@@ -314,8 +314,8 @@ return [
                     'route' => 'academic-years.index',
                     'icon' => 'fas fa-calendar-alt',
                 ],
-                
-                
+
+
                 [
                     'text' => 'Profile Sekolah',
                     'route' => 'school-settings.index',
@@ -340,14 +340,14 @@ return [
                     'icon' => 'fas fa-school',
                 ],
 
-               
+
 
                 [
                     'text' => 'Siswa',
                     'route' => 'students.index',
                     'icon' => 'fas fa-user-graduate',
                 ],
-                 [
+                [
                     'text' => 'Guru',
                     'route' => 'teachers.index',
                     'icon' => 'fas fa-chalkboard-teacher',
@@ -357,7 +357,7 @@ return [
                     'route' => 'subjects.index',
                     'icon' => 'fas fa-book',
                 ],
-                
+
             ],
         ],
 
@@ -386,10 +386,10 @@ return [
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Oleh Guru',
+                    'text' => 'Absensi Guru',
                     'route' => 'siswa.teacher-attendances.index',
                     'icon' => 'fas fa-chalkboard-teacher',
-                    'can' => 'siswa',
+                    'can' => 'siswa-absen-guru',
                 ],
                 [
                     'text' => 'Absensi Siswa Oleh Guru',
@@ -415,7 +415,7 @@ return [
             'icon' => 'fas fa-cog',
             'can' => 'admin',
             'submenu' => [
-                
+
                 [
                     'text' => 'Hari Libur',
                     'route' => 'holidays.index',
@@ -431,8 +431,8 @@ return [
                     'route' => 'schedules.index',
                     'icon' => 'fas fa-clock',
                 ],
-               
-                
+
+
             ],
         ],
         [

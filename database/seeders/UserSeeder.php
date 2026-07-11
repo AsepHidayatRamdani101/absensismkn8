@@ -9,37 +9,34 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-
-        $admin = User::firstOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@smkn8.sch.id'],
             [
                 'name' => 'Administrator',
-                'password' => bcrypt('admin123')
+                'password' => bcrypt('admin123'),
             ]
         );
 
-        $admin->assignRole('admin');
+        $admin->syncRoles(['admin']);
 
-
-        $guru = User::firstOrCreate(
+        $guru = User::updateOrCreate(
             ['email' => 'guru@smkn8.sch.id'],
             [
                 'name' => 'Guru',
-                'password' => bcrypt('guru123')
+                'password' => bcrypt('guru123'),
             ]
         );
 
-        $guru->assignRole('guru');
+        $guru->syncRoles(['guru']);
 
-
-        $siswa = User::firstOrCreate(
+        $siswa = User::updateOrCreate(
             ['email' => 'siswa@smkn8.sch.id'],
             [
                 'name' => 'Siswa',
-                'password' => bcrypt('siswa123')
+                'password' => bcrypt('siswa123'),
             ]
         );
 
-        $siswa->assignRole('siswa');
+        $siswa->syncRoles(['siswa']);
     }
 }

@@ -12,12 +12,13 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class TeacherAttendanceController extends Controller
 {
     public function siswaIndex()
     {
-        $user = auth()->user();
+        $user = Auth::user();
 
         $student = Student::with('classroom.major')
             ->where('nisn', $user->email)
@@ -27,6 +28,8 @@ class TeacherAttendanceController extends Controller
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
         }
+
+        $canSubmitTeacherAttendance = $student->canSubmitTeacherAttendance();
 
         $dayMap = [
             1 => 'Senin',
@@ -79,6 +82,8 @@ class TeacherAttendanceController extends Controller
                     $selectedAction = 'Hadir';
                 } elseif ($detail->status === 'Izin' && strcasecmp((string) $detail->keterangan, 'Tugas') === 0) {
                     $selectedAction = 'Tugas';
+                } elseif ($detail->status === 'Alpha') {
+                    $selectedAction = 'Tanpa Keterangan';
                 }
             }
 
@@ -96,12 +101,16 @@ class TeacherAttendanceController extends Controller
             'todayDayName' => $todayDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
             'scheduleRows' => $scheduleRows,
+            'canSubmitTeacherAttendance' => $canSubmitTeacherAttendance,
         ]);
     }
 
     public function index()
     {
-        $isReadOnly = auth()->user()?->hasRole('siswa') ?? false;
+        $authUser = Auth::user();
+        $isReadOnly = $authUser && method_exists($authUser, 'hasRole')
+            ? $authUser->hasRole('siswa')
+            : false;
 
         $teacherAttendances = TeacherAttendance::with([
             'teacher',
@@ -242,10 +251,10 @@ class TeacherAttendanceController extends Controller
     public function submitForSiswa(Request $request, Schedule $schedule)
     {
         $validated = $request->validate([
-            'action' => 'required|in:Hadir,Tugas',
+            'action' => 'required|in:Hadir,Tugas,Tanpa Keterangan',
         ]);
 
-        $user = auth()->user();
+        $user = Auth::user();
 
         $student = Student::query()
             ->where('nisn', $user->email)
@@ -254,6 +263,11 @@ class TeacherAttendanceController extends Controller
 
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        if (!$student->canSubmitTeacherAttendance()) {
+            return redirect()->route('siswa.teacher-attendances.index')
+                ->with('error', 'Hanya siswa dengan jabatan KM, Sekretaris, atau Bendahara yang dapat mengabsen guru.');
         }
 
         $schedule->load(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom', 'teacherSubject.academicYear']);
@@ -304,8 +318,17 @@ class TeacherAttendanceController extends Controller
             ]);
         }
 
-        $status = $validated['action'] === 'Tugas' ? 'Izin' : 'Hadir';
-        $keterangan = $validated['action'] === 'Tugas' ? 'Tugas' : null;
+        $status = match ($validated['action']) {
+            'Tugas' => 'Izin',
+            'Tanpa Keterangan' => 'Alpha',
+            default => 'Hadir',
+        };
+
+        $keterangan = match ($validated['action']) {
+            'Tugas' => 'Tugas',
+            'Tanpa Keterangan' => 'Tanpa Keterangan',
+            default => null,
+        };
 
         AttendanceDetail::updateOrCreate(
             [

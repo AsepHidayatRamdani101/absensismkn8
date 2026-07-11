@@ -16,23 +16,28 @@ use App\Models\TeacherAttendance;
 use App\Models\TeacherSubject;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $user = auth()->user();
+        $user = Auth::user();
 
-        if ($user->hasRole('admin')) {
+        if (!$user || !method_exists($user, 'hasRole')) {
+            abort(403);
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('admin')) {
             return redirect()->route('admin.dashboard');
         }
 
-        if ($user->hasRole('guru')) {
+        if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
             return redirect()->route('guru.dashboard');
         }
 
-        if ($user->hasRole('siswa')) {
+        if (method_exists($user, 'hasRole') && $user->hasRole('siswa')) {
             return redirect()->route('siswa.dashboard');
         }
 
@@ -53,12 +58,25 @@ class DashboardController extends Controller
         $totalMajors = Major::count();
         $totalSubjects = Subject::count();
         $totalDevices = AttendanceDevice::count();
+        $studentClassOfficers = Student::query()
+            ->whereIn('jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
+            ->count();
+
+        $ketuaKelasCount = Student::query()->where('jabatan_kelas', Student::JABATAN_KETUA_KELAS)->count();
+        $sekretarisCount = Student::query()->where('jabatan_kelas', Student::JABATAN_SEKRETARIS)->count();
+        $bendaharaCount = Student::query()->where('jabatan_kelas', Student::JABATAN_BENDAHARA)->count();
 
         $todayTeacherAttendances = TeacherAttendance::whereDate('tanggal', $today)->count();
         $todayStudentAttendanceByTeacher = AttendanceDetail::whereHas('teacherAttendance', function ($query) use ($today) {
             $query->whereDate('tanggal', $today);
         })->count();
         $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
+        $todayOfficerAttendanceActions = AttendanceDetail::query()
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->join('students', 'students.id', '=', 'attendance_details.student_id')
+            ->whereDate('teacher_attendances.tanggal', $today)
+            ->whereIn('students.jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
+            ->count();
 
         $teacherPresentToday = TeacherAttendance::whereDate('tanggal', $today)
             ->distinct('teacher_id')
@@ -210,9 +228,14 @@ class DashboardController extends Controller
             'totalMajors',
             'totalSubjects',
             'totalDevices',
+            'studentClassOfficers',
+            'ketuaKelasCount',
+            'sekretarisCount',
+            'bendaharaCount',
             'todayTeacherAttendances',
             'todayStudentAttendanceByTeacher',
             'todayStudentAttendanceIoT',
+            'todayOfficerAttendanceActions',
             'teacherPresencePercent',
             'studentPresencePercent',
             'teacherPresencePercentWeek',
@@ -233,7 +256,7 @@ class DashboardController extends Controller
 
     public function siswa()
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
@@ -338,7 +361,7 @@ class DashboardController extends Controller
 
     public function guru()
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();

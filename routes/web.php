@@ -102,10 +102,11 @@ Route::middleware(['auth', 'guru'])->group(function () {
 Route::middleware(['auth', 'siswa'])->group(function () {
     Route::get('/siswa', [DashboardController::class, 'siswa'])->name('siswa.dashboard');
     Route::get('/siswa/teacher-attendances', [TeacherAttendanceController::class, 'siswaIndex'])
+        ->middleware('can:siswa-absen-guru')
         ->name('siswa.teacher-attendances.index');
     Route::post('/siswa/teacher-attendances/{schedule}/submit', [TeacherAttendanceController::class, 'submitForSiswa'])
+        ->middleware('can:siswa-absen-guru')
         ->name('siswa.teacher-attendances.submit');
-    
 });
 
 Route::get('/home', function () {

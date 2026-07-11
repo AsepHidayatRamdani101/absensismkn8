@@ -136,6 +136,7 @@
 
 
 @section('js')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(function() {
             $('#btnImportTeachers').on('click', function() {
@@ -151,7 +152,7 @@
             $('#btnGenerateAccountsTeachers').on('click', function() {
                 Swal.fire({
                     title: 'Generate akun guru?',
-                    text: 'Username dari NIP dan password default guru12345.',
+                    text: 'Username dari NIP (fallback NUPTK) dan password default guru12345.',
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, generate',

@@ -44,6 +44,7 @@ class StudentController extends Controller
             'nama_lengkap' => 'required',
             'jenis_kelamin' => 'required|in:L,P',
             'classroom_id' => 'required|exists:classrooms,id',
+            'jabatan_kelas' => 'nullable|in:ketua_kelas,sekretaris,bendahara',
             'alamat' => 'nullable',
             'no_hp' => 'nullable',
 
@@ -79,6 +80,8 @@ class StudentController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
 
             'classroom_id' => 'required|exists:classrooms,id',
+
+            'jabatan_kelas' => 'nullable|in:ketua_kelas,sekretaris,bendahara',
 
             'alamat' => 'nullable',
 
@@ -124,8 +127,8 @@ class StudentController extends Controller
     {
         return Excel::download(
             new TemplateExport(
-                ['nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'classroom_kode_kelas', 'alamat', 'no_hp'],
-                [['24001', '9988776655', 'Budi Santoso', 'L', 'X-RPL-1', 'Jl. Garut', '08123456789']]
+                ['nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'classroom_kode_kelas', 'jabatan_kelas', 'alamat', 'no_hp'],
+                [['24001', '9988776655', 'Budi Santoso', 'L', 'X-RPL-1', 'KM', 'Jl. Garut', '08123456789']]
             ),
             'format-import-siswa.xlsx'
         );
@@ -142,6 +145,10 @@ class StudentController extends Controller
         Student::query()->orderBy('id')->chunk(200, function ($students) use (&$created, &$updated, &$skipped) {
             foreach ($students as $student) {
                 $username = trim((string) $student->nisn);
+
+                if ($username === '') {
+                    $username = trim((string) $student->nis);
+                }
 
                 if ($username === '') {
                     $skipped++;
@@ -168,7 +175,7 @@ class StudentController extends Controller
 
         return redirect()->route('students.index')->with(
             'success',
-            "Generate akun siswa selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NISN kosong): {$skipped}."
+            "Generate akun siswa selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NISN/NIS kosong): {$skipped}."
         );
     }
 }

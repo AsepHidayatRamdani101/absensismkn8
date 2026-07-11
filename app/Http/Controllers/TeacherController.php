@@ -136,6 +136,10 @@ class TeacherController extends Controller
                 $username = trim((string) $teacher->nip);
 
                 if ($username === '') {
+                    $username = trim((string) $teacher->nuptk);
+                }
+
+                if ($username === '') {
                     $skipped++;
                     continue;
                 }
@@ -160,7 +164,7 @@ class TeacherController extends Controller
 
         return redirect()->route('teachers.index')->with(
             'success',
-            "Generate akun guru selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NIP kosong): {$skipped}."
+            "Generate akun guru selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NIP/NUPTK kosong): {$skipped}."
         );
     }
 }

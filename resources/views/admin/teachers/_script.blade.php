@@ -1,5 +1,18 @@
 <script>
     $(function() {
+        const teacherUrlTemplate = @json(route('teachers.update', ['teacher' => '__ID__']));
+        const teacherEditUrlTemplate = @json(route('teachers.edit', ['teacher' => '__ID__']));
+
+        const buildTeacherUrl = (id, isEdit = false) => {
+            const template = isEdit ? teacherEditUrlTemplate : teacherUrlTemplate;
+            return template.replace('__ID__', id);
+        };
+
+        const showAjaxError = (xhr, fallbackMessage) => {
+            const message = xhr.responseJSON?.message ?? fallbackMessage;
+
+            Swal.fire('Gagal', message, 'error');
+        };
 
         $('#tableTeachers').DataTable({
             responsive: true,
@@ -32,11 +45,11 @@
         });
 
         // EDIT
-        $('.btn-edit').click(function() {
+        $(document).on('click', '.btn-edit', function() {
 
             let id = $(this).data('id');
 
-            $.get('/teachers/' + id + '/edit', function(data) {
+            $.get(buildTeacherUrl(id, true), function(data) {
 
                 $('#edit_id').val(data.id);
                 $('#edit_nip').val(data.nip);
@@ -48,6 +61,8 @@
 
                 $('#modalEdit').modal('show');
 
+            }).fail(function(xhr) {
+                showAjaxError(xhr, 'Data guru gagal dimuat.');
             });
 
         });
@@ -61,7 +76,7 @@
 
             $.ajax({
 
-                url: '/teachers/' + id,
+                url: buildTeacherUrl(id),
 
                 type: 'POST',
 
@@ -89,6 +104,10 @@
                         'success'
                     ).then(() => location.reload());
 
+                },
+
+                error: function(xhr) {
+                    showAjaxError(xhr, 'Data guru gagal diperbarui.');
                 }
 
             });
@@ -96,14 +115,14 @@
         });
 
         // DELETE
-        $('.btn-delete').click(function() {
+        $(document).on('click', '.btn-delete', function() {
 
             let id = $(this).data('id');
 
             Swal.fire({
 
                 title: 'Hapus data?',
-                text: 'Data tidak dapat dikembalikan',
+                text: 'Data tidak bisa dikembalikan',
                 icon: 'warning',
 
                 showCancelButton: true,
@@ -117,7 +136,7 @@
 
                     $.ajax({
 
-                        url: '/teachers/' + id,
+                        url: buildTeacherUrl(id),
 
                         type: 'POST',
 
@@ -130,12 +149,24 @@
 
                         success: function(res) {
 
-                            Swal.fire(
-                                'Berhasil',
-                                res.message,
-                                'success'
-                            ).then(() => location.reload());
+                            Swal.fire({
 
+                                icon: 'success',
+
+                                title: 'Berhasil',
+
+                                text: res.message
+
+                            }).then(() => {
+
+                                location.reload();
+
+                            });
+
+                        },
+
+                        error: function(xhr) {
+                            showAjaxError(xhr, 'Data guru gagal dihapus.');
                         }
 
                     });

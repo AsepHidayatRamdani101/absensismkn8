@@ -1,0 +1,97 @@
+body {
+
+    background: #eef3f9;
+
+    overflow: hidden;
+
+}
+
+.left-panel {
+
+    background: linear-gradient(135deg, #0d6efd, #1d4ed8);
+
+    color: white;
+
+    position: relative;
+
+}
+
+.overlay {
+
+    position: absolute;
+
+    width: 100%;
+
+    height: 100%;
+
+    background: url('/images/login-bg.svg');
+
+    background-size: cover;
+
+    opacity: .12;
+
+}
+
+.content {
+
+    z-index: 99;
+
+    margin: auto;
+
+    padding: 60px;
+
+}
+
+.content h1 {
+
+    font-weight: bold;
+
+    font-size: 42px;
+
+}
+
+.login-card {
+
+    width: 430px;
+
+    background: white;
+
+    border-radius: 20px;
+
+    padding: 45px;
+
+    box-shadow: 0 15px 40px rgba(0, 0, 0, .12);
+
+}
+
+.form-control {
+
+    height: 48px;
+
+    border-radius: 12px;
+
+}
+
+.btn-primary {
+
+    height: 50px;
+
+    border-radius: 12px;
+
+}
+
+h2 {
+
+    font-weight: bold;
+
+}
+
+@media(max-width:992px) {
+
+    .login-card {
+
+        width: 90%;
+
+    }
+
+}

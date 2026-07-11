@@ -244,16 +244,15 @@
 
     <div class="card info-card">
         <div class="card-header">
-            <h3 class="card-title mb-0">Deskripsi Aplikasi</h3>
+            <h3 class="card-title mb-0">Tentang Aplikasi</h3>
         </div>
         <div class="card-body">
             <p class="mb-2">
-                Aplikasi absensi sekolah ini membantu pencatatan kehadiran siswa dan guru secara terintegrasi,
-                termasuk absensi kelas oleh guru dan dukungan absensi berbasis perangkat IoT.
+                Aplikasi ini digunakan untuk manajemen absensi sekolah, mencakup absensi guru,
+                absensi siswa oleh guru, dan absensi siswa berbasis IoT agar monitoring kehadiran lebih
+                terintegrasi.
             </p>
-            <p class="mb-1"><strong>Nama Aplikasi:</strong> {{ config('app_version.name', config('app.name')) }}</p>
-            <p class="mb-1"><strong>Versi:</strong> {{ config('app_version.version', '-') }}</p>
-            <p class="mb-0"><strong>Pengembang:</strong> {{ config('app_version.developer', '-') }}</p>
+            <p class="mb-0"><strong>Deploy by:</strong> Asep Hidayat Ramdani, S.T.</p>
         </div>
     </div>
 

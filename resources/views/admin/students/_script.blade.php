@@ -90,6 +90,9 @@
                     $('#edit_classroom_id')
                         .val(data.classroom_id);
 
+                    $('#edit_jabatan_kelas')
+                        .val(data.jabatan_kelas ?? '');
+
                     $('#edit_no_hp')
                         .val(data.no_hp);
 
@@ -136,6 +139,8 @@
                     jenis_kelamin: $('#edit_jenis_kelamin').val(),
 
                     classroom_id: $('#edit_classroom_id').val(),
+
+                    jabatan_kelas: $('#edit_jabatan_kelas').val(),
 
                     no_hp: $('#edit_no_hp').val(),
 

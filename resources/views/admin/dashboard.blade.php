@@ -131,8 +131,8 @@
                 <div class="pr-md-3 mb-3 mb-md-0">
                     <h2 class="app-info-title">Tentang Aplikasi</h2>
                     <p class="app-info-text">Aplikasi ini digunakan untuk manajemen absensi sekolah, mencakup absensi guru,
-                        absensi siswa oleh guru, dan absensi siswa berbasis IoT agar monitoring kehadiran lebih
-                        terintegrasi.</p>
+                        absensi siswa oleh guru, absensi siswa berbasis IoT, serta absensi guru oleh siswa pengurus kelas
+                        (KM, Sekretaris, dan Bendahara) agar monitoring kehadiran lebih terintegrasi.</p>
                     <p class="app-info-text mb-0"><strong>Deploy by:</strong> Asep Hidayat Ramdani, S.T.</p>
                 </div>
                 <div>
@@ -363,7 +363,7 @@
 
     <p class="section-title mt-2">Statistik Tambahan</p>
     <div class="row">
-        <div class="col-lg-6 col-12">
+        <div class="col-lg-3 col-6">
             <div class="small-box bg-light stat-card">
                 <div class="inner">
                     <h3>{{ $totalSubjects }}</h3>
@@ -375,7 +375,7 @@
             </div>
         </div>
 
-        <div class="col-lg-6 col-12">
+        <div class="col-lg-3 col-6">
             <div class="small-box bg-lightblue stat-card">
                 <div class="inner">
                     <h3>{{ $todayStudentAttendanceByTeacher + $todayStudentAttendanceIoT }}</h3>
@@ -383,6 +383,31 @@
                 </div>
                 <div class="icon">
                     <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-gradient-info stat-card">
+                <div class="inner">
+                    <h3>{{ $studentClassOfficers }}</h3>
+                    <p>Total Siswa Pengurus Kelas</p>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-gradient-indigo stat-card">
+                <div class="inner">
+                    <h3>{{ $todayOfficerAttendanceActions }}</h3>
+                    <p>Absensi Guru oleh Pengurus (Hari Ini)</p>
+                    <small>KM: {{ $ketuaKelasCount }}, Sek: {{ $sekretarisCount }}, Ben: {{ $bendaharaCount }}</small>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-clipboard-check"></i>
                 </div>
             </div>
         </div>

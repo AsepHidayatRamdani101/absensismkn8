@@ -72,6 +72,7 @@
                         <th>Nama</th>
                         <th>JK</th>
                         <th>Kelas</th>
+                        <th>Jabatan</th>
                         <th>No HP</th>
                         <th width="15%">Aksi</th>
                     </tr>
@@ -96,6 +97,8 @@
                                 {{ $student->classroom->nama_kelas }}
 
                             </td>
+
+                            <td>{{ $student->jabatan_kelas_label }}</td>
 
                             <td>{{ $student->no_hp }}</td>
 
@@ -155,7 +158,7 @@
             $('#btnGenerateAccountsStudents').on('click', function() {
                 Swal.fire({
                     title: 'Generate akun siswa?',
-                    text: 'Username dari NISN dan password default siswa12345.',
+                    text: 'Username dari NISN (fallback NIS) dan password default siswa12345.',
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, generate',

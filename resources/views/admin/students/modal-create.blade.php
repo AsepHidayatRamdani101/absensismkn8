@@ -107,6 +107,25 @@
 
                     <div class="form-group">
 
+                        <label>Jabatan Kelas</label>
+
+                        <select name="jabatan_kelas" class="form-control">
+
+                            <option value="">
+                                -- Tidak ada jabatan --
+                            </option>
+
+                            <option value="ketua_kelas">KM</option>
+                            <option value="sekretaris">Sekretaris</option>
+                            <option value="bendahara">Bendahara</option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
                         <label>No HP</label>
 
                         <input type="text" name="no_hp" class="form-control">
