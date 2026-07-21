@@ -305,6 +305,24 @@ return [
             'can' => 'admin',
         ],
         [
+            'text' => 'Dashboard',
+            'route' => 'guru.dashboard',
+            'icon' => 'fas fa-fw fa-home',
+            'can' => 'guru',
+        ],
+        [
+            'text' => 'Dashboard',
+            'route' => 'siswa.dashboard',
+            'icon' => 'fas fa-fw fa-home',
+            'can' => 'siswa',
+        ],
+        [
+            'text' => 'Dashboard',
+            'route' => 'kurikulum.dashboard',
+            'icon' => 'fas fa-fw fa-home',
+            'can' => 'kurikulum',
+        ],
+        [
             'text' => 'Setting Sekolah',
             'icon' => 'fas fa-cog',
             'can' => 'admin',
@@ -365,7 +383,7 @@ return [
         [
             'text' => 'Absensi',
             'icon' => 'fas fa-clipboard-list',
-            'can' => ['admin', 'siswa', 'guru'],
+            'can' => 'admin',
             'submenu' => [
                 [
                     'text' => 'Perangkat IoT',
@@ -386,27 +404,166 @@ return [
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Guru',
-                    'route' => 'siswa.teacher-attendances.index',
-                    'icon' => 'fas fa-chalkboard-teacher',
-                    'can' => 'siswa-absen-guru',
-                ],
-                [
                     'text' => 'Absensi Siswa Oleh Guru',
                     'route' => 'attendance-details.index',
                     'icon' => 'fas fa-user-check',
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Siswa Oleh Guru',
-                    'route' => 'guru.attendance-details.index',
-                    'icon' => 'fas fa-user-check',
-                    'can' => 'guru',
-                ],
-                [
                     'text' => 'Log Device',
                     'url' => '#',
                     'icon' => 'fas fa-history',
+                    'can' => 'admin',
+                ],
+            ],
+        ],
+        [
+            'text' => 'Absensi',
+            'route' => 'siswa.teacher-attendances.index',
+            'icon' => 'fas fa-chalkboard-teacher',
+            'can' => 'siswa-absen-guru',
+        ],
+        [
+            'text' => 'Absensi Siswa Kelas',
+            'route' => 'siswa.attendance-details.index',
+            'icon' => 'fas fa-user-check',
+            'can' => 'siswa-absen-guru',
+        ],
+        [
+            'text' => 'Riwayat Absen',
+            'route' => 'siswa.attendance-history.index',
+            'icon' => 'fas fa-history',
+            'can' => 'siswa',
+        ],
+        [
+            'text' => 'Pengajuan Absensi',
+            'route' => 'siswa.leave-requests.index',
+            'icon' => 'fas fa-file-medical',
+            'can' => 'siswa',
+        ],
+        [
+            'text' => 'Guru',
+            'icon' => 'fas fa-chalkboard-teacher',
+            'can' => 'guru',
+            'submenu' => [
+                [
+                    'text' => 'Absensi',
+                    'route' => 'guru.attendance-details.index',
+                    'icon' => 'fas fa-user-check',
+                ],
+                [
+                    'text' => 'Agenda Guru',
+                    'route' => 'guru.agenda.index',
+                    'icon' => 'fas fa-book-open',
+                ],
+                [
+                    'text' => 'Pengajuan Izin',
+                    'route' => 'guru.leave-requests.index',
+                    'icon' => 'fas fa-file-signature',
+                ],
+                [
+                    'text' => 'Rekap Siswa (Guru)',
+                    'route' => 'guru.mapel.rekap',
+                    'icon' => 'fas fa-book-reader',
+                ],
+            ],
+        ],
+        [
+            'text' => 'Wali Kelas',
+            'icon' => 'fas fa-clipboard-check',
+            'can' => 'guru-wali-kelas',
+            'submenu' => [
+                [
+                    'text' => 'Rekap Siswa',
+                    'route' => 'guru.wali-kelas.rekap-siswa',
+                    'icon' => 'fas fa-clipboard-list',
+                ],
+                [
+                    'text' => 'Pengajuan Izin/Sakit Siswa',
+                    'route' => 'guru.wali-kelas.leave-requests.index',
+                    'icon' => 'fas fa-user-clock',
+                ],
+            ],
+        ],
+        [
+            'text' => 'Kurikulum',
+            'icon' => 'fas fa-layer-group',
+            'can' => 'kurikulum',
+            'label' => 'Khusus',
+            'label_color' => 'info',
+            'submenu' => [
+                [
+                    'text' => 'Absensi',
+                    'icon' => 'fas fa-clipboard-list',
+                    'submenu' => [
+                        [
+                            'text' => 'Absen Guru',
+                            'route' => 'teacher-attendances.index',
+                            'icon' => 'fas fa-chalkboard-teacher',
+                        ],
+                        [
+                            'text' => 'Absen Siswa',
+                            'route' => 'attendance-details.index',
+                            'icon' => 'fas fa-user-check',
+                        ],
+                        [
+                            'text' => 'Approve Pengajuan Izin Guru',
+                            'route' => 'kurikulum.teacher-leave-requests.index',
+                            'icon' => 'fas fa-file-signature',
+                        ],
+                    ],
+                ],
+                [
+                    'text' => 'Setting Jadwal',
+                    'icon' => 'fas fa-cog',
+                    'submenu' => [
+                        [
+                            'text' => 'Hari Libur',
+                            'route' => 'holidays.index',
+                            'icon' => 'fas fa-calendar-times',
+                        ],
+                        [
+                            'text' => 'Guru Pengampu',
+                            'route' => 'teacher-subjects.index',
+                            'icon' => 'fas fa-user-check',
+                        ],
+                        [
+                            'text' => 'Jadwal',
+                            'route' => 'schedules.index',
+                            'icon' => 'fas fa-clock',
+                        ],
+                    ],
+                ],
+                [
+                    'text' => 'Laporan',
+                    'icon' => 'fas fa-file-alt',
+                    'submenu' => [
+                        [
+                            'text' => 'Laporan Guru',
+                            'route' => 'reports.teacher-attendance',
+                            'icon' => 'fas fa-chalkboard-teacher',
+                        ],
+                        [
+                            'text' => 'Laporan Siswa',
+                            'route' => 'reports.student-attendance',
+                            'icon' => 'fas fa-user-graduate',
+                        ],
+                        [
+                            'text' => 'Laporan Agenda Guru',
+                            'route' => 'reports.teacher-agenda',
+                            'icon' => 'fas fa-book-open',
+                        ],
+                        [
+                            'text' => 'Laporan Izin Guru',
+                            'route' => 'reports.teacher-leave',
+                            'icon' => 'fas fa-file-signature',
+                        ],
+                        [
+                            'text' => 'Laporan Izin Siswa',
+                            'route' => 'reports.student-leave',
+                            'icon' => 'fas fa-file-medical',
+                        ],
+                    ],
                 ],
             ],
         ],
@@ -548,6 +705,26 @@ return [
                     'type' => 'js',
                     'asset' => false,
                     'location' => '//cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/pace.min.js',
+                ],
+            ],
+        ],
+        'MobileFriendly' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'css',
+                    'asset' => true,
+                    'location' => 'css/mobile-friendly.css',
+                ],
+            ],
+        ],
+        'MobileTableEnhancements' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'js',
+                    'asset' => true,
+                    'location' => 'js/mobile-table-enhancements.js',
                 ],
             ],
         ],

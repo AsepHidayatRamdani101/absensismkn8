@@ -46,40 +46,42 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableTeacherSubjects" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Guru</th>
-                        <th>Mata Pelajaran</th>
-                        <th>Kelas</th>
-                        <th>Tahun Ajaran</th>
-                        <th>Semester</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($teacherSubjects as $teacherSubject)
+            <div class="table-responsive">
+                <table id="tableTeacherSubjects" class="table table-bordered table-striped">
+                    <thead>
                         <tr>
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $teacherSubject->teacher->nama_lengkap ?? '-' }}</td>
-                            <td>{{ $teacherSubject->subject->nama_mapel ?? '-' }}</td>
-                            <td>{{ $teacherSubject->classroom->nama_kelas ?? '-' }}</td>
-                            <td>{{ $teacherSubject->academicYear->tahun_ajaran ?? '-' }}</td>
-                            <td>{{ $teacherSubject->academicYear->semester ?? '-' }}</td>
-                            <td>
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $teacherSubject->id }}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $teacherSubject->id }}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
+                            <th width="5%">No</th>
+                            <th>Guru</th>
+                            <th>Mata Pelajaran</th>
+                            <th>Kelas</th>
+                            <th>Tahun Ajaran</th>
+                            <th>Semester</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($teacherSubjects as $teacherSubject)
+                            <tr>
+                                <td>{{ $loop->iteration }}</td>
+                                <td>{{ $teacherSubject->teacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $teacherSubject->subject->nama_mapel ?? '-' }}</td>
+                                <td>{{ $teacherSubject->classroom->nama_kelas ?? '-' }}</td>
+                                <td>{{ $teacherSubject->academicYear->tahun_ajaran ?? '-' }}</td>
+                                <td>{{ $teacherSubject->academicYear->semester ?? '-' }}</td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $teacherSubject->id }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $teacherSubject->id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

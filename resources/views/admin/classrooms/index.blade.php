@@ -54,61 +54,63 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableClassrooms" class="table table-bordered table-striped">
+            <div class="table-responsive">
+                <table id="tableClassrooms" class="table table-bordered table-striped">
 
-                <thead>
+                    <thead>
 
-                    <tr>
-                        <th>No</th>
-                        <th>Kode</th>
-                        <th>Nama Kelas</th>
-                        <th>Tingkat</th>
-                        <th>Jurusan</th>
-                        <th>Rombel</th>
-                        <th width="120">Aksi</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    @foreach ($classrooms as $kelas)
                         <tr>
-
-                            <td>{{ $loop->iteration }}</td>
-
-                            <td>{{ $kelas->kode_kelas }}</td>
-
-                            <td>{{ $kelas->nama_kelas }}</td>
-
-                            <td>{{ $kelas->tingkat }}</td>
-
-                            <td>{{ $kelas->major->singkatan }}</td>
-
-                            <td>{{ $kelas->rombel }}</td>
-
-                            <td>
-
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $kelas->id }}">
-
-                                    <i class="fas fa-edit"></i>
-
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $kelas->id }}">
-
-                                    <i class="fas fa-trash"></i>
-
-                                </button>
-
-                            </td>
-
+                            <th>No</th>
+                            <th>Kode</th>
+                            <th>Nama Kelas</th>
+                            <th>Tingkat</th>
+                            <th>Jurusan</th>
+                            <th>Rombel</th>
+                            <th width="120">Aksi</th>
                         </tr>
-                    @endforeach
 
-                </tbody>
+                    </thead>
 
-            </table>
+                    <tbody>
+
+                        @foreach ($classrooms as $kelas)
+                            <tr>
+
+                                <td>{{ $loop->iteration }}</td>
+
+                                <td>{{ $kelas->kode_kelas }}</td>
+
+                                <td>{{ $kelas->nama_kelas }}</td>
+
+                                <td>{{ $kelas->tingkat }}</td>
+
+                                <td>{{ $kelas->major->singkatan }}</td>
+
+                                <td>{{ $kelas->rombel }}</td>
+
+                                <td>
+
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $kelas->id }}">
+
+                                        <i class="fas fa-edit"></i>
+
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $kelas->id }}">
+
+                                        <i class="fas fa-trash"></i>
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+                        @endforeach
+
+                    </tbody>
+
+                </table>
+            </div>
 
         </div>
 

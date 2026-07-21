@@ -50,7 +50,14 @@
             <h1 class="mb-1">Dashboard Guru</h1>
             <p class="guru-subtitle">Ringkasan performa kehadiran mengajar Anda</p>
         </div>
-        <span class="badge badge-light border px-3 py-2">{{ $today->format('d M Y') }}</span>
+        <div class="d-flex flex-wrap align-items-center" style="gap:.5rem;">
+            @if ($isWaliKelas)
+                <span class="badge badge-{{ $pendingStudentLeaveRequests > 0 ? 'danger' : 'secondary' }} px-3 py-2">
+                    Pengajuan Siswa Menunggu: {{ $pendingStudentLeaveRequests }}
+                </span>
+            @endif
+            <span class="badge badge-light border px-3 py-2">{{ $today->format('d M Y') }}</span>
+        </div>
     </div>
 @stop
 
@@ -58,6 +65,16 @@
     @if (!$teacher)
         <div class="alert alert-warning">
             Data guru untuk akun ini belum ditemukan. Pastikan username login menggunakan NIP yang sesuai data guru.
+        </div>
+    @endif
+
+    @if ($isWaliKelas && $pendingStudentLeaveRequests > 0)
+        <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap">
+            <span>Ada <strong>{{ $pendingStudentLeaveRequests }}</strong> pengajuan izin/sakit siswa yang menunggu
+                verifikasi wali kelas.</span>
+            <a href="{{ route('guru.wali-kelas.leave-requests.index') }}" class="btn btn-sm btn-warning border mt-2 mt-sm-0">
+                Buka Verifikasi
+            </a>
         </div>
     @endif
 
@@ -98,6 +115,20 @@
                 <div class="icon"><i class="fas fa-user-clock"></i></div>
             </div>
         </div>
+        @if ($isWaliKelas)
+            <div class="col-lg-3 col-6 mb-3">
+                <div class="small-box bg-maroon summary-card">
+                    <div class="inner">
+                        <h3>{{ $pendingStudentLeaveRequests }}</h3>
+                        <p>Pengajuan Siswa Menunggu</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-file-medical-alt"></i></div>
+                    <a href="{{ route('guru.wali-kelas.leave-requests.index') }}" class="small-box-footer">
+                        Lihat Verifikasi <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="row">

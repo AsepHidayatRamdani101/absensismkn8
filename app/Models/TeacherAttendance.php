@@ -18,7 +18,15 @@ class TeacherAttendance extends Model
         'pertemuan',
         'materi_pembelajaran',
         'catatan_guru',
+        'kehadiran_guru',
+        'tugas_file_path',
+        'tugas_deskripsi',
+        'foto_guru_path',
         'status',
+    ];
+
+    protected $casts = [
+        'tanggal' => 'date',
     ];
 
     public function teacher()

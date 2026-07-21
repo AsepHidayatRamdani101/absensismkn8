@@ -55,9 +55,12 @@
                 $('#edit_nip').val(data.nip);
                 $('#edit_nuptk').val(data.nuptk);
                 $('#edit_nama_lengkap').val(data.nama_lengkap);
+                $('#edit_jabatan').val(data.jabatan ?? 'guru');
                 $('#edit_jenis_kelamin').val(data.jenis_kelamin);
                 $('#edit_no_hp').val(data.no_hp);
                 $('#edit_alamat').val(data.alamat);
+                $('#edit_wali_classroom_id').val(data.wali_classroom_id ?? '');
+                $('#edit_is_kurikulum').prop('checked', !!data.is_kurikulum);
 
                 $('#modalEdit').modal('show');
 
@@ -88,9 +91,12 @@
                     nip: $('#edit_nip').val(),
                     nuptk: $('#edit_nuptk').val(),
                     nama_lengkap: $('#edit_nama_lengkap').val(),
+                    jabatan: $('#edit_jabatan').val(),
                     jenis_kelamin: $('#edit_jenis_kelamin').val(),
                     no_hp: $('#edit_no_hp').val(),
                     alamat: $('#edit_alamat').val(),
+                    wali_classroom_id: $('#edit_wali_classroom_id').val(),
+                    is_kurikulum: $('#edit_is_kurikulum').is(':checked') ? 1 : 0,
 
                 },
 

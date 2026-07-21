@@ -1,0 +1,234 @@
+/* Global mobile usability tweaks for AdminLTE pages */
+:root {
+    --mobile-space: 0.75rem;
+    --mobile-radius: 0.5rem;
+}
+
+.card {
+    border-radius: var(--mobile-radius);
+}
+
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive .table {
+    min-width: 640px;
+}
+
+.table-mobile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+@media (max-width: 991.98px) {
+    .content-wrapper>.content {
+        padding-left: var(--mobile-space);
+        padding-right: var(--mobile-space);
+    }
+
+    .content-header {
+        padding: 0.75rem var(--mobile-space);
+    }
+
+    .content-header h1 {
+        font-size: 1.25rem;
+        line-height: 1.25;
+        margin-bottom: 0.5rem;
+    }
+
+    .content-header .d-flex {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.5rem;
+    }
+
+    .content-header .d-flex>div,
+    .content-header .d-flex>form,
+    .content-header .btn-toolbar {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .content-header .btn,
+    .content-header .btn-group,
+    .content-header .btn-group .btn {
+        flex: 1 1 auto;
+        min-height: 42px;
+    }
+
+    .card .card-header,
+    .card .card-body,
+    .card .card-footer {
+        padding: 0.85rem;
+    }
+
+    .btn,
+    .form-control,
+    .custom-select,
+    .input-group-text,
+    .select2-container--default .select2-selection--single {
+        min-height: 42px;
+    }
+
+    .form-control,
+    .custom-select,
+    .select2-container--default .select2-selection--single {
+        font-size: 16px;
+    }
+
+    .table td,
+    .table th {
+        white-space: nowrap;
+        font-size: 0.9rem;
+        vertical-align: middle;
+    }
+
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate {
+        float: none !important;
+        text-align: left !important;
+        margin-top: 0.5rem;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        width: 100%;
+        margin-left: 0 !important;
+    }
+
+    .pagination {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    .modal-content {
+        border-radius: var(--mobile-radius);
+    }
+
+    .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .main-footer {
+        font-size: 0.875rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 767.98px) {
+
+    #tableStudents.mobile-priority th:nth-child(4),
+    #tableStudents.mobile-priority td:nth-child(4),
+    #tableStudents.mobile-priority th:nth-child(6),
+    #tableStudents.mobile-priority td:nth-child(6),
+    #tableStudents.mobile-priority th:nth-child(7),
+    #tableStudents.mobile-priority td:nth-child(7),
+    #tableTeachers.mobile-priority th:nth-child(3),
+    #tableTeachers.mobile-priority td:nth-child(3),
+    #tableTeachers.mobile-priority th:nth-child(5),
+    #tableTeachers.mobile-priority td:nth-child(5),
+    #tableTeachers.mobile-priority th:nth-child(6),
+    #tableTeachers.mobile-priority td:nth-child(6),
+    #tableSchedules.mobile-priority th:nth-child(7),
+    #tableSchedules.mobile-priority td:nth-child(7),
+    #tableSchedules.mobile-priority th:nth-child(8),
+    #tableSchedules.mobile-priority td:nth-child(8),
+    #tableAttendanceDetails.mobile-priority th:nth-child(8),
+    #tableAttendanceDetails.mobile-priority td:nth-child(8),
+    #tableAttendanceDetails.mobile-priority th:nth-child(9),
+    #tableAttendanceDetails.mobile-priority td:nth-child(9),
+    #tableGuruAttendanceDetails.mobile-priority th:nth-child(4),
+    #tableGuruAttendanceDetails.mobile-priority td:nth-child(4),
+    #tableMajors.mobile-priority th:nth-child(4),
+    #tableMajors.mobile-priority td:nth-child(4),
+    #tableAttendances.mobile-priority th:nth-child(6),
+    #tableAttendances.mobile-priority td:nth-child(6),
+    #tableAttendances.mobile-priority th:nth-child(7),
+    #tableAttendances.mobile-priority td:nth-child(7),
+    #tableAttendances.mobile-priority th:nth-child(9),
+    #tableAttendances.mobile-priority td:nth-child(9),
+    #tableAttendances.mobile-priority th:nth-child(10),
+    #tableAttendances.mobile-priority td:nth-child(10),
+    #tableTeacherAttendances.mobile-priority th:nth-child(4),
+    #tableTeacherAttendances.mobile-priority td:nth-child(4),
+    #tableTeacherAttendances.mobile-priority th:nth-child(7),
+    #tableTeacherAttendances.mobile-priority td:nth-child(7),
+    #tableTeacherSubjects.mobile-priority th:nth-child(6),
+    #tableTeacherSubjects.mobile-priority td:nth-child(6),
+    #tableTeacherReport.mobile-priority th:nth-child(7),
+    #tableTeacherReport.mobile-priority td:nth-child(7),
+    #tableTeacherReport.mobile-priority th:nth-child(9),
+    #tableTeacherReport.mobile-priority td:nth-child(9),
+    #tableStudentReport.mobile-priority th:nth-child(9),
+    #tableStudentReport.mobile-priority td:nth-child(9),
+    #tableStudentReport.mobile-priority th:nth-child(10),
+    #tableStudentReport.mobile-priority td:nth-child(10),
+    #tableWaliClassRecap.mobile-priority th:nth-child(2),
+    #tableWaliClassRecap.mobile-priority td:nth-child(2),
+    #tableWaliClassRecap.mobile-priority th:nth-child(5),
+    #tableWaliClassRecap.mobile-priority td:nth-child(5),
+    #tableWaliClassRecap.mobile-priority th:nth-child(6),
+    #tableWaliClassRecap.mobile-priority td:nth-child(6),
+    #tableWaliClassRecap.mobile-priority th:nth-child(7),
+    #tableWaliClassRecap.mobile-priority td:nth-child(7) {
+        display: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .table-responsive .table.mobile-card-table {
+        min-width: 100%;
+    }
+
+    .table.mobile-card-table thead {
+        display: none;
+    }
+
+    .table.mobile-card-table tbody tr {
+        display: block;
+        border: 1px solid #dee2e6;
+        border-radius: var(--mobile-radius);
+        margin-bottom: 0.75rem;
+        background: #fff;
+    }
+
+    .table.mobile-card-table tbody td {
+        display: grid;
+        grid-template-columns: minmax(96px, 38%) 1fr;
+        gap: 0.5rem;
+        white-space: normal;
+        border-top: 1px solid #f1f1f1;
+        border-bottom: 0;
+        padding: 0.55rem 0.7rem;
+    }
+
+    .table.mobile-card-table tbody td:first-child {
+        border-top: 0;
+    }
+
+    .table.mobile-card-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #6c757d;
+        font-size: 0.8rem;
+    }
+
+    .table.mobile-card-table tbody td:last-child {
+        padding-bottom: 0.7rem;
+    }
+
+    .table.mobile-card-table .btn {
+        min-width: 2.25rem;
+    }
+}

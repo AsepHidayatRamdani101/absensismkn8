@@ -62,68 +62,70 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableStudents" class="table table-bordered table-striped">
+            <div class="table-responsive">
+                <table id="tableStudents" class="table table-bordered table-striped">
 
-                <thead>
+                    <thead>
 
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>NIS</th>
-                        <th>Nama</th>
-                        <th>JK</th>
-                        <th>Kelas</th>
-                        <th>Jabatan</th>
-                        <th>No HP</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    @foreach ($students as $student)
                         <tr>
-
-                            <td>{{ $loop->iteration }}</td>
-
-                            <td>{{ $student->nis }}</td>
-
-                            <td>{{ $student->nama_lengkap }}</td>
-
-                            <td>{{ $student->jenis_kelamin }}</td>
-
-                            <td>
-
-                                {{ $student->classroom->nama_kelas }}
-
-                            </td>
-
-                            <td>{{ $student->jabatan_kelas_label }}</td>
-
-                            <td>{{ $student->no_hp }}</td>
-
-                            <td>
-
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $student->id }}">
-
-                                    <i class="fas fa-edit"></i>
-
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $student->id }}">
-
-                                    <i class="fas fa-trash"></i>
-
-                                </button>
-
-                            </td>
-
+                            <th width="5%">No</th>
+                            <th>NIS</th>
+                            <th>Nama</th>
+                            <th>JK</th>
+                            <th>Kelas</th>
+                            <th>Jabatan</th>
+                            <th>No HP</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
 
-                </tbody>
+                    </thead>
 
-            </table>
+                    <tbody>
+
+                        @foreach ($students as $student)
+                            <tr>
+
+                                <td>{{ $loop->iteration }}</td>
+
+                                <td>{{ $student->nis }}</td>
+
+                                <td>{{ $student->nama_lengkap }}</td>
+
+                                <td>{{ $student->jenis_kelamin }}</td>
+
+                                <td>
+
+                                    {{ $student->classroom->nama_kelas }}
+
+                                </td>
+
+                                <td>{{ $student->jabatan_kelas_label }}</td>
+
+                                <td>{{ $student->no_hp }}</td>
+
+                                <td>
+
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $student->id }}">
+
+                                        <i class="fas fa-edit"></i>
+
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $student->id }}">
+
+                                        <i class="fas fa-trash"></i>
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+                        @endforeach
+
+                    </tbody>
+
+                </table>
+            </div>
 
         </div>
 

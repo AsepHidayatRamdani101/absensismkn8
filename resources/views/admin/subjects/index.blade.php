@@ -46,38 +46,40 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableSubjects" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Kode</th>
-                        <th>Nama Mata Pelajaran</th>
-                        <th>Kategori</th>
-                        <th>Jam/Minggu</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($subjects as $subject)
+            <div class="table-responsive">
+                <table id="tableSubjects" class="table table-bordered table-striped">
+                    <thead>
                         <tr>
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $subject->kode_mapel }}</td>
-                            <td>{{ $subject->nama_mapel }}</td>
-                            <td>{{ $subject->kategori }}</td>
-                            <td>{{ $subject->jam_per_minggu }}</td>
-                            <td>
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $subject->id }}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $subject->id }}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
+                            <th width="5%">No</th>
+                            <th>Kode</th>
+                            <th>Nama Mata Pelajaran</th>
+                            <th>Kategori</th>
+                            <th>Jam/Minggu</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($subjects as $subject)
+                            <tr>
+                                <td>{{ $loop->iteration }}</td>
+                                <td>{{ $subject->kode_mapel }}</td>
+                                <td>{{ $subject->nama_mapel }}</td>
+                                <td>{{ $subject->kategori }}</td>
+                                <td>{{ $subject->jam_per_minggu }}</td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $subject->id }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $subject->id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

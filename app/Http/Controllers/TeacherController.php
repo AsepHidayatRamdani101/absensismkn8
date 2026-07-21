@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Exports\TeachersExport;
 use App\Exports\TemplateExport;
 use App\Imports\TeachersImport;
+use App\Models\Classroom;
 use App\Models\Teacher;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -15,19 +18,42 @@ use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $teachers = Teacher::latest()->get();
+        $hasWaliKelasColumns = $this->hasWaliKelasColumns();
+        $kurikulumFilter = $request->string('kurikulum_filter')->toString();
+
+        $teacherQuery = Teacher::query();
+
+        if ($hasWaliKelasColumns) {
+            $teacherQuery->with('waliClassroom');
+        }
+
+        if ($kurikulumFilter === 'kurikulum') {
+            $teacherQuery->where('is_kurikulum', true);
+        } elseif ($kurikulumFilter === 'non_kurikulum') {
+            $teacherQuery->where(function ($query) {
+                $query->whereNull('is_kurikulum')->orWhere('is_kurikulum', false);
+            });
+        }
+
+        $teachers = $teacherQuery->latest()->get();
+
+        $classrooms = $hasWaliKelasColumns
+            ? Classroom::orderBy('nama_kelas')->get()
+            : collect();
 
         return view(
             'admin.teachers.index',
-            compact('teachers')
+            compact('teachers', 'classrooms', 'kurikulumFilter')
         );
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $hasWaliKelasColumns = $this->hasWaliKelasColumns();
+
+        $rules = [
 
             'nip' => 'nullable|unique:teachers',
 
@@ -35,15 +61,38 @@ class TeacherController extends Controller
 
             'nama_lengkap' => 'required',
 
+            'jabatan' => 'required|in:guru,kepala_program,kepala_sekolah,bk',
+
             'jenis_kelamin' => 'required|in:L,P',
 
             'no_hp' => 'nullable',
 
             'alamat' => 'nullable',
 
-        ]);
+            'is_kurikulum' => 'nullable|boolean',
 
-        Teacher::create($validated);
+        ];
+
+        if ($hasWaliKelasColumns) {
+            $rules['wali_classroom_id'] = [
+                'nullable',
+                'exists:classrooms,id',
+                Rule::unique('teachers', 'wali_classroom_id'),
+            ];
+        }
+
+        $validated = $request->validate($rules);
+
+        if ($hasWaliKelasColumns) {
+            $validated['wali_classroom_id'] = $validated['wali_classroom_id'] ?: null;
+            $validated['is_wali_kelas'] = !is_null($validated['wali_classroom_id']);
+        }
+
+        $validated['is_kurikulum'] = $request->boolean('is_kurikulum');
+
+        $teacher = Teacher::create($validated);
+
+        $this->syncTeacherRoles($teacher);
 
         return response()->json([
             'success' => true,
@@ -53,12 +102,18 @@ class TeacherController extends Controller
 
     public function edit(Teacher $teacher)
     {
-        return response()->json($teacher);
+        return response()->json(
+            $this->hasWaliKelasColumns()
+                ? $teacher->load('waliClassroom')
+                : $teacher
+        );
     }
 
     public function update(Request $request, Teacher $teacher)
     {
-        $validated = $request->validate([
+        $hasWaliKelasColumns = $this->hasWaliKelasColumns();
+
+        $rules = [
 
             'nip' => [
                 'nullable',
@@ -70,15 +125,38 @@ class TeacherController extends Controller
 
             'nama_lengkap' => 'required',
 
+            'jabatan' => 'required|in:guru,kepala_program,kepala_sekolah,bk',
+
             'jenis_kelamin' => 'required|in:L,P',
 
             'no_hp' => 'nullable',
 
             'alamat' => 'nullable',
 
-        ]);
+            'is_kurikulum' => 'nullable|boolean',
+
+        ];
+
+        if ($hasWaliKelasColumns) {
+            $rules['wali_classroom_id'] = [
+                'nullable',
+                'exists:classrooms,id',
+                Rule::unique('teachers', 'wali_classroom_id')->ignore($teacher->id),
+            ];
+        }
+
+        $validated = $request->validate($rules);
+
+        if ($hasWaliKelasColumns) {
+            $validated['wali_classroom_id'] = $validated['wali_classroom_id'] ?: null;
+            $validated['is_wali_kelas'] = !is_null($validated['wali_classroom_id']);
+        }
+
+        $validated['is_kurikulum'] = $request->boolean('is_kurikulum');
 
         $teacher->update($validated);
+
+        $this->syncTeacherRoles($teacher->fresh());
 
         return response()->json([
             'success' => true,
@@ -116,8 +194,8 @@ class TeacherController extends Controller
     {
         return Excel::download(
             new TemplateExport(
-                ['nip', 'nuptk', 'nama_lengkap', 'jenis_kelamin', 'no_hp', 'alamat'],
-                [['198801012010011001', '1234567890123456', 'Andi Wijaya', 'L', '08123456789', 'Jl. Pendidikan']]
+                ['nip', 'nuptk', 'nama_lengkap', 'jabatan', 'jenis_kelamin', 'no_hp', 'alamat', 'is_wali_kelas', 'wali_kelas', 'is_kurikulum'],
+                [['198801012010011001', '1234567890123456', 'Andi Wijaya', 'guru', 'L', '08123456789', 'Jl. Pendidikan', '0', '', '0']]
             ),
             'format-import-guru.xlsx'
         );
@@ -126,6 +204,7 @@ class TeacherController extends Controller
     public function generateAccounts()
     {
         Role::firstOrCreate(['name' => 'guru', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'kurikulum', 'guard_name' => 'web']);
 
         $created = 0;
         $updated = 0;
@@ -158,7 +237,11 @@ class TeacherController extends Controller
                     $updated++;
                 }
 
-                $user->syncRoles(['guru']);
+                if (!$user->hasRole('guru')) {
+                    $user->assignRole('guru');
+                }
+
+                $this->syncTeacherRoles($teacher, $user);
             }
         });
 
@@ -166,5 +249,43 @@ class TeacherController extends Controller
             'success',
             "Generate akun guru selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NIP/NUPTK kosong): {$skipped}."
         );
+    }
+
+    private function hasWaliKelasColumns(): bool
+    {
+        return Schema::hasColumns('teachers', ['is_wali_kelas', 'wali_classroom_id']);
+    }
+
+    private function syncTeacherRoles(Teacher $teacher, ?User $user = null): void
+    {
+        $username = trim((string) $teacher->nip);
+
+        if ($username === '') {
+            $username = trim((string) $teacher->nuptk);
+        }
+
+        if ($username === '') {
+            return;
+        }
+
+        $user = $user ?? User::query()->where('email', $username)->first();
+
+        if (!$user) {
+            return;
+        }
+
+        Role::firstOrCreate(['name' => 'kurikulum', 'guard_name' => 'web']);
+
+        if ($teacher->is_kurikulum) {
+            if (!$user->hasRole('kurikulum')) {
+                $user->assignRole('kurikulum');
+            }
+
+            return;
+        }
+
+        if ($user->hasRole('kurikulum')) {
+            $user->removeRole('kurikulum');
+        }
     }
 }

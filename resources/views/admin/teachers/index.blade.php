@@ -56,6 +56,25 @@
 
         <div class="card-body">
 
+            <form method="GET" action="{{ route('teachers.index') }}" class="mb-3">
+                <div class="row align-items-end">
+                    <div class="col-md-4 col-lg-3">
+                        <label for="kurikulum_filter" class="mb-1">Filter Kurikulum</label>
+                        <select name="kurikulum_filter" id="kurikulum_filter" class="form-control">
+                            <option value="" {{ $kurikulumFilter === '' ? 'selected' : '' }}>Semua Guru</option>
+                            <option value="kurikulum" {{ $kurikulumFilter === 'kurikulum' ? 'selected' : '' }}>Akun
+                                Kurikulum</option>
+                            <option value="non_kurikulum" {{ $kurikulumFilter === 'non_kurikulum' ? 'selected' : '' }}>Bukan
+                                Akun Kurikulum</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 col-lg-3 mt-3 mt-md-0">
+                        <button type="submit" class="btn btn-primary mr-2">Terapkan</button>
+                        <a href="{{ route('teachers.index') }}" class="btn btn-outline-secondary">Reset</a>
+                    </div>
+                </div>
+            </form>
+
             @if (session('success'))
                 <div class="alert alert-success">{{ session('success') }}</div>
             @endif
@@ -64,61 +83,78 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableTeachers" class="table table-bordered table-striped">
+            <div class="table-responsive">
+                <table id="tableTeachers" class="table table-bordered table-striped">
 
-                <thead>
+                    <thead>
 
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>NIP</th>
-                        <th>NUPTK</th>
-                        <th>Nama Guru</th>
-                        <th>JK</th>
-                        <th>No HP</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    @foreach ($teachers as $teacher)
                         <tr>
-
-                            <td>{{ $loop->iteration }}</td>
-
-                            <td>{{ $teacher->nip }}</td>
-
-                            <td>{{ $teacher->nuptk }}</td>
-
-                            <td>{{ $teacher->nama_lengkap }}</td>
-
-                            <td>{{ $teacher->jenis_kelamin }}</td>
-
-                            <td>{{ $teacher->no_hp }}</td>
-
-                            <td>
-
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $teacher->id }}">
-
-                                    <i class="fas fa-edit"></i>
-
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $teacher->id }}">
-
-                                    <i class="fas fa-trash"></i>
-
-                                </button>
-
-                            </td>
-
+                            <th width="5%">No</th>
+                            <th>NIP</th>
+                            <th>NUPTK</th>
+                            <th>Nama Guru</th>
+                            <th>Jabatan</th>
+                            <th>Kelas Wali</th>
+                            <th>Kurikulum</th>
+                            <th>JK</th>
+                            <th>No HP</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
 
-                </tbody>
+                    </thead>
 
-            </table>
+                    <tbody>
+
+                        @foreach ($teachers as $teacher)
+                            <tr>
+
+                                <td>{{ $loop->iteration }}</td>
+
+                                <td>{{ $teacher->nip }}</td>
+
+                                <td>{{ $teacher->nuptk }}</td>
+
+                                <td>{{ $teacher->nama_lengkap }}</td>
+
+                                <td>{{ $teacher->jabatan_label }}</td>
+
+                                <td>{{ $teacher->waliClassroom->nama_kelas ?? '-' }}</td>
+
+                                <td>
+                                    @if ($teacher->is_kurikulum)
+                                        <span class="badge badge-info">Ya</span>
+                                    @else
+                                        <span class="badge badge-secondary">Tidak</span>
+                                    @endif
+                                </td>
+
+                                <td>{{ $teacher->jenis_kelamin }}</td>
+
+                                <td>{{ $teacher->no_hp }}</td>
+
+                                <td>
+
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $teacher->id }}">
+
+                                        <i class="fas fa-edit"></i>
+
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $teacher->id }}">
+
+                                        <i class="fas fa-trash"></i>
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+                        @endforeach
+
+                    </tbody>
+
+                </table>
+            </div>
 
         </div>
 

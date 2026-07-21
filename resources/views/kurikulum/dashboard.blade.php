@@ -1,0 +1,76 @@
+@extends('adminlte::page')
+
+@section('title', 'Dashboard Kurikulum')
+
+@section('content_header')
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1 class="mb-1">Dashboard Kurikulum</h1>
+            <p class="text-muted mb-0">Akses cepat untuk absensi, setting jadwal, approval, dan laporan.</p>
+        </div>
+    </div>
+@stop
+
+@section('content')
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <div class="small-box bg-info">
+                <div class="inner">
+                    <h3>{{ $pendingGuruLeaveRequests }}</h3>
+                    <p>Pengajuan Izin Guru Menunggu</p>
+                </div>
+                <div class="icon"><i class="fas fa-file-signature"></i></div>
+                <a href="{{ route('kurikulum.teacher-leave-requests.index') }}" class="small-box-footer">
+                    Buka Approval <i class="fas fa-arrow-circle-right"></i>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="small-box bg-warning">
+                <div class="inner">
+                    <h3>{{ $pendingStudentLeaveRequests }}</h3>
+                    <p>Pengajuan Izin Siswa Menunggu</p>
+                </div>
+                <div class="icon"><i class="fas fa-user-clock"></i></div>
+                <a href="{{ route('reports.student-leave') }}" class="small-box-footer">
+                    Lihat Laporan <i class="fas fa-arrow-circle-right"></i>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="small-box bg-success">
+                <div class="inner">
+                    <h3>{{ $totalTeacherAttendancesToday }}</h3>
+                    <p>Absen Guru Hari Ini</p>
+                </div>
+                <div class="icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                <a href="{{ route('teacher-attendances.index') }}" class="small-box-footer">
+                    Lihat Data <i class="fas fa-arrow-circle-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <a href="{{ route('reports.teacher-attendance') }}" class="btn btn-outline-primary btn-block">Laporan
+                        Guru</a>
+                </div>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <a href="{{ route('reports.student-attendance') }}" class="btn btn-outline-primary btn-block">Laporan
+                        Siswa</a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{{ route('reports.teacher-agenda') }}" class="btn btn-outline-primary btn-block">Laporan Agenda
+                        Guru</a>
+                </div>
+            </div>
+        </div>
+    </div>
+@stop
+
+@section('footer')
+    @include('components.app-footer')
+@stop

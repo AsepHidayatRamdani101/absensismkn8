@@ -79,49 +79,51 @@
                 </div>
             </div>
 
-            <table id="tableSchedules" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Guru</th>
-                        <th>Mata Pelajaran</th>
-                        <th>Kelas</th>
-                        <th>Hari</th>
-                        <th>Jam</th>
-                        <th>Ruangan</th>
-                        <th>Tahun Ajaran</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($schedules as $schedule)
-                        <tr data-tingkat="{{ $schedule->teacherSubject->classroom->tingkat ?? '' }}"
-                            data-jurusan="{{ $schedule->teacherSubject->classroom->major->nama_jurusan ?? '' }}"
-                            data-kelas="{{ $schedule->teacherSubject->classroom->nama_kelas ?? '' }}">
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $schedule->teacherSubject->teacher->nama_lengkap ?? '-' }}</td>
-                            <td>{{ $schedule->teacherSubject->subject->nama_mapel ?? '-' }}</td>
-                            <td>{{ $schedule->teacherSubject->classroom->nama_kelas ?? '-' }}</td>
-                            <td>{{ $schedule->hari }}</td>
-                            <td>{{ $schedule->jam_mulai }} - {{ $schedule->jam_selesai }}</td>
-                            <td>{{ $schedule->ruangan ?? '-' }}</td>
-                            <td>
-                                {{ $schedule->teacherSubject->academicYear->tahun_ajaran ?? '-' }}
-                                ({{ $schedule->teacherSubject->academicYear->semester ?? '-' }})
-                            </td>
-                            <td>
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $schedule->id }}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $schedule->id }}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
+            <div class="table-responsive">
+                <table id="tableSchedules" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th width="5%">No</th>
+                            <th>Guru</th>
+                            <th>Mata Pelajaran</th>
+                            <th>Kelas</th>
+                            <th>Hari</th>
+                            <th>Jam</th>
+                            <th>Ruangan</th>
+                            <th>Tahun Ajaran</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($schedules as $schedule)
+                            <tr data-tingkat="{{ $schedule->teacherSubject->classroom->tingkat ?? '' }}"
+                                data-jurusan="{{ $schedule->teacherSubject->classroom->major->nama_jurusan ?? '' }}"
+                                data-kelas="{{ $schedule->teacherSubject->classroom->nama_kelas ?? '' }}">
+                                <td>{{ $loop->iteration }}</td>
+                                <td>{{ $schedule->teacherSubject->teacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $schedule->teacherSubject->subject->nama_mapel ?? '-' }}</td>
+                                <td>{{ $schedule->teacherSubject->classroom->nama_kelas ?? '-' }}</td>
+                                <td>{{ $schedule->hari }}</td>
+                                <td>{{ $schedule->jam_mulai }} - {{ $schedule->jam_selesai }}</td>
+                                <td>{{ $schedule->ruangan ?? '-' }}</td>
+                                <td>
+                                    {{ $schedule->teacherSubject->academicYear->tahun_ajaran ?? '-' }}
+                                    ({{ $schedule->teacherSubject->academicYear->semester ?? '-' }})
+                                </td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $schedule->id }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $schedule->id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

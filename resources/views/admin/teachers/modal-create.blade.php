@@ -64,6 +64,25 @@
 
                     <div class="form-group">
 
+                        <label>Jabatan</label>
+
+                        <select name="jabatan" class="form-control" required>
+
+                            <option value="guru">Guru</option>
+
+                            <option value="kepala_program">Kepala Program</option>
+
+                            <option value="kepala_sekolah">Kepala Sekolah</option>
+
+                            <option value="bk">BK</option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
                         <label>Jenis Kelamin</label>
 
                         <select name="jenis_kelamin" class="form-control">
@@ -86,6 +105,34 @@
                         <label>No HP</label>
 
                         <input type="text" name="no_hp" class="form-control">
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Kelas Wali</label>
+
+                        <select name="wali_classroom_id" id="create_wali_classroom_id" class="form-control">
+                            <option value="">Kosongkan jika bukan wali kelas</option>
+                            @foreach ($classrooms as $classroom)
+                                <option value="{{ $classroom->id }}">{{ $classroom->nama_kelas }}</option>
+                            @endforeach
+                        </select>
+
+                        <small class="text-muted d-block mt-1">Isi hanya jika guru memang menjadi wali kelas.</small>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="create_is_kurikulum"
+                                name="is_kurikulum" value="1">
+                            <label class="custom-control-label" for="create_is_kurikulum">Akun Kurikulum</label>
+                        </div>
+
+                        <small class="text-muted d-block mt-1">Centang jika akun ini dipakai untuk akses menu
+                            Kurikulum.</small>
 
                     </div>
 

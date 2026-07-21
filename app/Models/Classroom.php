@@ -18,4 +18,9 @@ class Classroom extends Model
         return $this->hasMany(Student::class);
     }
 
+    public function waliKelas()
+    {
+        return $this->hasOne(Teacher::class, 'wali_classroom_id');
+    }
+
 }

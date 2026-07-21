@@ -54,55 +54,57 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
-            <table id="tableMajors" class="table table-bordered table-striped">
+            <div class="table-responsive">
+                <table id="tableMajors" class="table table-bordered table-striped">
 
-                <thead>
+                    <thead>
 
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Kode</th>
-                        <th>Nama Jurusan</th>
-                        <th>Singkatan</th>
-                        <th width="15%">Aksi</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    @foreach ($majors as $major)
                         <tr>
-
-                            <td>{{ $loop->iteration }}</td>
-
-                            <td>{{ $major->kode_jurusan }}</td>
-
-                            <td>{{ $major->nama_jurusan }}</td>
-
-                            <td>{{ $major->singkatan }}</td>
-
-                            <td>
-
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $major->id }}">
-
-                                    <i class="fas fa-edit"></i>
-
-                                </button>
-
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $major->id }}">
-
-                                    <i class="fas fa-trash"></i>
-
-                                </button>
-
-                            </td>
-
+                            <th width="5%">No</th>
+                            <th>Kode</th>
+                            <th>Nama Jurusan</th>
+                            <th>Singkatan</th>
+                            <th width="15%">Aksi</th>
                         </tr>
-                    @endforeach
 
-                </tbody>
+                    </thead>
 
-            </table>
+                    <tbody>
+
+                        @foreach ($majors as $major)
+                            <tr>
+
+                                <td>{{ $loop->iteration }}</td>
+
+                                <td>{{ $major->kode_jurusan }}</td>
+
+                                <td>{{ $major->nama_jurusan }}</td>
+
+                                <td>{{ $major->singkatan }}</td>
+
+                                <td>
+
+                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $major->id }}">
+
+                                        <i class="fas fa-edit"></i>
+
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $major->id }}">
+
+                                        <i class="fas fa-trash"></i>
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+                        @endforeach
+
+                    </tbody>
+
+                </table>
+            </div>
 
         </div>
 

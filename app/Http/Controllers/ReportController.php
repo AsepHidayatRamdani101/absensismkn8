@@ -2,14 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\GuruMapelRecapExport;
+use App\Exports\GuruWaliKelasRecapExport;
+use App\Exports\StudentLeaveReportExport;
 use App\Exports\StudentAttendanceReportExport;
+use App\Exports\TeacherAgendaReportExport;
 use App\Exports\TeacherAttendanceReportExport;
+use App\Exports\TeacherLeaveReportExport;
 use App\Models\AttendanceDetail;
 use App\Models\Classroom;
 use App\Models\Major;
 use App\Models\Student;
+use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Models\TeacherLeaveRequest;
+use App\Models\TeacherSubject;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -54,6 +62,280 @@ class ReportController extends Controller
             'filters' => $request->all(),
             'periodLabel' => $this->buildPeriodLabel($request),
         ]);
+    }
+
+    public function guruWaliKelasRecap(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::with('waliClassroom.major')
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $payload = $this->buildGuruWaliKelasRecapPayload($teacher, $request);
+
+        return view('guru.rekap_siswa_wali_kelas.index', $payload);
+    }
+
+    public function guruWaliKelasRecapPdf(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::with('waliClassroom.major')
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $payload = $this->buildGuruWaliKelasRecapPayload($teacher, $request);
+
+        $pdf = Pdf::loadView('guru.reports.pdf.wali-kelas-recap', $payload)
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download('rekap-siswa-wali-kelas.pdf');
+    }
+
+    public function guruWaliKelasRecapExcel(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::with('waliClassroom.major')
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $payload = $this->buildGuruWaliKelasRecapPayload($teacher, $request);
+
+        return Excel::download(
+            new GuruWaliKelasRecapExport($payload['rows'], $payload['totals'], $payload['periodLabel'], $teacher, $teacher->waliClassroom),
+            'rekap-siswa-wali-kelas.xlsx'
+        );
+    }
+
+    private function buildGuruWaliKelasRecapPayload(Teacher $teacher, Request $request): array
+    {
+        $teacher->loadMissing('waliClassroom.major');
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        $students = Student::query()
+            ->where('classroom_id', $teacher->wali_classroom_id)
+            ->orderBy('nama_lengkap')
+            ->get();
+
+        $summaryQuery = AttendanceDetail::query()
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->select('attendance_details.student_id')
+            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
+            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Sakit' THEN 1 ELSE 0 END) as sakit")
+            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Izin' THEN 1 ELSE 0 END) as izin")
+            ->selectRaw("SUM(CASE WHEN attendance_details.status IN ('Alpha','Alpa') THEN 1 ELSE 0 END) as alpa")
+            ->selectRaw('COUNT(*) as total')
+            ->whereIn('attendance_details.student_id', $students->pluck('id'));
+
+        if ($startDate && $endDate) {
+            $summaryQuery->whereBetween('teacher_attendances.tanggal', [$startDate, $endDate]);
+        }
+
+        $summaries = $summaryQuery
+            ->groupBy('attendance_details.student_id')
+            ->get()
+            ->keyBy('student_id');
+
+        $rows = $students->map(function (Student $student) use ($summaries) {
+            $summary = $summaries->get($student->id);
+            $total = (int) ($summary->total ?? 0);
+            $hadir = (int) ($summary->hadir ?? 0);
+
+            return [
+                'student' => $student,
+                'hadir' => $hadir,
+                'sakit' => (int) ($summary->sakit ?? 0),
+                'izin' => (int) ($summary->izin ?? 0),
+                'alpa' => (int) ($summary->alpa ?? 0),
+                'total' => $total,
+                'persen_hadir' => $total > 0 ? round(($hadir / $total) * 100, 2) : 0,
+            ];
+        });
+
+        $totals = [
+            'hadir' => (int) $rows->sum('hadir'),
+            'sakit' => (int) $rows->sum('sakit'),
+            'izin' => (int) $rows->sum('izin'),
+            'alpa' => (int) $rows->sum('alpa'),
+            'total' => (int) $rows->sum('total'),
+        ];
+
+        return [
+            'teacher' => $teacher,
+            'classroom' => $teacher->waliClassroom,
+            'rows' => $rows,
+            'totals' => $totals,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ];
+    }
+
+    public function guruMapelRecap(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
+        }
+
+        $payload = $this->buildGuruMapelRecapPayload($teacher, $request);
+
+        return view('guru.rekap_guru_mapel.index', $payload);
+    }
+
+    public function guruMapelRecapPdf(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            abort(403);
+        }
+
+        $payload = $this->buildGuruMapelRecapPayload($teacher, $request);
+
+        $pdf = Pdf::loadView('guru.reports.pdf.mapel-recap', $payload)
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download('rekap-guru-mapel.pdf');
+    }
+
+    public function guruMapelRecapExcel(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            abort(403);
+        }
+
+        $payload = $this->buildGuruMapelRecapPayload($teacher, $request);
+
+        return Excel::download(
+            new GuruMapelRecapExport($payload['rows'], $payload['totals'], $payload['periodLabel'], $teacher),
+            'rekap-guru-mapel.xlsx'
+        );
+    }
+
+    private function buildGuruMapelRecapPayload(Teacher $teacher, Request $request): array
+    {
+
+        $teacherSubjects = TeacherSubject::query()
+            ->with(['subject', 'classroom'])
+            ->where('teacher_id', $teacher->id)
+            ->get();
+
+        $subjectOptions = $teacherSubjects
+            ->map(fn($item) => $item->subject)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nama_mapel')
+            ->values();
+
+        $classroomOptions = $teacherSubjects
+            ->map(fn($item) => $item->classroom)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nama_kelas')
+            ->values();
+
+        $allowedSubjectIds = $subjectOptions->pluck('id')->map(fn($id) => (int) $id)->values()->all();
+        $allowedClassroomIds = $classroomOptions->pluck('id')->map(fn($id) => (int) $id)->values()->all();
+
+        $selectedSubjectId = $request->filled('subject_id') ? (int) $request->subject_id : null;
+        $selectedClassroomId = $request->filled('classroom_id') ? (int) $request->classroom_id : null;
+
+        if ($selectedSubjectId !== null && !in_array($selectedSubjectId, $allowedSubjectIds, true)) {
+            $selectedSubjectId = null;
+        }
+
+        if ($selectedClassroomId !== null && !in_array($selectedClassroomId, $allowedClassroomIds, true)) {
+            $selectedClassroomId = null;
+        }
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rowsQuery = AttendanceDetail::query()
+            ->with([
+                'student.classroom',
+                'teacherAttendance.subject',
+                'teacherAttendance.classroom',
+            ])
+            ->whereHas('teacherAttendance', function ($query) use ($teacher, $startDate, $endDate, $selectedSubjectId, $selectedClassroomId) {
+                $query->where('teacher_id', $teacher->id);
+
+                if ($startDate && $endDate) {
+                    $query->whereBetween('tanggal', [$startDate, $endDate]);
+                }
+
+                if ($selectedSubjectId !== null) {
+                    $query->where('subject_id', $selectedSubjectId);
+                }
+
+                if ($selectedClassroomId !== null) {
+                    $query->where('classroom_id', $selectedClassroomId);
+                }
+            })
+            ->orderByDesc('id');
+
+        $rows = $rowsQuery->get();
+
+        $totals = [
+            'hadir' => (int) $rows->where('status', 'Hadir')->count(),
+            'sakit' => (int) $rows->where('status', 'Sakit')->count(),
+            'izin' => (int) $rows->where('status', 'Izin')->count(),
+            'alpa' => (int) $rows->filter(function ($item) {
+                return in_array($item->status, ['Alpha', 'Alpa'], true);
+            })->count(),
+            'total' => (int) $rows->count(),
+        ];
+
+        return [
+            'teacher' => $teacher,
+            'rows' => $rows,
+            'totals' => $totals,
+            'filters' => [
+                ...$request->all(),
+                'subject_id' => $selectedSubjectId,
+                'classroom_id' => $selectedClassroomId,
+            ],
+            'periodLabel' => $this->buildPeriodLabel($request),
+            'subjectOptions' => $subjectOptions,
+            'classroomOptions' => $classroomOptions,
+            'showSubjectFilter' => $subjectOptions->count() > 1,
+            'showClassroomFilter' => $classroomOptions->count() > 1,
+        ];
     }
 
     public function teacherAttendancePdf(Request $request)
@@ -102,6 +384,121 @@ class ReportController extends Controller
         );
     }
 
+    public function teacherAgenda(Request $request)
+    {
+        $rows = $this->buildTeacherAgendaQuery($request)->get();
+
+        $teachers = Teacher::orderBy('nama_lengkap')->get();
+        $majors = Major::orderBy('nama_jurusan')->get();
+        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+
+        return view('admin.reports.teacher-agenda', [
+            'rows' => $rows,
+            'teachers' => $teachers,
+            'majors' => $majors,
+            'classrooms' => $classrooms,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function teacherAgendaPdf(Request $request)
+    {
+        $rows = $this->buildTeacherAgendaQuery($request)->get();
+
+        $pdf = Pdf::loadView('admin.reports.pdf.teacher-agenda', [
+            'rows' => $rows,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-agenda-guru.pdf');
+    }
+
+    public function teacherAgendaExcel(Request $request)
+    {
+        $rows = $this->buildTeacherAgendaQuery($request)->get();
+
+        return Excel::download(
+            new TeacherAgendaReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
+            'laporan-agenda-guru.xlsx'
+        );
+    }
+
+    public function teacherLeave(Request $request)
+    {
+        $rows = $this->buildTeacherLeaveQuery($request)->get();
+        $teachers = Teacher::orderBy('nama_lengkap')->get();
+
+        return view('admin.reports.teacher-leave', [
+            'rows' => $rows,
+            'teachers' => $teachers,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function teacherLeavePdf(Request $request)
+    {
+        $rows = $this->buildTeacherLeaveQuery($request)->get();
+
+        $pdf = Pdf::loadView('admin.reports.pdf.teacher-leave', [
+            'rows' => $rows,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-izin-guru.pdf');
+    }
+
+    public function teacherLeaveExcel(Request $request)
+    {
+        $rows = $this->buildTeacherLeaveQuery($request)->get();
+
+        return Excel::download(
+            new TeacherLeaveReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
+            'laporan-izin-guru.xlsx'
+        );
+    }
+
+    public function studentLeave(Request $request)
+    {
+        $rows = $this->buildStudentLeaveQuery($request)->get();
+        $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
+        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+
+        return view('admin.reports.student-leave', [
+            'rows' => $rows,
+            'students' => $students,
+            'classrooms' => $classrooms,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function studentLeavePdf(Request $request)
+    {
+        $rows = $this->buildStudentLeaveQuery($request)->get();
+
+        $pdf = Pdf::loadView('admin.reports.pdf.student-leave', [
+            'rows' => $rows,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-izin-siswa.pdf');
+    }
+
+    public function studentLeaveExcel(Request $request)
+    {
+        $rows = $this->buildStudentLeaveQuery($request)->get();
+
+        return Excel::download(
+            new StudentLeaveReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
+            'laporan-izin-siswa.xlsx'
+        );
+    }
+
     private function buildTeacherAttendanceQuery(Request $request)
     {
         $query = TeacherAttendance::with([
@@ -129,6 +526,63 @@ class ReportController extends Controller
 
         if ($request->filled('classroom_id')) {
             $query->where('classroom_id', $request->classroom_id);
+        }
+
+        return $query;
+    }
+
+    private function buildTeacherAgendaQuery(Request $request)
+    {
+        return $this->buildTeacherAttendanceQuery($request);
+    }
+
+    private function buildTeacherLeaveQuery(Request $request)
+    {
+        $query = TeacherLeaveRequest::with('teacher')->orderByDesc('tanggal_mulai')->orderByDesc('id');
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        if ($startDate && $endDate) {
+            $query->whereDate('tanggal_mulai', '<=', $endDate)
+                ->whereDate('tanggal_selesai', '>=', $startDate);
+        }
+
+        if ($request->filled('teacher_id')) {
+            $query->where('teacher_id', $request->teacher_id);
+        }
+
+        if ($request->filled('status_pengajuan')) {
+            $query->where('status_pengajuan', $request->status_pengajuan);
+        }
+
+        return $query;
+    }
+
+    private function buildStudentLeaveQuery(Request $request)
+    {
+        $query = StudentLeaveRequest::with(['student.classroom.major', 'verifier'])
+            ->orderByDesc('tanggal_mulai')
+            ->orderByDesc('id');
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        if ($startDate && $endDate) {
+            $query->whereDate('tanggal_mulai', '<=', $endDate)
+                ->whereDate('tanggal_selesai', '>=', $startDate);
+        }
+
+        if ($request->filled('student_id')) {
+            $query->where('student_id', $request->student_id);
+        }
+
+        if ($request->filled('classroom_id')) {
+            $query->whereHas('student', function ($studentQuery) use ($request) {
+                $studentQuery->where('classroom_id', $request->classroom_id);
+            });
+        }
+
+        if ($request->filled('status_pengajuan')) {
+            $query->where('status_pengajuan', $request->status_pengajuan);
         }
 
         return $query;

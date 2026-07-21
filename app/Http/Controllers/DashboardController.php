@@ -10,6 +10,7 @@ use App\Models\Major;
 use App\Models\Schedule;
 use App\Models\SchoolSetting;
 use App\Models\Student;
+use App\Models\StudentLeaveRequest;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
@@ -31,6 +32,10 @@ class DashboardController extends Controller
 
         if (method_exists($user, 'hasRole') && $user->hasRole('admin')) {
             return redirect()->route('admin.dashboard');
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('kurikulum')) {
+            return redirect()->route('kurikulum.dashboard');
         }
 
         if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
@@ -401,6 +406,8 @@ class DashboardController extends Controller
         $teachingSubjectCount = 0;
         $todayScheduleCount = 0;
         $todayAttendanceCount = 0;
+        $pendingStudentLeaveRequests = 0;
+        $isWaliKelas = false;
 
         if ($teacher) {
             $baseQuery = TeacherAttendance::query()->where('teacher_id', $teacher->id);
@@ -482,6 +489,17 @@ class DashboardController extends Controller
                 ->where('teacher_id', $teacher->id)
                 ->whereDate('tanggal', $today->toDateString())
                 ->count();
+
+            $isWaliKelas = (bool) ($teacher->is_wali_kelas && $teacher->wali_classroom_id);
+
+            if ($isWaliKelas) {
+                $pendingStudentLeaveRequests = (int) StudentLeaveRequest::query()
+                    ->where('status_pengajuan', 'Menunggu')
+                    ->whereHas('student', function ($query) use ($teacher) {
+                        $query->where('classroom_id', $teacher->wali_classroom_id);
+                    })
+                    ->count();
+            }
         }
 
         $schoolSetting = SchoolSetting::first();
@@ -503,7 +521,30 @@ class DashboardController extends Controller
             'teachingSubjectCount',
             'todayScheduleCount',
             'todayAttendanceCount',
+            'pendingStudentLeaveRequests',
+            'isWaliKelas',
             'schoolSetting'
+        ));
+    }
+
+    public function kurikulum()
+    {
+        $pendingGuruLeaveRequests = class_exists(\App\Models\TeacherLeaveRequest::class)
+            ? (int) \App\Models\TeacherLeaveRequest::query()->where('status_pengajuan', 'Menunggu')->count()
+            : 0;
+
+        $pendingStudentLeaveRequests = class_exists(\App\Models\StudentLeaveRequest::class)
+            ? (int) \App\Models\StudentLeaveRequest::query()->where('status_pengajuan', 'Menunggu')->count()
+            : 0;
+
+        $totalTeacherAttendancesToday = (int) TeacherAttendance::query()
+            ->whereDate('tanggal', Carbon::today()->toDateString())
+            ->count();
+
+        return view('kurikulum.dashboard', compact(
+            'pendingGuruLeaveRequests',
+            'pendingStudentLeaveRequests',
+            'totalTeacherAttendancesToday'
         ));
     }
 

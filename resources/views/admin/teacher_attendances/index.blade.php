@@ -82,54 +82,56 @@
                 </div>
             </div>
 
-            <table id="tableTeacherAttendances" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Guru</th>
-                        <th>Tanggal</th>
-                        <th>Pertemuan</th>
-                        <th>Kelas</th>
-                        <th>Mata Pelajaran</th>
-                        <th>Tahun Ajaran</th>
-                        <th>Status</th>
-                        @if (!$isReadOnly)
-                            <th width="15%">Aksi</th>
-                        @endif
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($teacherAttendances as $item)
-                        <tr data-tahun-ajaran="{{ $item->academicYear->tahun_ajaran ?? '' }}"
-                            data-tanggal="{{ $item->tanggal }}" data-guru="{{ $item->teacher->nama_lengkap ?? '' }}"
-                            data-mapel="{{ $item->subject->nama_mapel ?? '' }}"
-                            data-pertemuan="{{ $item->pertemuan ?? '' }}"
-                            data-kelas="{{ $item->classroom->nama_kelas ?? '' }}">
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                            <td>{{ $item->tanggal }}</td>
-                            <td>{{ $item->pertemuan }}</td>
-                            <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
-                            <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
-                            <td>{{ $item->academicYear->tahun_ajaran ?? '-' }}
-                                ({{ $item->academicYear->semester ?? '-' }})
-                            </td>
-                            <td>{{ $item->status }}</td>
+            <div class="table-responsive">
+                <table id="tableTeacherAttendances" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th width="5%">No</th>
+                            <th>Guru</th>
+                            <th>Tanggal</th>
+                            <th>Pertemuan</th>
+                            <th>Kelas</th>
+                            <th>Mata Pelajaran</th>
+                            <th>Tahun Ajaran</th>
+                            <th>Status</th>
                             @if (!$isReadOnly)
-                                <td>
-                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $item->id }}">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-
-                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $item->id }}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
+                                <th width="15%">Aksi</th>
                             @endif
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($teacherAttendances as $item)
+                            <tr data-tahun-ajaran="{{ $item->academicYear->tahun_ajaran ?? '' }}"
+                                data-tanggal="{{ $item->tanggal }}" data-guru="{{ $item->teacher->nama_lengkap ?? '' }}"
+                                data-mapel="{{ $item->subject->nama_mapel ?? '' }}"
+                                data-pertemuan="{{ $item->pertemuan ?? '' }}"
+                                data-kelas="{{ $item->classroom->nama_kelas ?? '' }}">
+                                <td>{{ $loop->iteration }}</td>
+                                <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $item->tanggal }}</td>
+                                <td>{{ $item->pertemuan }}</td>
+                                <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
+                                <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
+                                <td>{{ $item->academicYear->tahun_ajaran ?? '-' }}
+                                    ({{ $item->academicYear->semester ?? '-' }})
+                                </td>
+                                <td>{{ $item->status }}</td>
+                                @if (!$isReadOnly)
+                                    <td>
+                                        <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $item->id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+
+                                        <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $item->id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                @endif
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

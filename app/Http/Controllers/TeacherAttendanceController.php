@@ -10,13 +10,15 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Models\TeacherLeaveRequest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class TeacherAttendanceController extends Controller
 {
-    public function siswaIndex()
+    public function siswaIndex(Request $request)
     {
         $user = Auth::user();
 
@@ -42,15 +44,24 @@ class TeacherAttendanceController extends Controller
         ];
 
         $today = Carbon::today();
-        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $selectedDateInput = (string) $request->query('tanggal', $today->toDateString());
+
+        try {
+            $selectedDate = Carbon::parse($selectedDateInput)->startOfDay();
+        } catch (\Throwable $e) {
+            $selectedDate = $today->copy();
+        }
+
+        $selectedDayName = $dayMap[$selectedDate->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($selectedDayName, ['Sabtu', 'Minggu'], true);
+        $isSelectedDateToday = $selectedDate->isSameDay($today);
 
         $schedules = collect();
 
-        if ($todayDayName !== null && !$isWeekendHoliday) {
+        if ($selectedDayName !== null && !$isWeekendHoliday) {
             $schedules = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
-                ->where('hari', $todayDayName)
+                ->where('hari', $selectedDayName)
                 ->whereHas('teacherSubject', function ($query) use ($student) {
                     $query->where('classroom_id', $student->classroom_id);
                 })
@@ -58,10 +69,67 @@ class TeacherAttendanceController extends Controller
                 ->get();
         }
 
+        $guruMapelOptions = $schedules
+            ->map(function ($schedule) {
+                $teacherSubject = $schedule->teacherSubject;
+
+                return [
+                    'id' => (int) ($teacherSubject->id ?? 0),
+                    'label' => trim((string) ($teacherSubject->subject->nama_mapel ?? '-'))
+                        . ' - ' . trim((string) ($teacherSubject->teacher->nama_lengkap ?? '-')),
+                ];
+            })
+            ->filter(fn($option) => $option['id'] > 0)
+            ->unique('id')
+            ->sortBy('label')
+            ->values();
+
+        $selectedGuruMapelId = (int) $request->query('guru_mapel', 0);
+        $allowedGuruMapelIds = $guruMapelOptions->pluck('id')->all();
+
+        if ($selectedGuruMapelId !== 0 && !in_array($selectedGuruMapelId, $allowedGuruMapelIds, true)) {
+            $selectedGuruMapelId = 0;
+        }
+
+        if ($selectedGuruMapelId !== 0) {
+            $schedules = $schedules->filter(function ($schedule) use ($selectedGuruMapelId) {
+                return (int) ($schedule->teacherSubject->id ?? 0) === $selectedGuruMapelId;
+            })->values();
+        }
+
+        $teacherIds = $schedules
+            ->pluck('teacherSubject.teacher_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $todayLeaveRequestsByTeacher = collect();
+        $approvedLeavesByTeacher = collect();
+
+        if ($teacherIds->isNotEmpty()) {
+            $todayLeaveRequestsByTeacher = TeacherLeaveRequest::query()
+                ->whereIn('teacher_id', $teacherIds)
+                ->whereDate('tanggal_mulai', '<=', $selectedDate->toDateString())
+                ->whereDate('tanggal_selesai', '>=', $selectedDate->toDateString())
+                ->latest('id')
+                ->get()
+                ->unique('teacher_id')
+                ->keyBy('teacher_id');
+
+            $approvedLeavesByTeacher = TeacherLeaveRequest::query()
+                ->whereIn('teacher_id', $teacherIds)
+                ->where('status_pengajuan', 'Disetujui')
+                ->whereDate('tanggal_mulai', '<=', $selectedDate->toDateString())
+                ->whereDate('tanggal_selesai', '>=', $selectedDate->toDateString())
+                ->latest('id')
+                ->get()
+                ->keyBy('teacher_id');
+        }
+
         $scheduleIds = $schedules->pluck('id');
 
         $teacherAttendances = TeacherAttendance::query()
-            ->whereDate('tanggal', $today->toDateString())
+            ->whereDate('tanggal', $selectedDate->toDateString())
             ->whereIn('schedule_id', $scheduleIds)
             ->get()
             ->keyBy('schedule_id');
@@ -72,9 +140,11 @@ class TeacherAttendanceController extends Controller
             ->get()
             ->keyBy('teacher_attendance_id');
 
-        $scheduleRows = $schedules->map(function ($schedule) use ($teacherAttendances, $attendanceDetails) {
+        $scheduleRows = $schedules->map(function ($schedule) use ($teacherAttendances, $attendanceDetails, $todayLeaveRequestsByTeacher, $approvedLeavesByTeacher, $canSubmitTeacherAttendance, $isSelectedDateToday) {
             $teacherAttendance = $teacherAttendances->get($schedule->id);
             $detail = $teacherAttendance ? $attendanceDetails->get($teacherAttendance->id) : null;
+            $todayLeaveRequest = $todayLeaveRequestsByTeacher->get((int) ($schedule->teacherSubject->teacher_id ?? 0));
+            $approvedLeave = $approvedLeavesByTeacher->get((int) ($schedule->teacherSubject->teacher_id ?? 0));
 
             $selectedAction = null;
             if ($detail) {
@@ -87,21 +157,56 @@ class TeacherAttendanceController extends Controller
                 }
             }
 
+            $guruStatus = $approvedLeave
+                ? $approvedLeave->jenis_pengajuan
+                : ($teacherAttendance?->kehadiran_guru ?? 'Hadir');
+
+            $requiresApproval = (bool) $todayLeaveRequest;
+            $isApprovedIzin = (bool) $approvedLeave && strcasecmp((string) $guruStatus, 'Izin') === 0;
+            $canOfficerSubmitForRow = $canSubmitTeacherAttendance
+                && $isSelectedDateToday
+                && (!$requiresApproval || (bool) $approvedLeave)
+                && !$isApprovedIzin;
+
+            $submissionBlockReason = null;
+
+            if (!$isSelectedDateToday) {
+                $submissionBlockReason = 'Aksi hanya tersedia untuk tanggal hari ini';
+            }
+
+            if ($canSubmitTeacherAttendance && $isSelectedDateToday && $requiresApproval && !$approvedLeave) {
+                $submissionBlockReason = 'Menunggu approve kurikulum';
+            }
+
+            if ($canSubmitTeacherAttendance && $isSelectedDateToday && $isApprovedIzin) {
+                $submissionBlockReason = 'Guru izin sudah disetujui kurikulum';
+            }
+
             return [
                 'schedule' => $schedule,
                 'teacher_attendance' => $teacherAttendance,
                 'detail' => $detail,
                 'selected_action' => $selectedAction,
+                'today_leave_request' => $todayLeaveRequest,
+                'approved_leave' => $approvedLeave,
+                'guru_status' => $guruStatus,
+                'can_officer_submit' => $canOfficerSubmitForRow,
+                'submission_block_reason' => $submissionBlockReason,
+                'is_approved_izin' => $isApprovedIzin,
             ];
         });
 
         return view('siswa.teacher_attendances.index', [
             'student' => $student,
-            'today' => $today,
-            'todayDayName' => $todayDayName,
+            'today' => $selectedDate,
+            'todayDayName' => $selectedDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
             'scheduleRows' => $scheduleRows,
             'canSubmitTeacherAttendance' => $canSubmitTeacherAttendance,
+            'selectedDate' => $selectedDate->toDateString(),
+            'selectedGuruMapelId' => $selectedGuruMapelId,
+            'guruMapelOptions' => $guruMapelOptions,
+            'isSelectedDateToday' => $isSelectedDateToday,
         ]);
     }
 
@@ -252,6 +357,8 @@ class TeacherAttendanceController extends Controller
     {
         $validated = $request->validate([
             'action' => 'required|in:Hadir,Tugas,Tanpa Keterangan',
+            'foto_guru' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'foto_guru_kamera' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
 
         $user = Auth::user();
@@ -294,6 +401,26 @@ class TeacherAttendanceController extends Controller
                 ->with('error', 'Aksi hanya bisa dilakukan untuk jadwal hari ini.');
         }
 
+        $todayLeaveRequest = TeacherLeaveRequest::query()
+            ->where('teacher_id', $schedule->teacherSubject->teacher_id)
+            ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+            ->latest('id')
+            ->first();
+
+        $approvedLeave = TeacherLeaveRequest::query()
+            ->where('teacher_id', $schedule->teacherSubject->teacher_id)
+            ->where('status_pengajuan', 'Disetujui')
+            ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+            ->latest('id')
+            ->first();
+
+        if ($todayLeaveRequest && !$approvedLeave) {
+            return redirect()->route('siswa.teacher-attendances.index')
+                ->with('error', 'Guru sudah mengajukan izin, tetapi belum disetujui kurikulum. Absensi belum bisa dilakukan.');
+        }
+
         $teacherAttendance = TeacherAttendance::query()
             ->where('schedule_id', $schedule->id)
             ->whereDate('tanggal', $today->toDateString())
@@ -314,8 +441,29 @@ class TeacherAttendanceController extends Controller
                 'pertemuan' => max($lastPertemuan + 1, 1),
                 'materi_pembelajaran' => null,
                 'catatan_guru' => null,
+                'kehadiran_guru' => $approvedLeave?->jenis_pengajuan ?? 'Hadir',
+                'tugas_file_path' => $approvedLeave?->lampiran_tugas_path,
+                'tugas_deskripsi' => $approvedLeave?->deskripsi_tugas,
+                'foto_guru_path' => null,
                 'status' => 'Draft',
             ]);
+        } elseif ($approvedLeave) {
+            $teacherAttendance->update([
+                'kehadiran_guru' => $approvedLeave->jenis_pengajuan,
+                'tugas_file_path' => $approvedLeave->lampiran_tugas_path,
+                'tugas_deskripsi' => $approvedLeave->deskripsi_tugas,
+            ]);
+        }
+
+        $uploadedPhoto = $request->file('foto_guru') ?? $request->file('foto_guru_kamera');
+
+        if ($uploadedPhoto) {
+            if (!empty($teacherAttendance->foto_guru_path)) {
+                Storage::disk('public')->delete($teacherAttendance->foto_guru_path);
+            }
+
+            $teacherAttendance->foto_guru_path = $uploadedPhoto->store('siswa-foto-guru', 'public');
+            $teacherAttendance->save();
         }
 
         $status = match ($validated['action']) {

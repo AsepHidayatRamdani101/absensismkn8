@@ -125,38 +125,40 @@
 
             <p class="text-muted mb-2"><strong>Periode:</strong> {{ $periodLabel }}</p>
 
-            <table id="tableStudentReport" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th width="5%">No</th>
-                        <th>Tanggal</th>
-                        <th>Guru</th>
-                        <th>Siswa</th>
-                        <th>Mapel</th>
-                        <th>Jurusan</th>
-                        <th>Kelas</th>
-                        <th>Status</th>
-                        <th>Jam Absen</th>
-                        <th>Keterangan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($rows as $item)
+            <div class="table-responsive">
+                <table id="tableStudentReport" class="table table-bordered table-striped">
+                    <thead>
                         <tr>
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $item->teacherAttendance->tanggal ?? '-' }}</td>
-                            <td>{{ $item->teacherAttendance->teacher->nama_lengkap ?? '-' }}</td>
-                            <td>{{ $item->student->nama_lengkap ?? '-' }}</td>
-                            <td>{{ $item->teacherAttendance->subject->nama_mapel ?? '-' }}</td>
-                            <td>{{ $item->student->classroom->major->nama_jurusan ?? '-' }}</td>
-                            <td>{{ $item->student->classroom->nama_kelas ?? '-' }}</td>
-                            <td>{{ $item->status }}</td>
-                            <td>{{ $item->jam_absen ?? '-' }}</td>
-                            <td>{{ $item->keterangan ?? '-' }}</td>
+                            <th width="5%">No</th>
+                            <th>Tanggal</th>
+                            <th>Guru</th>
+                            <th>Siswa</th>
+                            <th>Mapel</th>
+                            <th>Jurusan</th>
+                            <th>Kelas</th>
+                            <th>Status</th>
+                            <th>Jam Absen</th>
+                            <th>Keterangan</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($rows as $item)
+                            <tr>
+                                <td>{{ $loop->iteration }}</td>
+                                <td>{{ $item->teacherAttendance->tanggal ?? '-' }}</td>
+                                <td>{{ $item->teacherAttendance->teacher->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $item->student->nama_lengkap ?? '-' }}</td>
+                                <td>{{ $item->teacherAttendance->subject->nama_mapel ?? '-' }}</td>
+                                <td>{{ $item->student->classroom->major->nama_jurusan ?? '-' }}</td>
+                                <td>{{ $item->student->classroom->nama_kelas ?? '-' }}</td>
+                                <td>{{ $item->status }}</td>
+                                <td>{{ $item->jam_absen ?? '-' }}</td>
+                                <td>{{ $item->keterangan ?? '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 @stop

@@ -2,17 +2,181 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\SiswaAttendanceHistoryExport;
 use App\Models\AttendanceDetail;
 use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Models\TeacherLeaveRequest;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceDetailController extends Controller
 {
+    public function siswaHistory(Request $request)
+    {
+        $student = $this->resolveCurrentStudent();
+
+        if (!$student) {
+            return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        $payload = $this->buildSiswaHistoryPayload($request, $student);
+
+        return view('siswa.attendance_history.index', [
+            'student' => $student,
+            ...$payload,
+        ]);
+    }
+
+    public function siswaHistoryPdf(Request $request)
+    {
+        $student = $this->resolveCurrentStudent();
+
+        if (!$student) {
+            return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        $payload = $this->buildSiswaHistoryPayload($request, $student);
+
+        $pdf = Pdf::loadView('siswa.attendance_history.pdf', [
+            'student' => $student,
+            'histories' => $payload['histories'],
+            'statusSummary' => $payload['statusSummary'],
+            'filters' => [
+                'tanggal_dari' => $payload['tanggalDari'],
+                'tanggal_sampai' => $payload['tanggalSampai'],
+                'status' => $payload['statusFilter'],
+                'guru_mapel' => $payload['guruMapelFilter'],
+            ],
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('riwayat-absen-siswa.pdf');
+    }
+
+    public function siswaHistoryExcel(Request $request)
+    {
+        $student = $this->resolveCurrentStudent();
+
+        if (!$student) {
+            return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        $payload = $this->buildSiswaHistoryPayload($request, $student);
+
+        return Excel::download(
+            new SiswaAttendanceHistoryExport($payload['histories']),
+            'riwayat-absen-siswa.xlsx'
+        );
+    }
+
+    public function siswaIndex(Request $request)
+    {
+        $officer = $this->resolveOfficerStudent();
+
+        if (!$officer || !$officer->canSubmitTeacherAttendance()) {
+            return redirect()->route('siswa.dashboard')
+                ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $today = Carbon::today();
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+
+        $leaveSchedules = collect();
+
+        if ($todayDayName !== null && !$isWeekendHoliday) {
+            $leaveSchedules = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
+                ->where('hari', $todayDayName)
+                ->whereHas('teacherSubject', function ($query) use ($officer, $today) {
+                    $query->where('classroom_id', $officer->classroom_id)
+                        ->whereHas('teacher.leaveRequests', function ($leaveQuery) use ($today) {
+                            $leaveQuery
+                                ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+                                ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+                                ->whereDate('tanggal_selesai', '>=', $today->toDateString());
+                        });
+                })
+                ->orderBy('jam_mulai')
+                ->get();
+        }
+
+        $selectedScheduleId = (int) $request->query('schedule_id', 0);
+        $allowedScheduleIds = $leaveSchedules->pluck('id')->map(fn($id) => (int) $id)->values()->all();
+
+        if ($selectedScheduleId !== 0 && !in_array($selectedScheduleId, $allowedScheduleIds, true)) {
+            $selectedScheduleId = 0;
+        }
+
+        if ($selectedScheduleId === 0 && !empty($allowedScheduleIds)) {
+            $selectedScheduleId = (int) $allowedScheduleIds[0];
+        }
+
+        $selectedSchedule = $leaveSchedules->firstWhere('id', $selectedScheduleId);
+
+        $activeLeaveRequest = null;
+        $statusByStudentId = [];
+
+        if ($selectedSchedule && $selectedSchedule->teacherSubject) {
+            $activeLeaveRequest = TeacherLeaveRequest::query()
+                ->where('teacher_id', $selectedSchedule->teacherSubject->teacher_id)
+                ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+                ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+                ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+                ->latest('id')
+                ->first();
+
+            $teacherAttendance = TeacherAttendance::query()
+                ->where('schedule_id', $selectedSchedule->id)
+                ->whereDate('tanggal', $today->toDateString())
+                ->first();
+
+            if ($teacherAttendance) {
+                $rows = AttendanceDetail::query()
+                    ->where('teacher_attendance_id', $teacherAttendance->id)
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $statusByStudentId[$row->student_id] = $row->status;
+                }
+            }
+        }
+
+        $students = Student::query()
+            ->with('classroom')
+            ->where('classroom_id', $officer->classroom_id)
+            ->orderBy('nama_lengkap')
+            ->get();
+
+        return view('siswa.attendance_details.index', [
+            'officer' => $officer,
+            'today' => $today,
+            'todayDayName' => $todayDayName,
+            'isWeekendHoliday' => $isWeekendHoliday,
+            'leaveSchedules' => $leaveSchedules,
+            'selectedScheduleId' => $selectedScheduleId,
+            'selectedSchedule' => $selectedSchedule,
+            'activeLeaveRequest' => $activeLeaveRequest,
+            'students' => $students,
+            'statusByStudentId' => $statusByStudentId,
+        ]);
+    }
+
     public function guruIndex(Request $request)
     {
         $user = auth()->user();
@@ -391,6 +555,117 @@ class AttendanceDetailController extends Controller
             ->with('success', 'Status absensi siswa berhasil disimpan.');
     }
 
+    public function submitForOfficer(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:Hadir,Sakit,Izin,Alpa',
+            'classroom_id' => 'required|integer',
+            'schedule_id' => 'required|integer|exists:schedules,id',
+        ]);
+
+        $officer = $this->resolveOfficerStudent();
+
+        if (!$officer || !$officer->canSubmitTeacherAttendance()) {
+            return redirect()->route('siswa.dashboard')
+                ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
+        }
+
+        $classroomId = (int) $validated['classroom_id'];
+
+        if ((int) $officer->classroom_id !== $classroomId || (int) $student->classroom_id !== $classroomId) {
+            abort(403);
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $today = Carbon::today();
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+
+        if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $validated['schedule_id']])
+                ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+        }
+
+        $schedule = Schedule::query()
+            ->with('teacherSubject')
+            ->where('id', (int) $validated['schedule_id'])
+            ->where('hari', $todayDayName)
+            ->whereHas('teacherSubject', function ($query) use ($classroomId) {
+                $query->where('classroom_id', $classroomId);
+            })
+            ->first();
+
+        if (!$schedule || !$schedule->teacherSubject) {
+            return redirect()->route('siswa.attendance-details.index')
+                ->with('error', 'Jadwal tidak valid untuk kelas Anda hari ini.');
+        }
+
+        $leaveRequest = TeacherLeaveRequest::query()
+            ->where('teacher_id', $schedule->teacherSubject->teacher_id)
+            ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+            ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+            ->latest('id')
+            ->first();
+
+        if (!$leaveRequest) {
+            return redirect()->route('siswa.attendance-details.index')
+                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru mengajukan izin.');
+        }
+
+        $teacherAttendance = TeacherAttendance::query()
+            ->where('schedule_id', $schedule->id)
+            ->whereDate('tanggal', $today->toDateString())
+            ->first();
+
+        if (!$teacherAttendance) {
+            $lastPertemuan = (int) TeacherAttendance::query()
+                ->where('schedule_id', $schedule->id)
+                ->max('pertemuan');
+
+            $teacherAttendance = TeacherAttendance::create([
+                'teacher_id' => $schedule->teacherSubject->teacher_id,
+                'schedule_id' => $schedule->id,
+                'classroom_id' => $schedule->teacherSubject->classroom_id,
+                'subject_id' => $schedule->teacherSubject->subject_id,
+                'academic_year_id' => $schedule->teacherSubject->academic_year_id,
+                'tanggal' => $today->toDateString(),
+                'pertemuan' => max($lastPertemuan + 1, 1),
+                'materi_pembelajaran' => null,
+                'catatan_guru' => null,
+                'kehadiran_guru' => $leaveRequest->jenis_pengajuan,
+                'tugas_file_path' => $leaveRequest->lampiran_tugas_path,
+                'tugas_deskripsi' => $leaveRequest->deskripsi_tugas,
+                'status' => 'Draft',
+            ]);
+        }
+
+        $status = $validated['status'] === 'Alpa' ? 'Alpha' : $validated['status'];
+
+        AttendanceDetail::updateOrCreate(
+            [
+                'teacher_attendance_id' => $teacherAttendance->id,
+                'student_id' => $student->id,
+            ],
+            [
+                'status' => $status,
+                'keterangan' => null,
+                'jam_absen' => now()->format('H:i:s'),
+            ]
+        );
+
+        return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+            ->with('success', 'Status absensi siswa berhasil disimpan.');
+    }
+
     public function submitBulkForGuru(Request $request)
     {
         $validated = $request->validate([
@@ -544,10 +819,242 @@ class AttendanceDetailController extends Controller
             ->with('success', "Berhasil menyimpan absensi {$savedCount} siswa.");
     }
 
+    public function submitBulkForOfficer(Request $request)
+    {
+        $validated = $request->validate([
+            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Alpa',
+            'classroom_id' => 'required|integer',
+            'schedule_id' => 'required|integer|exists:schedules,id',
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'required|integer|exists:students,id',
+        ]);
+
+        $officer = $this->resolveOfficerStudent();
+
+        if (!$officer || !$officer->canSubmitTeacherAttendance()) {
+            return redirect()->route('siswa.dashboard')
+                ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
+        }
+
+        $classroomId = (int) $validated['classroom_id'];
+
+        if ((int) $officer->classroom_id !== $classroomId) {
+            abort(403);
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $today = Carbon::today();
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+
+        if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $validated['schedule_id']])
+                ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+        }
+
+        $schedule = Schedule::query()
+            ->with('teacherSubject')
+            ->where('id', (int) $validated['schedule_id'])
+            ->where('hari', $todayDayName)
+            ->whereHas('teacherSubject', function ($query) use ($classroomId) {
+                $query->where('classroom_id', $classroomId);
+            })
+            ->first();
+
+        if (!$schedule || !$schedule->teacherSubject) {
+            return redirect()->route('siswa.attendance-details.index')
+                ->with('error', 'Jadwal tidak valid untuk kelas Anda hari ini.');
+        }
+
+        $leaveRequest = TeacherLeaveRequest::query()
+            ->where('teacher_id', $schedule->teacherSubject->teacher_id)
+            ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+            ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+            ->latest('id')
+            ->first();
+
+        if (!$leaveRequest) {
+            return redirect()->route('siswa.attendance-details.index')
+                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru mengajukan izin.');
+        }
+
+        $studentIds = collect($validated['student_ids'])->map(fn($id) => (int) $id)->values();
+
+        $students = Student::query()
+            ->whereIn('id', $studentIds)
+            ->where('classroom_id', $classroomId)
+            ->get();
+
+        if ($students->isEmpty()) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+                ->with('error', 'Tidak ada data siswa valid untuk disimpan.');
+        }
+
+        $teacherAttendance = TeacherAttendance::query()
+            ->where('schedule_id', $schedule->id)
+            ->whereDate('tanggal', $today->toDateString())
+            ->first();
+
+        if (!$teacherAttendance) {
+            $lastPertemuan = (int) TeacherAttendance::query()
+                ->where('schedule_id', $schedule->id)
+                ->max('pertemuan');
+
+            $teacherAttendance = TeacherAttendance::create([
+                'teacher_id' => $schedule->teacherSubject->teacher_id,
+                'schedule_id' => $schedule->id,
+                'classroom_id' => $schedule->teacherSubject->classroom_id,
+                'subject_id' => $schedule->teacherSubject->subject_id,
+                'academic_year_id' => $schedule->teacherSubject->academic_year_id,
+                'tanggal' => $today->toDateString(),
+                'pertemuan' => max($lastPertemuan + 1, 1),
+                'materi_pembelajaran' => null,
+                'catatan_guru' => null,
+                'kehadiran_guru' => $leaveRequest->jenis_pengajuan,
+                'tugas_file_path' => $leaveRequest->lampiran_tugas_path,
+                'tugas_deskripsi' => $leaveRequest->deskripsi_tugas,
+                'status' => 'Draft',
+            ]);
+        }
+
+        $status = $validated['bulk_status'] === 'Alpa' ? 'Alpha' : $validated['bulk_status'];
+
+        foreach ($students as $student) {
+            AttendanceDetail::updateOrCreate(
+                [
+                    'teacher_attendance_id' => $teacherAttendance->id,
+                    'student_id' => $student->id,
+                ],
+                [
+                    'status' => $status,
+                    'keterangan' => null,
+                    'jam_absen' => now()->format('H:i:s'),
+                ]
+            );
+        }
+
+        return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+            ->with('success', 'Absensi siswa berhasil disimpan secara massal.');
+    }
+
     private function isWeekendHoliday(string $date): bool
     {
         $dayName = Carbon::parse($date)->locale('id')->dayName;
 
         return in_array($dayName, ['Sabtu', 'Minggu'], true);
+    }
+
+    private function resolveOfficerStudent(): ?Student
+    {
+        $student = $this->resolveCurrentStudent();
+
+        return $student;
+    }
+
+    private function buildSiswaHistoryPayload(Request $request, Student $student): array
+    {
+        $query = AttendanceDetail::query()
+            ->with([
+                'teacherAttendance.teacher',
+                'teacherAttendance.subject',
+                'teacherAttendance.classroom',
+            ])
+            ->where('student_id', $student->id);
+
+        $tanggalDari = (string) $request->query('tanggal_dari', '');
+        $tanggalSampai = (string) $request->query('tanggal_sampai', '');
+        $statusFilter = (string) $request->query('status', '');
+        $guruMapelFilter = (string) $request->query('guru_mapel', '');
+
+        if ($tanggalDari !== '') {
+            $query->whereHas('teacherAttendance', function ($attendanceQuery) use ($tanggalDari) {
+                $attendanceQuery->whereDate('tanggal', '>=', $tanggalDari);
+            });
+        }
+
+        if ($tanggalSampai !== '') {
+            $query->whereHas('teacherAttendance', function ($attendanceQuery) use ($tanggalSampai) {
+                $attendanceQuery->whereDate('tanggal', '<=', $tanggalSampai);
+            });
+        }
+
+        if ($statusFilter !== '') {
+            $query->where('status', $statusFilter);
+        }
+
+        if ($guruMapelFilter !== '') {
+            [$teacherId, $subjectId] = array_pad(explode(':', $guruMapelFilter), 2, null);
+
+            if (is_numeric($teacherId) && is_numeric($subjectId)) {
+                $query->whereHas('teacherAttendance', function ($attendanceQuery) use ($teacherId, $subjectId) {
+                    $attendanceQuery->where('teacher_id', (int) $teacherId)
+                        ->where('subject_id', (int) $subjectId);
+                });
+            }
+        }
+
+        $histories = $query
+            ->latest('id')
+            ->get();
+
+        $guruMapelOptions = AttendanceDetail::query()
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->join('teachers', 'teachers.id', '=', 'teacher_attendances.teacher_id')
+            ->join('subjects', 'subjects.id', '=', 'teacher_attendances.subject_id')
+            ->where('attendance_details.student_id', $student->id)
+            ->selectRaw('teacher_attendances.teacher_id as teacher_id, teacher_attendances.subject_id as subject_id, subjects.nama_mapel as nama_mapel, teachers.nama_lengkap as nama_guru')
+            ->distinct()
+            ->orderBy('subjects.nama_mapel')
+            ->orderBy('teachers.nama_lengkap')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'value' => $item->teacher_id . ':' . $item->subject_id,
+                    'label' => $item->nama_mapel . ' - ' . $item->nama_guru,
+                ];
+            })
+            ->values();
+
+        $statusSummary = [
+            'total' => (int) $histories->count(),
+            'hadir' => (int) $histories->where('status', 'Hadir')->count(),
+            'sakit' => (int) $histories->where('status', 'Sakit')->count(),
+            'izin' => (int) $histories->where('status', 'Izin')->count(),
+            'alpa' => (int) $histories->filter(fn($item) => in_array($item->status, ['Alpha', 'Alpa'], true))->count(),
+            'terlambat' => (int) $histories->where('status', 'Terlambat')->count(),
+        ];
+
+        $statusSummary['persentase_hadir'] = $statusSummary['total'] > 0
+            ? round(($statusSummary['hadir'] / $statusSummary['total']) * 100, 2)
+            : 0;
+
+        return [
+            'histories' => $histories,
+            'tanggalDari' => $tanggalDari,
+            'tanggalSampai' => $tanggalSampai,
+            'statusFilter' => $statusFilter,
+            'guruMapelFilter' => $guruMapelFilter,
+            'guruMapelOptions' => $guruMapelOptions,
+            'statusSummary' => $statusSummary,
+        ];
+    }
+
+    private function resolveCurrentStudent(): ?Student
+    {
+        $user = auth()->user();
+
+        return Student::query()
+            ->where('nisn', $user->email)
+            ->orWhere('nis', $user->email)
+            ->first();
     }
 }

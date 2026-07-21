@@ -34,6 +34,10 @@ if ($user->hasRole('admin')) {
     return redirect('/admin');
 }
 
+if ($user->hasRole('kurikulum')) {
+    return redirect('/kurikulum');
+}
+
 if ($user->hasRole('guru')) {
     return redirect('/guru');
 }
