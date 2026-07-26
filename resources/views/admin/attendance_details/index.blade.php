@@ -8,10 +8,17 @@
     <div class="d-flex justify-content-between">
         <h1>Absensi Siswa Oleh Guru</h1>
 
-        <button class="btn btn-primary" data-toggle="modal" data-target="#modalCreate">
-            <i class="fas fa-plus"></i>
-            Tambah Absensi Siswa
-        </button>
+        <div>
+            <button class="btn btn-primary mr-1" data-toggle="modal" data-target="#modalCreate">
+                <i class="fas fa-plus"></i>
+                Tambah Absensi Siswa
+            </button>
+
+            <button id="btnDeleteMultipleAttendanceDetails" class="btn btn-danger d-none">
+                <i class="fas fa-trash"></i>
+                Hapus Terpilih (<span id="selectedCountAttendanceDetails">0</span>)
+            </button>
+        </div>
     </div>
 @stop
 
@@ -83,6 +90,7 @@
             <table id="tableAttendanceDetails" class="table table-bordered table-striped">
                 <thead>
                     <tr>
+                        <th width="3%"><input type="checkbox" id="checkAllAttendanceDetails"></th>
                         <th width="5%">No</th>
                         <th>Tanggal</th>
                         <th>Guru</th>
@@ -103,6 +111,7 @@
                             data-mapel="{{ $item->teacherAttendance->subject->nama_mapel ?? '' }}"
                             data-kelas="{{ $item->teacherAttendance->classroom->nama_kelas ?? '' }}"
                             data-status="{{ $item->status }}">
+                            <td><input type="checkbox" class="check-attendance-detail" value="{{ $item->id }}"></td>
                             <td>{{ $loop->iteration }}</td>
                             <td>{{ $item->teacherAttendance->tanggal ?? '-' }}</td>
                             <td>{{ $item->teacherAttendance->teacher->nama_lengkap ?? '-' }}</td>
@@ -113,11 +122,11 @@
                             <td>{{ $item->jam_absen ?? '-' }}</td>
                             <td>{{ $item->keterangan ?? '-' }}</td>
                             <td>
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $item->id }}">
+                                <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $item->id }}">
                                     <i class="fas fa-edit"></i>
                                 </button>
 
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $item->id }}">
+                                <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $item->id }}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>

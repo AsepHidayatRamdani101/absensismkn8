@@ -1,5 +1,7 @@
 @extends('adminlte::page')
 
+@include('guru.partials.mobile-ux')
+
 @section('title', 'Rekap Siswa Wali Kelas')
 
 @section('plugins.Datatables', true)
@@ -88,6 +90,7 @@
                             <th width="5%">No</th>
                             <th>NIS</th>
                             <th>Nama Siswa</th>
+                            <th>Identitas</th>
                             <th>Hadir</th>
                             <th>Sakit</th>
                             <th>Izin</th>
@@ -102,6 +105,20 @@
                                 <td>{{ $loop->iteration }}</td>
                                 <td>{{ $row['student']->nis }}</td>
                                 <td>{{ $row['student']->nama_lengkap }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-info btn-xs btn-student-identity"
+                                        data-name="{{ $row['student']->nama_lengkap }}"
+                                        data-nis="{{ $row['student']->nis }}"
+                                        data-nisn="{{ $row['student']->nisn ?? '-' }}"
+                                        data-parent="{{ $row['student']->nama_orang_tua_wali ?? '-' }}"
+                                        data-address="{{ $row['student']->alamat ?? '-' }}"
+                                        data-student-phone="{{ $row['student']->no_hp ?? '-' }}"
+                                        data-parent-phone="{{ $row['student']->no_hp_orang_tua ?? '-' }}"
+                                        data-height="{{ $row['student']->tinggi_badan ?? '-' }}"
+                                        data-weight="{{ $row['student']->berat_badan ?? '-' }}">
+                                        <i class="fas fa-id-card"></i>
+                                    </button>
+                                </td>
                                 <td>{{ $row['hadir'] }}</td>
                                 <td>{{ $row['sakit'] }}</td>
                                 <td>{{ $row['izin'] }}</td>
@@ -113,7 +130,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th colspan="3">Total</th>
+                            <th colspan="4">Total</th>
                             <th>{{ $totals['hadir'] }}</th>
                             <th>{{ $totals['sakit'] }}</th>
                             <th>{{ $totals['izin'] }}</th>
@@ -154,6 +171,28 @@
 
             $('#period_type').on('change', togglePeriodField);
             togglePeriodField();
+
+            $('.btn-student-identity').on('click', function() {
+                const button = $(this);
+
+                Swal.fire({
+                    title: button.data('name'),
+                    width: 700,
+                    html: `
+                        <div class="text-left">
+                            <p class="mb-2"><strong>NIS:</strong> ${button.data('nis') || '-'}</p>
+                            <p class="mb-2"><strong>NISN:</strong> ${button.data('nisn') || '-'}</p>
+                            <p class="mb-2"><strong>Orang Tua / Wali:</strong> ${button.data('parent') || '-'}</p>
+                            <p class="mb-2"><strong>Alamat:</strong> ${button.data('address') || '-'}</p>
+                            <p class="mb-2"><strong>No HP Siswa:</strong> ${button.data('student-phone') || '-'}</p>
+                            <p class="mb-2"><strong>No HP Orang Tua:</strong> ${button.data('parent-phone') || '-'}</p>
+                            <p class="mb-2"><strong>Tinggi Badan:</strong> ${button.data('height') || '-'} cm</p>
+                            <p class="mb-0"><strong>Berat Badan:</strong> ${button.data('weight') || '-'} kg</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'Tutup'
+                });
+            });
         });
     </script>
 @stop

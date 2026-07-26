@@ -26,17 +26,31 @@ class Student extends Model
         'nis',
         'nisn',
         'nama_lengkap',
+        'nama_orang_tua_wali',
         'jenis_kelamin',
         'classroom_id',
         'jabatan_kelas',
         'alamat',
         'no_hp',
+        'no_hp_orang_tua',
+        'tinggi_badan',
+        'berat_badan',
         'foto',
+    ];
+
+    protected $casts = [
+        'tinggi_badan' => 'decimal:2',
+        'berat_badan' => 'decimal:2',
     ];
 
     public function canSubmitTeacherAttendance(): bool
     {
         return in_array($this->jabatan_kelas, self::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE, true);
+    }
+
+    public function hasMinimumIdentityForProtectedMenus(): bool
+    {
+        return trim((string) $this->no_hp_orang_tua) !== '';
     }
 
     public function getJabatanKelasLabelAttribute(): string

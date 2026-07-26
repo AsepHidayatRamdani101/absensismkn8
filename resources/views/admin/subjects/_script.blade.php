@@ -143,5 +143,59 @@
                 }
             });
         });
+        //----------------------------------
+        // DELETE MULTIPLE
+        //----------------------------------
+
+        function updateSubjectBulkBtn() {
+            let count = $('.check-subject:checked').length;
+            $('#selectedCountSubjects').text(count);
+            $('#btnDeleteMultipleSubjects').toggleClass('d-none', count === 0);
+        }
+
+        $('#checkAllSubjects').on('change', function() {
+            $('.check-subject').prop('checked', this.checked);
+            updateSubjectBulkBtn();
+        });
+
+        $(document).on('change', '.check-subject', function() {
+            if (!this.checked) $('#checkAllSubjects').prop('checked', false);
+            updateSubjectBulkBtn();
+        });
+
+        $('#btnDeleteMultipleSubjects').on('click', function() {
+            let ids = $('.check-subject:checked').map(function() {
+                return this.value;
+            }).get();
+            Swal.fire({
+                title: 'Hapus ' + ids.length + ' mata pelajaran?',
+                text: 'Data tidak dapat dikembalikan',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ route('subjects.destroy-multiple') }}",
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            _method: 'DELETE',
+                            ids: ids,
+                        },
+                        success: function(res) {
+                            Swal.fire('Berhasil', res.message, 'success').then(() =>
+                                location.reload());
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Gagal', xhr.responseJSON?.message ??
+                                'Terjadi kesalahan', 'error');
+                        }
+                    });
+                }
+            });
+        });
+
     });
 </script>

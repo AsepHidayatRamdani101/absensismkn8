@@ -118,11 +118,11 @@
                                 <td>{{ $item->status }}</td>
                                 @if (!$isReadOnly)
                                     <td>
-                                        <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $item->id }}">
+                                        <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $item->id }}">
                                             <i class="fas fa-edit"></i>
                                         </button>
 
-                                        <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $item->id }}">
+                                        <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $item->id }}">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>

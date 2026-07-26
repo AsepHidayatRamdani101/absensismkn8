@@ -42,6 +42,11 @@
                 <i class="fas fa-plus"></i>
                 Tambah Siswa
             </button>
+
+            <button id="btnDeleteMultipleStudents" class="btn btn-danger d-none">
+                <i class="fas fa-trash"></i>
+                Hapus Terpilih (<span id="selectedCountStudents">0</span>)
+            </button>
         </div>
 
     </div>
@@ -62,15 +67,50 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
+            {{-- FILTER --}}
+            <form method="GET" action="{{ route('students.index') }}" class="mb-3" id="formFilterStudents">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="mb-1">Filter Jurusan</label>
+                        <select name="major_id" id="filterMajor" class="form-control form-control-sm">
+                            <option value="">Semua Jurusan</option>
+                            @foreach ($majors as $major)
+                                <option value="{{ $major->id }}" {{ $majorFilter == $major->id ? 'selected' : '' }}>
+                                    {{ $major->nama_jurusan }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3 mt-2 mt-md-0">
+                        <label class="mb-1">Filter Kelas</label>
+                        <select name="classroom_id" id="filterClassroom" class="form-control form-control-sm">
+                            <option value="">Semua Kelas</option>
+                            @foreach ($classrooms as $classroom)
+                                <option value="{{ $classroom->id }}" data-major="{{ $classroom->major_id }}"
+                                    {{ $classroomFilter == $classroom->id ? 'selected' : '' }}>
+                                    {{ $classroom->nama_kelas }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3 mt-2 mt-md-0">
+                        <button type="submit" class="btn btn-primary btn-sm mr-1">Terapkan</button>
+                        <a href="{{ route('students.index') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+                    </div>
+                </div>
+            </form>
+
             <div class="table-responsive">
                 <table id="tableStudents" class="table table-bordered table-striped">
 
                     <thead>
 
                         <tr>
+                            <th width="3%"><input type="checkbox" id="checkAllStudents"></th>
                             <th width="5%">No</th>
-                            <th>NIS</th>
+                            <th>NISN</th>
                             <th>Nama</th>
+                            <th>Status</th>
                             <th>JK</th>
                             <th>Kelas</th>
                             <th>Jabatan</th>
@@ -85,11 +125,21 @@
                         @foreach ($students as $student)
                             <tr>
 
+                                <td><input type="checkbox" class="check-student" value="{{ $student->id }}"></td>
+
                                 <td>{{ $loop->iteration }}</td>
 
-                                <td>{{ $student->nis }}</td>
+                                <td>{{ $student->nisn }}</td>
 
                                 <td>{{ $student->nama_lengkap }}</td>
+
+                                <td>
+                                    @if ($student->has_account)
+                                        <span class="badge badge-success">Sudah</span>
+                                    @else
+                                        <span class="badge badge-secondary">Belum</span>
+                                    @endif
+                                </td>
 
                                 <td>{{ $student->jenis_kelamin }}</td>
 
@@ -105,13 +155,13 @@
 
                                 <td>
 
-                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $student->id }}">
+                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $student->id }}">
 
                                         <i class="fas fa-edit"></i>
 
                                     </button>
 
-                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $student->id }}">
+                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $student->id }}">
 
                                         <i class="fas fa-trash"></i>
 
@@ -147,6 +197,26 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(function() {
+            // Filter: cascade kelas by jurusan
+            $('#filterMajor').on('change', function() {
+                let majorId = $(this).val();
+                $('#filterClassroom option').each(function() {
+                    if (!$(this).val()) return; // keep "Semua Kelas"
+                    $(this).toggle(!majorId || $(this).data('major') == majorId);
+                });
+                $('#filterClassroom').val('');
+            });
+
+            // On load: hide classrooms not matching selected major
+            (function() {
+                let majorId = $('#filterMajor').val();
+                if (!majorId) return;
+                $('#filterClassroom option').each(function() {
+                    if (!$(this).val()) return;
+                    if ($(this).data('major') != majorId) $(this).hide();
+                });
+            })();
+
             $('#btnImportStudents').on('click', function() {
                 $('#fileImportStudents').trigger('click');
             });
@@ -167,6 +237,15 @@
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'Memproses generate akun...',
+                            text: 'Mohon tunggu, akun siswa sedang dibuat.',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
                         $('#formGenerateAccountsStudents').submit();
                     }
                 });

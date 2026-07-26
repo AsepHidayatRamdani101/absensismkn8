@@ -83,6 +83,11 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
         }
 
+        if (!$officer->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum mengakses menu ini. Riwayat Absen tetap bisa diakses.');
+        }
+
         $dayMap = [
             1 => 'Senin',
             2 => 'Selasa',
@@ -93,7 +98,7 @@ class AttendanceDetailController extends Controller
             7 => 'Minggu',
         ];
 
-        $today = Carbon::today();
+        $today = Carbon::today(config('app.timezone'));
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
 
@@ -456,10 +461,25 @@ class AttendanceDetailController extends Controller
         ]);
     }
 
+    public function destroyMultiple(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:attendance_details,id',
+        ]);
+
+        AttendanceDetail::whereIn('id', $validated['ids'])->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => count($validated['ids']) . ' data absensi siswa oleh guru berhasil dihapus',
+        ]);
+    }
+
     public function submitForGuru(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'status' => 'required|in:Hadir,Sakit,Izin,Alpa',
+            'status' => 'required|in:Hadir,Sakit,Izin,Alpa,Terlambat',
             'classroom_id' => 'required|integer',
         ]);
 
@@ -570,6 +590,11 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
         }
 
+        if (!$officer->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum melakukan absensi. Riwayat Absen tetap bisa diakses.');
+        }
+
         $classroomId = (int) $validated['classroom_id'];
 
         if ((int) $officer->classroom_id !== $classroomId || (int) $student->classroom_id !== $classroomId) {
@@ -670,7 +695,7 @@ class AttendanceDetailController extends Controller
     {
         $validated = $request->validate([
             'classroom_id' => 'nullable|integer',
-            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Alpa',
+            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Alpa,Terlambat',
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'required|integer|exists:students,id',
         ]);
@@ -834,6 +859,11 @@ class AttendanceDetailController extends Controller
         if (!$officer || !$officer->canSubmitTeacherAttendance()) {
             return redirect()->route('siswa.dashboard')
                 ->with('error', 'Hanya KM/Sekretaris/Bendahara yang dapat mengisi absensi siswa kelas.');
+        }
+
+        if (!$officer->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum melakukan absensi massal. Riwayat Absen tetap bisa diakses.');
         }
 
         $classroomId = (int) $validated['classroom_id'];

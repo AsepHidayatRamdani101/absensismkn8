@@ -28,6 +28,11 @@ class StudentLeaveRequestController extends Controller
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
         }
 
+        if (!$student->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum mengakses pengajuan izin/sakit. Riwayat Absen tetap bisa diakses.');
+        }
+
         $requests = StudentLeaveRequest::query()
             ->where('student_id', $student->id)
             ->latest()
@@ -50,6 +55,11 @@ class StudentLeaveRequestController extends Controller
 
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        if (!$student->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum mengirim pengajuan izin/sakit. Riwayat Absen tetap bisa diakses.');
         }
 
         $validated = $request->validate([

@@ -41,6 +41,11 @@
         .info-list li {
             margin-bottom: 0.45rem;
         }
+
+        .identity-progress {
+            height: 10px;
+            border-radius: 999px;
+        }
     </style>
 @stop
 
@@ -55,9 +60,56 @@
 @stop
 
 @section('content')
+    @php
+        $identityFields = $student
+            ? [
+                'Orang Tua / Wali' => $student->nama_orang_tua_wali,
+                'Alamat' => $student->alamat,
+                'No HP Siswa' => $student->no_hp,
+                'No HP Orang Tua' => $student->no_hp_orang_tua,
+                'Tinggi Badan' => $student->tinggi_badan,
+                'Berat Badan' => $student->berat_badan,
+            ]
+            : [];
+
+        $missingIdentityFields = collect($identityFields)
+            ->filter(fn($value) => $value === null || trim((string) $value) === '')
+            ->keys()
+            ->values();
+
+        $identityCompletion =
+            count($identityFields) > 0
+                ? round(((count($identityFields) - $missingIdentityFields->count()) / count($identityFields)) * 100)
+                : 0;
+    @endphp
+
+    @if (session('success'))
+        <div class="alert alert-success">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if (session('error'))
+        <div class="alert alert-danger">
+            {{ session('error') }}
+        </div>
+    @endif
+
     @if (!$student)
         <div class="alert alert-warning">
             Data siswa untuk akun ini belum ditemukan. Pastikan username login menggunakan NISN/NIS yang sesuai data siswa.
+        </div>
+    @endif
+
+    @if ($student && $missingIdentityFields->isNotEmpty())
+        <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <strong>Profil belum lengkap ({{ $identityCompletion }}%).</strong>
+                <span>Data yang belum diisi: {{ $missingIdentityFields->join(', ') }}.</span>
+            </div>
+            <a href="{{ route('siswa.identity.edit') }}" class="btn btn-warning btn-sm mt-2 mt-md-0">
+                Lengkapi Sekarang
+            </a>
         </div>
     @endif
 
@@ -244,6 +296,40 @@
     </div>
 
     <div class="card info-card">
+        @if ($student)
+            <div class="card-header">
+                <h3 class="card-title mb-0">Identitas Siswa</h3>
+            </div>
+            <div class="card-body border-bottom">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-2">
+                            Lengkapi identitas Anda secara mandiri melalui halaman identitas siswa.
+                            @if ($missingIdentityFields->isEmpty())
+                                <span class="badge badge-success ml-1">Lengkap</span>
+                            @else
+                                <span class="badge badge-warning ml-1">Belum Lengkap</span>
+                            @endif
+                        </p>
+                        <p class="mb-1"><strong>Orang Tua / Wali:</strong> {{ $student->nama_orang_tua_wali ?: '-' }}</p>
+                        <p class="mb-1"><strong>No HP Siswa:</strong> {{ $student->no_hp ?: '-' }}</p>
+                        <p class="mb-1"><strong>No HP Orang Tua:</strong> {{ $student->no_hp_orang_tua ?: '-' }}</p>
+                        <p class="mb-1"><strong>Progress:</strong> {{ $identityCompletion }}%</p>
+                        <div class="progress identity-progress">
+                            <div class="progress-bar {{ $identityCompletion === 100 ? 'bg-success' : 'bg-warning' }}"
+                                style="width: {{ $identityCompletion }}%"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-right mt-3 mt-md-0">
+                        <a href="{{ route('siswa.identity.edit') }}" class="btn btn-primary">
+                            <i class="fas fa-id-card mr-1"></i>
+                            Buka Identitas
+                        </a>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <div class="card-header">
             <h3 class="card-title mb-0">Tentang Aplikasi</h3>
         </div>

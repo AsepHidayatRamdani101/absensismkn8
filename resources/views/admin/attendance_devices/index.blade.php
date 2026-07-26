@@ -46,11 +46,11 @@
                                 @endif
                             </td>
                             <td>
-                                <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $device->id }}">
+                                <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $device->id }}">
                                     <i class="fas fa-edit"></i>
                                 </button>
 
-                                <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $device->id }}">
+                                <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $device->id }}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>

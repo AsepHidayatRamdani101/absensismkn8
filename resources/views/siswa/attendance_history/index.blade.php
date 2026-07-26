@@ -87,6 +87,14 @@
 @stop
 
 @section('content')
+    @if (empty(trim((string) ($student->no_hp_orang_tua ?? ''))))
+        <div class="alert alert-info">
+            Riwayat Absen tetap dapat diakses meskipun profil belum lengkap. Untuk membuka menu aksi seperti absensi dan
+            pengajuan,
+            lengkapi dulu No HP Orang Tua di menu Identitas Siswa.
+        </div>
+    @endif
+
     @if (session('error'))
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif

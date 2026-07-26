@@ -1,8 +1,44 @@
 @extends('adminlte::page')
 
+@include('guru.partials.mobile-ux')
+
 @section('title', 'Agenda Guru')
 
 @section('plugins.Datatables', true)
+
+@push('css')
+    <style>
+        #tableGuruAgenda .btn-open-agenda-modal {
+            font-weight: 700;
+            border-radius: .5rem;
+        }
+
+        .agenda-mobile-hint {
+            border-radius: .6rem;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1e3a8a;
+        }
+
+        @media (max-width: 767.98px) {
+
+            #tableGuruAgenda th,
+            #tableGuruAgenda td {
+                vertical-align: middle;
+            }
+
+            #tableGuruAgenda td:last-child {
+                min-width: 142px;
+            }
+
+            #tableGuruAgenda .btn-open-agenda-modal {
+                width: 100%;
+                min-height: 40px;
+                box-shadow: 0 6px 14px rgba(37, 99, 235, .22);
+            }
+        }
+    </style>
+@endpush
 
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -34,6 +70,10 @@
 
     <div class="card">
         <div class="card-body">
+            <div class="alert agenda-mobile-hint d-md-none py-2 px-3 mb-3">
+                Fokus mobile: gunakan tombol <strong>Isi Agenda</strong> untuk input cepat setiap jam pelajaran.
+            </div>
+
             <div class="table-responsive">
                 <table id="tableGuruAgenda" class="table table-bordered table-striped mb-0">
                     <thead>
@@ -97,6 +137,7 @@
                                         data-has-deskripsi="{{ $tugasDeskripsi ? '1' : '0' }}"
                                         data-tugas-deskripsi="{{ $tugasDeskripsi ?? '' }}"
                                         @if ($isWeekendHoliday) disabled @endif>
+                                        <i class="fas fa-pen mr-1"></i>
                                         Isi Agenda
                                     </button>
                                 </td>
@@ -198,11 +239,24 @@
 @section('js')
     <script>
         $(function() {
+            let isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+
             $('#tableGuruAgenda').DataTable({
-                responsive: true,
+                responsive: !isMobile,
+                scrollX: isMobile,
+                autoWidth: false,
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
-                }
+                },
+                columnDefs: [{
+                        orderable: false,
+                        targets: [8]
+                    },
+                    ...(isMobile ? [{
+                        targets: [3, 4, 5, 6, 7],
+                        visible: false
+                    }] : [])
+                ]
             });
 
             function syncTugasRequirement() {

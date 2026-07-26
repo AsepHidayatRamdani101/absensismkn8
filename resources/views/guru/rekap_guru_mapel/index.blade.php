@@ -1,5 +1,7 @@
 @extends('adminlte::page')
 
+@include('guru.partials.mobile-ux')
+
 @section('title', 'Rekap Guru Mapel')
 
 @section('plugins.Datatables', true)

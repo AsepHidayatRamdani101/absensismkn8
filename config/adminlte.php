@@ -317,6 +317,12 @@ return [
             'can' => 'siswa',
         ],
         [
+            'text' => 'Identitas Siswa',
+            'route' => 'siswa.identity.edit',
+            'icon' => 'fas fa-fw fa-id-card',
+            'can' => 'siswa',
+        ],
+        [
             'text' => 'Dashboard',
             'route' => 'kurikulum.dashboard',
             'icon' => 'fas fa-fw fa-home',

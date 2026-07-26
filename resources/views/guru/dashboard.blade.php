@@ -1,5 +1,7 @@
 @extends('adminlte::page')
 
+@include('guru.partials.mobile-ux')
+
 @section('title', 'Dashboard Guru')
 
 @section('css')

@@ -60,11 +60,11 @@
                     <thead>
 
                         <tr>
-                            <th width="5%">No</th>
+                            <th>No</th>
                             <th>Kode</th>
                             <th>Nama Jurusan</th>
                             <th>Singkatan</th>
-                            <th width="15%">Aksi</th>
+                            <th>Aksi</th>
                         </tr>
 
                     </thead>
@@ -84,13 +84,13 @@
 
                                 <td>
 
-                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $major->id }}">
+                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $major->id }}">
 
                                         <i class="fas fa-edit"></i>
 
                                     </button>
 
-                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $major->id }}">
+                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $major->id }}">
 
                                         <i class="fas fa-trash"></i>
 

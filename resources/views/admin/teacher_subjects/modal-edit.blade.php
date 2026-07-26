@@ -1,5 +1,5 @@
 <div class="modal fade" id="modalEdit" tabindex="-1" role="dialog">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="formEdit">
                 @csrf
@@ -16,9 +16,10 @@
 
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Guru</label>
-                        <select id="edit_teacher_id" name="teacher_id" class="form-control" required>
-                            <option value="">- Pilih Guru -</option>
+                        <label>Guru <span class="text-danger">*</span></label>
+                        <select id="edit_teacher_id" name="teacher_id" class="form-control select2" required
+                            style="width: 100%;">
+                            <option value="">- Cari Guru -</option>
                             @foreach ($teachers as $teacher)
                                 <option value="{{ $teacher->id }}">{{ $teacher->nama_lengkap }}</option>
                             @endforeach
@@ -26,9 +27,10 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Mata Pelajaran</label>
-                        <select id="edit_subject_id" name="subject_id" class="form-control" required>
-                            <option value="">- Pilih Mata Pelajaran -</option>
+                        <label>Mata Pelajaran <span class="text-danger">*</span></label>
+                        <select id="edit_subject_id" name="subject_id" class="form-control select2" required
+                            style="width: 100%;">
+                            <option value="">- Cari Mata Pelajaran -</option>
                             @foreach ($subjects as $subject)
                                 <option value="{{ $subject->id }}">{{ $subject->nama_mapel }}</option>
                             @endforeach
@@ -36,18 +38,20 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Kelas</label>
-                        <select id="edit_classroom_id" name="classroom_id" class="form-control" required>
-                            <option value="">- Pilih Kelas -</option>
+                        <label>Kelas <span class="text-danger">*</span></label>
+                        <select id="edit_classroom_id" name="classroom_id[]" class="form-control select2" multiple
+                            required style="width: 100%;">
                             @foreach ($classrooms as $classroom)
                                 <option value="{{ $classroom->id }}">{{ $classroom->nama_kelas }}</option>
                             @endforeach
                         </select>
+                        <small class="form-text text-muted">Dapat memilih multiple kelas</small>
                     </div>
 
                     <div class="form-group mb-0">
-                        <label>Tahun Ajaran</label>
-                        <select id="edit_academic_year_id" name="academic_year_id" class="form-control" required>
+                        <label>Tahun Ajaran <span class="text-danger">*</span></label>
+                        <select id="edit_academic_year_id" name="academic_year_id" class="form-control select2" required
+                            style="width: 100%;">
                             <option value="">- Pilih Tahun Ajaran -</option>
                             @foreach ($academicYears as $academicYear)
                                 <option value="{{ $academicYear->id }}">

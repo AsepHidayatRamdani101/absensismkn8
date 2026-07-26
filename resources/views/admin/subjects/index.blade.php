@@ -31,6 +31,11 @@
                 <i class="fas fa-plus"></i>
                 Tambah Mata Pelajaran
             </button>
+
+            <button id="btnDeleteMultipleSubjects" class="btn btn-danger d-none">
+                <i class="fas fa-trash"></i>
+                Hapus Terpilih (<span id="selectedCountSubjects">0</span>)
+            </button>
         </div>
     </div>
 @stop
@@ -50,6 +55,7 @@
                 <table id="tableSubjects" class="table table-bordered table-striped">
                     <thead>
                         <tr>
+                            <th width="3%"><input type="checkbox" id="checkAllSubjects"></th>
                             <th width="5%">No</th>
                             <th>Kode</th>
                             <th>Nama Mata Pelajaran</th>
@@ -61,17 +67,18 @@
                     <tbody>
                         @foreach ($subjects as $subject)
                             <tr>
+                                <td><input type="checkbox" class="check-subject" value="{{ $subject->id }}"></td>
                                 <td>{{ $loop->iteration }}</td>
                                 <td>{{ $subject->kode_mapel }}</td>
                                 <td>{{ $subject->nama_mapel }}</td>
                                 <td>{{ $subject->kategori }}</td>
                                 <td>{{ $subject->jam_per_minggu }}</td>
                                 <td>
-                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $subject->id }}">
+                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $subject->id }}">
                                         <i class="fas fa-edit"></i>
                                     </button>
 
-                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $subject->id }}">
+                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $subject->id }}">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>

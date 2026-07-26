@@ -39,6 +39,26 @@ class TeacherController extends Controller
 
         $teachers = $teacherQuery->latest()->get();
 
+        $accountIdentifiers = $teachers
+            ->flatMap(fn(Teacher $teacher) => array_filter([
+                trim((string) $teacher->nip),
+                trim((string) $teacher->nuptk),
+            ]))
+            ->unique()
+            ->values();
+
+        $existingAccounts = User::query()
+            ->whereIn('email', $accountIdentifiers)
+            ->pluck('email')
+            ->all();
+
+        $existingAccountLookup = array_fill_keys($existingAccounts, true);
+
+        $teachers->each(function (Teacher $teacher) use ($existingAccountLookup) {
+            $teacher->has_account = isset($existingAccountLookup[trim((string) $teacher->nip)])
+                || isset($existingAccountLookup[trim((string) $teacher->nuptk)]);
+        });
+
         $classrooms = $hasWaliKelasColumns
             ? Classroom::orderBy('nama_kelas')->get()
             : collect();
@@ -249,6 +269,21 @@ class TeacherController extends Controller
             'success',
             "Generate akun guru selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NIP/NUPTK kosong): {$skipped}."
         );
+    }
+
+    public function destroyMultiple(Request $request)
+    {
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer|exists:teachers,id',
+        ]);
+
+        Teacher::whereIn('id', $request->ids)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => count($request->ids) . ' data guru berhasil dihapus',
+        ]);
     }
 
     private function hasWaliKelasColumns(): bool

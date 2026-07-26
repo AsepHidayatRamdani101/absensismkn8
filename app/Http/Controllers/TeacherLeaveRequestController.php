@@ -8,6 +8,7 @@ use App\Models\TeacherAttendance;
 use App\Models\Schedule;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
@@ -101,6 +102,101 @@ class TeacherLeaveRequestController extends Controller
 
         return redirect()->route('guru.leave-requests.index')
             ->with('success', 'Pengajuan berhasil dikirim.');
+    }
+
+    public function update(Request $request, TeacherLeaveRequest $teacherLeaveRequest)
+    {
+        if (!$this->hasLeaveRequestColumns()) {
+            return redirect()->route('guru.leave-requests.index')
+                ->with('error', 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.');
+        }
+
+        $teacher = $this->resolveCurrentTeacher();
+
+        if (!$teacher) {
+            return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
+        }
+
+        if ((int) $teacherLeaveRequest->teacher_id !== (int) $teacher->id) {
+            abort(403);
+        }
+
+        if ($teacherLeaveRequest->status_pengajuan !== 'Menunggu') {
+            return redirect()->route('guru.leave-requests.index')
+                ->with('error', 'Pengajuan yang sudah diproses tidak dapat diedit.');
+        }
+
+        $validated = $request->validate([
+            'jenis_pengajuan' => ['required', Rule::in(['Izin', 'Sakit', 'Cuti', 'Dinas Luar', 'Home Visit'])],
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'alasan' => 'required|string|max:2000',
+            'lampiran_tugas' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
+            'deskripsi_tugas' => 'nullable|string|max:3000',
+        ]);
+
+        $deskripsiTugas = trim((string) ($validated['deskripsi_tugas'] ?? ''));
+        $hasExistingFile = !empty($teacherLeaveRequest->lampiran_tugas_path);
+
+        if ($validated['jenis_pengajuan'] !== 'Cuti' && !$request->hasFile('lampiran_tugas') && !$hasExistingFile && $deskripsiTugas === '') {
+            return redirect()->route('guru.leave-requests.index')
+                ->withErrors(['deskripsi_tugas' => 'Isi tugas wajib (file atau deskripsi) untuk semua pengajuan selain Cuti.'])
+                ->withInput();
+        }
+
+        $attachmentPath = $teacherLeaveRequest->lampiran_tugas_path;
+
+        if ($request->hasFile('lampiran_tugas')) {
+            if (!empty($attachmentPath)) {
+                Storage::disk('public')->delete($attachmentPath);
+            }
+
+            $attachmentPath = $request->file('lampiran_tugas')->store('guru-pengajuan', 'public');
+        }
+
+        $teacherLeaveRequest->update([
+            'jenis_pengajuan' => $validated['jenis_pengajuan'],
+            'tanggal_mulai' => $validated['tanggal_mulai'],
+            'tanggal_selesai' => $validated['tanggal_selesai'],
+            'alasan' => $validated['alasan'],
+            'lampiran_tugas_path' => $attachmentPath,
+            'deskripsi_tugas' => $deskripsiTugas !== '' ? $deskripsiTugas : null,
+        ]);
+
+        return redirect()->route('guru.leave-requests.index')
+            ->with('success', 'Pengajuan berhasil diperbarui.');
+    }
+
+    public function destroy(TeacherLeaveRequest $teacherLeaveRequest)
+    {
+        if (!$this->hasLeaveRequestColumns()) {
+            return redirect()->route('guru.leave-requests.index')
+                ->with('error', 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.');
+        }
+
+        $teacher = $this->resolveCurrentTeacher();
+
+        if (!$teacher) {
+            return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
+        }
+
+        if ((int) $teacherLeaveRequest->teacher_id !== (int) $teacher->id) {
+            abort(403);
+        }
+
+        if ($teacherLeaveRequest->status_pengajuan !== 'Menunggu') {
+            return redirect()->route('guru.leave-requests.index')
+                ->with('error', 'Pengajuan yang sudah diproses tidak dapat dihapus.');
+        }
+
+        if (!empty($teacherLeaveRequest->lampiran_tugas_path)) {
+            Storage::disk('public')->delete($teacherLeaveRequest->lampiran_tugas_path);
+        }
+
+        $teacherLeaveRequest->delete();
+
+        return redirect()->route('guru.leave-requests.index')
+            ->with('success', 'Pengajuan berhasil dihapus.');
     }
 
     public function approve(TeacherLeaveRequest $teacherLeaveRequest)

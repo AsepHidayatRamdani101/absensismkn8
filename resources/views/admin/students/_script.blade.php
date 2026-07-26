@@ -234,5 +234,59 @@
 
         });
 
+        //------------------------------------
+        // DELETE MULTIPLE
+        //------------------------------------
+
+        function updateStudentBulkBtn() {
+            let count = $('.check-student:checked').length;
+            $('#selectedCountStudents').text(count);
+            $('#btnDeleteMultipleStudents').toggleClass('d-none', count === 0);
+        }
+
+        $('#checkAllStudents').on('change', function() {
+            $('.check-student').prop('checked', this.checked);
+            updateStudentBulkBtn();
+        });
+
+        $(document).on('change', '.check-student', function() {
+            if (!this.checked) $('#checkAllStudents').prop('checked', false);
+            updateStudentBulkBtn();
+        });
+
+        $('#btnDeleteMultipleStudents').on('click', function() {
+            let ids = $('.check-student:checked').map(function() {
+                return this.value;
+            }).get();
+            Swal.fire({
+                title: 'Hapus ' + ids.length + ' data siswa?',
+                text: 'Data tidak bisa dikembalikan',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ route('students.destroy-multiple') }}",
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            _method: 'DELETE',
+                            ids: ids,
+                        },
+                        success: function(res) {
+                            Swal.fire('Berhasil', res.message, 'success').then(() =>
+                                location.reload());
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Gagal', xhr.responseJSON?.message ??
+                                'Terjadi kesalahan', 'error');
+                        }
+                    });
+                }
+            });
+        });
+
     });
 </script>

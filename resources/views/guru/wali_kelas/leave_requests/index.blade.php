@@ -1,5 +1,7 @@
 @extends('adminlte::page')
 
+@include('guru.partials.mobile-ux')
+
 @section('title', 'Pengajuan Izin/Sakit Siswa')
 
 @section('plugins.Datatables', true)

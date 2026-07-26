@@ -72,6 +72,21 @@ class SubjectController extends Controller
         ]);
     }
 
+    public function destroyMultiple(Request $request)
+    {
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer|exists:subjects,id',
+        ]);
+
+        Subject::whereIn('id', $request->ids)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => count($request->ids) . ' data mata pelajaran berhasil dihapus.',
+        ]);
+    }
+
     public function import(Request $request)
     {
         $request->validate([

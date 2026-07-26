@@ -183,5 +183,55 @@
 
         });
 
+        // DELETE MULTIPLE
+        function updateTeacherBulkBtn() {
+            let count = $('.check-teacher:checked').length;
+            $('#selectedCountTeachers').text(count);
+            $('#btnDeleteMultipleTeachers').toggleClass('d-none', count === 0);
+        }
+
+        $('#checkAllTeachers').on('change', function() {
+            $('.check-teacher').prop('checked', this.checked);
+            updateTeacherBulkBtn();
+        });
+
+        $(document).on('change', '.check-teacher', function() {
+            if (!this.checked) $('#checkAllTeachers').prop('checked', false);
+            updateTeacherBulkBtn();
+        });
+
+        $('#btnDeleteMultipleTeachers').on('click', function() {
+            let ids = $('.check-teacher:checked').map(function() {
+                return this.value;
+            }).get();
+            Swal.fire({
+                title: 'Hapus ' + ids.length + ' data guru?',
+                text: 'Data tidak bisa dikembalikan',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ route('teachers.destroy-multiple') }}",
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            _method: 'DELETE',
+                            ids: ids,
+                        },
+                        success: function(res) {
+                            Swal.fire('Berhasil', res.message, 'success').then(() =>
+                                location.reload());
+                        },
+                        error: function(xhr) {
+                            showAjaxError(xhr, 'Data guru gagal dihapus.');
+                        }
+                    });
+                }
+            });
+        });
+
     });
 </script>

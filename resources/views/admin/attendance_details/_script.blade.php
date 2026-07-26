@@ -65,6 +65,62 @@
             return true;
         });
 
+        function updateAttendanceDetailsBulkBtn() {
+            let count = $('.check-attendance-detail:checked').length;
+            $('#selectedCountAttendanceDetails').text(count);
+            $('#btnDeleteMultipleAttendanceDetails').toggleClass('d-none', count === 0);
+        }
+
+        $('#checkAllAttendanceDetails').on('change', function() {
+            $('.check-attendance-detail').prop('checked', this.checked);
+            updateAttendanceDetailsBulkBtn();
+        });
+
+        $(document).on('change', '.check-attendance-detail', function() {
+            if (!this.checked) {
+                $('#checkAllAttendanceDetails').prop('checked', false);
+            }
+
+            updateAttendanceDetailsBulkBtn();
+        });
+
+        $('#btnDeleteMultipleAttendanceDetails').on('click', function() {
+            let ids = $('.check-attendance-detail:checked').map(function() {
+                return this.value;
+            }).get();
+
+            Swal.fire({
+                title: 'Hapus ' + ids.length + ' data absensi?',
+                text: 'Data tidak dapat dikembalikan',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ route('attendance-details.destroy-multiple') }}",
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            _method: 'DELETE',
+                            ids: ids,
+                        },
+                        success: function(res) {
+                            Swal.fire('Berhasil', res.message, 'success').then(() =>
+                                location.reload());
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Gagal', xhr.responseJSON?.message ??
+                                'Terjadi kesalahan', 'error');
+                        }
+                    });
+                }
+            });
+        });
+
+        updateAttendanceDetailsBulkBtn();
+
         $('#filterTahunAjaran, #filterTanggal, #filterGuru, #filterMapel, #filterKelas, #filterStatus').on(
             'change',
             function() {

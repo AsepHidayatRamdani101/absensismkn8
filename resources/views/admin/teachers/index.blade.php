@@ -43,6 +43,11 @@
                 <i class="fas fa-plus"></i>
                 Tambah Guru
             </button>
+
+            <button id="btnDeleteMultipleTeachers" class="btn btn-danger d-none">
+                <i class="fas fa-trash"></i>
+                Hapus Terpilih (<span id="selectedCountTeachers">0</span>)
+            </button>
         </div>
 
     </div>
@@ -89,13 +94,15 @@
                     <thead>
 
                         <tr>
+                            <th width="3%"><input type="checkbox" id="checkAllTeachers"></th>
                             <th width="5%">No</th>
                             <th>NIP</th>
-                            <th>NUPTK</th>
+
                             <th>Nama Guru</th>
+                            <th>Status</th>
                             <th>Jabatan</th>
                             <th>Kelas Wali</th>
-                            <th>Kurikulum</th>
+
                             <th>JK</th>
                             <th>No HP</th>
                             <th width="15%">Aksi</th>
@@ -108,25 +115,29 @@
                         @foreach ($teachers as $teacher)
                             <tr>
 
+                                <td><input type="checkbox" class="check-teacher" value="{{ $teacher->id }}"></td>
+
                                 <td>{{ $loop->iteration }}</td>
 
                                 <td>{{ $teacher->nip }}</td>
 
-                                <td>{{ $teacher->nuptk }}</td>
+
 
                                 <td>{{ $teacher->nama_lengkap }}</td>
+
+                                <td>
+                                    @if ($teacher->has_account)
+                                        <span class="badge badge-success">Sudah</span>
+                                    @else
+                                        <span class="badge badge-secondary">Belum</span>
+                                    @endif
+                                </td>
 
                                 <td>{{ $teacher->jabatan_label }}</td>
 
                                 <td>{{ $teacher->waliClassroom->nama_kelas ?? '-' }}</td>
 
-                                <td>
-                                    @if ($teacher->is_kurikulum)
-                                        <span class="badge badge-info">Ya</span>
-                                    @else
-                                        <span class="badge badge-secondary">Tidak</span>
-                                    @endif
-                                </td>
+
 
                                 <td>{{ $teacher->jenis_kelamin }}</td>
 
@@ -134,13 +145,13 @@
 
                                 <td>
 
-                                    <button class="btn btn-warning btn-sm btn-edit" data-id="{{ $teacher->id }}">
+                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $teacher->id }}">
 
                                         <i class="fas fa-edit"></i>
 
                                     </button>
 
-                                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $teacher->id }}">
+                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $teacher->id }}">
 
                                         <i class="fas fa-trash"></i>
 
@@ -195,6 +206,15 @@
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'Memproses generate akun...',
+                            text: 'Mohon tunggu, akun guru sedang dibuat.',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
                         $('#formGenerateAccountsTeachers').submit();
                     }
                 });

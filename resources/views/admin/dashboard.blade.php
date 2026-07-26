@@ -120,7 +120,6 @@
             <h1 class="mb-0">Dashboard Admin</h1>
             <p class="dashboard-subtitle">Ringkasan performa sistem absensi sekolah</p>
         </div>
-        <span class="badge badge-light border px-3 py-2">{{ now()->format('d M Y') }}</span>
     </div>
 @stop
 

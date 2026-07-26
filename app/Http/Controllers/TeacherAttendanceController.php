@@ -31,6 +31,11 @@ class TeacherAttendanceController extends Controller
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
         }
 
+        if (!$student->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum mengakses menu ini. Riwayat Absen tetap bisa diakses.');
+        }
+
         $canSubmitTeacherAttendance = $student->canSubmitTeacherAttendance();
 
         $dayMap = [
@@ -370,6 +375,11 @@ class TeacherAttendanceController extends Controller
 
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
+        }
+
+        if (!$student->hasMinimumIdentityForProtectedMenus()) {
+            return redirect()->route('siswa.identity.edit')
+                ->with('error', 'Lengkapi minimal No HP Orang Tua pada menu Identitas Siswa sebelum melakukan absensi. Riwayat Absen tetap bisa diakses.');
         }
 
         if (!$student->canSubmitTeacherAttendance()) {
