@@ -55,17 +55,17 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
     ];
 
     private const PERIOD_TIME_MAP = [
-        1 => ['start' => '07:15', 'end' => '07:55'],
-        2 => ['start' => '07:55', 'end' => '08:35'],
-        3 => ['start' => '08:35', 'end' => '09:15'],
-        4 => ['start' => '09:15', 'end' => '09:55'],
-        5 => ['start' => '09:55', 'end' => '10:35'],
-        6 => ['start' => '10:35', 'end' => '11:15'],
-        7 => ['start' => '11:15', 'end' => '11:55'],
-        8 => ['start' => '11:55', 'end' => '12:35'],
-        9 => ['start' => '12:35', 'end' => '13:15'],
-        10 => ['start' => '13:15', 'end' => '13:55'],
-        11 => ['start' => '13:55', 'end' => '14:35'],
+        1 => ['start' => '06:30', 'end' => '07:15'],
+        2 => ['start' => '07:15', 'end' => '07:55'],
+        3 => ['start' => '07:55', 'end' => '08:35'],
+        4 => ['start' => '08:35', 'end' => '09:15'],
+        5 => ['start' => '09:45', 'end' => '10:25'],
+        6 => ['start' => '10:25', 'end' => '11:05'],
+        7 => ['start' => '11:05', 'end' => '11:45'],
+        8 => ['start' => '12:20', 'end' => '13:00'],
+        9 => ['start' => '13:00', 'end' => '13:40'],
+        10 => ['start' => '13:40', 'end' => '14:20'],
+        11 => ['start' => '14:20', 'end' => '15:00'],
     ];
 
     public function collection(Collection $rows)
@@ -378,7 +378,13 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
                     $next = (int) $periods[$i + 1];
                     $nextTeacherSubjectId = (int) $periodTeacherSubjects[$next];
 
-                    if ($next === ($current + 1) && $nextTeacherSubjectId === $teacherSubjectId) {
+                    $currentEnd = self::PERIOD_TIME_MAP[$current]['end'] ?? null;
+                    $nextStart = self::PERIOD_TIME_MAP[$next]['start'] ?? null;
+                    $isContinuousTime = $currentEnd !== null
+                        && $nextStart !== null
+                        && $nextStart === $currentEnd;
+
+                    if ($next === ($current + 1) && $nextTeacherSubjectId === $teacherSubjectId && $isContinuousTime) {
                         $endPeriod = $next;
                         $i++;
                         continue;
