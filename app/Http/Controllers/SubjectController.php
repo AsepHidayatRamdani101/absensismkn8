@@ -93,9 +93,10 @@ class SubjectController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        Excel::import(new SubjectsImport(), $request->file('file'));
+        $importer = new SubjectsImport();
+        Excel::import($importer, $request->file('file'));
 
-        return redirect()->route('subjects.index')->with('success', 'Import data mata pelajaran berhasil.');
+        return redirect()->route('subjects.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()

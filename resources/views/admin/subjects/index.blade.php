@@ -51,6 +51,11 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
+            <div class="alert alert-info mb-3">
+                Import mapel mendukung template standar dan file jadwal.xlsx
+                (kolom <strong>MATA PELAJARAN YANG DIAMPU</strong> / <strong>MAPEL YANG DIAMPU</strong>).
+            </div>
+
             <div class="table-responsive">
                 <table id="tableSubjects" class="table table-bordered table-striped">
                     <thead>

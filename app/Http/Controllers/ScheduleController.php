@@ -198,6 +198,14 @@ class ScheduleController extends Controller
         return redirect()->route('schedules.index')->with('success', $importer->getSuccessMessage());
     }
 
+    public function reset()
+    {
+        $deleted = Schedule::query()->count();
+        Schedule::query()->delete();
+
+        return redirect()->route('schedules.index')->with('success', 'Reset jadwal berhasil. ' . $deleted . ' baris jadwal dihapus.');
+    }
+
     public function export()
     {
         return Excel::download(new SchedulesExport(), 'master-jadwal.xlsx');

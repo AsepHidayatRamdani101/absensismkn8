@@ -27,6 +27,15 @@
                 </button>
             </form>
 
+            <form id="formResetSchedules" action="{{ route('schedules.reset') }}" method="POST"
+                class="d-inline-block mr-1">
+                @csrf
+                <button type="button" id="btnResetSchedules" class="btn btn-danger">
+                    <i class="fas fa-trash"></i>
+                    Reset Jadwal
+                </button>
+            </form>
+
             <button class="btn btn-primary" data-toggle="modal" data-target="#modalCreate">
                 <i class="fas fa-plus"></i>
                 Tambah Jadwal
@@ -49,7 +58,8 @@
             <div class="alert alert-info mb-3">
                 Import jadwal mendukung file jadwal harian guru (kolom slot <strong>SEN01</strong> s.d.
                 <strong>JUM11</strong>)
-                dan otomatis menyesuaikan dengan relasi guru pengampu yang sudah ada di database.
+                dan format <strong>jadwal hari dan waktu</strong> (kolom <strong>HARI / JAM KE / WAKTU</strong>).
+                Jam pelajaran dimulai pukul <strong>07.15</strong> sesuai format terbaru.
             </div>
 
             <div class="row mb-3">
@@ -154,6 +164,21 @@
                 if (this.files.length > 0) {
                     $('#formImportSchedules').submit();
                 }
+            });
+
+            $('#btnResetSchedules').on('click', function() {
+                Swal.fire({
+                    title: 'Reset jadwal?',
+                    text: 'Seluruh data jadwal akan dihapus dari tabel.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, reset',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#formResetSchedules').submit();
+                    }
+                });
             });
         });
     </script>
