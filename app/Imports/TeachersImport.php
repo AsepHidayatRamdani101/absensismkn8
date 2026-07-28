@@ -242,7 +242,7 @@ class TeachersImport implements ToCollection, WithCalculatedFormulas
             }
 
             if ($nip !== '') {
-                $currentNip = trim((string) $teacher->nip);
+                $currentNip = $this->sanitizeNip((string) $teacher->nip);
                 if ($currentNip === '' || $currentNip === $nip) {
                     $payload['nip'] = $nip;
                 }
@@ -472,7 +472,7 @@ class TeachersImport implements ToCollection, WithCalculatedFormulas
         $teachers = $this->getTeachers();
 
         if ($nip !== '') {
-            $teacherByNip = $teachers->first(fn(Teacher $item) => trim((string) $item->nip) === $nip);
+            $teacherByNip = $teachers->first(fn(Teacher $item) => $this->sanitizeNip((string) $item->nip) === $nip);
             if ($teacherByNip) {
                 return $teacherByNip;
             }
@@ -506,7 +506,8 @@ class TeachersImport implements ToCollection, WithCalculatedFormulas
         }
 
         if (is_float($value)) {
-            return number_format($value, 0, '', '');
+            // Keep full non-exponent numeric representation as much as possible.
+            $value = rtrim(rtrim(sprintf('%.15F', $value), '0'), '.');
         }
 
         $nip = trim((string) $value);
@@ -515,19 +516,31 @@ class TeachersImport implements ToCollection, WithCalculatedFormulas
             return '';
         }
 
-        if (Str::contains(Str::lower($nip), 'e+')) {
-            if (is_numeric($nip)) {
-                return number_format((float) $nip, 0, '', '');
+        $nip = str_replace(["\u{00A0}", ' '], '', $nip);
+
+        // Expand scientific notation text safely (e.g. 1.971771E+17).
+        if (preg_match('/^([0-9]+)(?:\.([0-9]+))?[eE]\+?([0-9]+)$/', $nip, $matches) === 1) {
+            $whole = $matches[1];
+            $fraction = $matches[2] ?? '';
+            $exponent = (int) $matches[3];
+            $digits = $whole . $fraction;
+            $shift = $exponent - strlen($fraction);
+
+            if ($shift >= 0) {
+                $nip = $digits . str_repeat('0', $shift);
+            } else {
+                $nip = substr($digits, 0, max(0, strlen($digits) + $shift));
             }
-
-            return '';
         }
 
-        if (Str::endsWith($nip, '.0') && is_numeric($nip)) {
-            $nip = substr($nip, 0, -2);
+        if (is_numeric($nip)) {
+            $nip = preg_replace('/\.0+$/', '', $nip) ?? $nip;
         }
 
-        return $nip;
+        // NIP should be numeric digits only.
+        $nip = preg_replace('/\D+/', '', $nip) ?? '';
+
+        return trim($nip);
     }
 
     private function normalizeRow($row): array
