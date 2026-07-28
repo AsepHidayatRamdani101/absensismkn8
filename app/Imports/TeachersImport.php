@@ -243,7 +243,12 @@ class TeachersImport implements ToCollection, WithCalculatedFormulas
 
             if ($nip !== '') {
                 $currentNip = $this->sanitizeNip((string) $teacher->nip);
-                if ($currentNip === '' || $currentNip === $nip) {
+                $nipUsedByAnotherTeacher = Teacher::query()
+                    ->where('id', '!=', $teacher->id)
+                    ->where('nip', $nip)
+                    ->exists();
+
+                if (!$nipUsedByAnotherTeacher && ($currentNip === '' || $currentNip !== $nip)) {
                     $payload['nip'] = $nip;
                 }
             }
