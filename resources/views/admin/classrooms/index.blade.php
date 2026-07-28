@@ -54,6 +54,12 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
+            <div class="alert alert-info">
+                Import kelas mendukung format jadwal guru pengampu.
+                Kode jurusan akan disesuaikan otomatis saat diperlukan (contoh: <strong>TKJ</strong> menjadi
+                <strong>TJKT</strong>).
+            </div>
+
             <div class="table-responsive">
                 <table id="tableClassrooms" class="table table-bordered table-striped">
 

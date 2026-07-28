@@ -192,9 +192,10 @@ class ScheduleController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        Excel::import(new SchedulesImport(), $request->file('file'));
+        $importer = new SchedulesImport();
+        Excel::import($importer, $request->file('file'));
 
-        return redirect()->route('schedules.index')->with('success', 'Import data jadwal berhasil.');
+        return redirect()->route('schedules.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()

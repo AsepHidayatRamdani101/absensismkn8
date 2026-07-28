@@ -26,13 +26,15 @@ class TeacherSubjectController extends Controller
         $subjects = Subject::orderBy('nama_mapel')->get();
         $classrooms = Classroom::orderBy('nama_kelas')->get();
         $academicYears = AcademicYear::orderByDesc('tahun_ajaran')->get();
+        $activeAcademicYear = AcademicYear::where('is_active', true)->first();
 
         return view('admin.teacher_subjects.index', compact(
             'teacherSubjects',
             'teachers',
             'subjects',
             'classrooms',
-            'academicYears'
+            'academicYears',
+            'activeAcademicYear'
         ));
     }
 
@@ -70,7 +72,7 @@ class TeacherSubjectController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $createdCount > 0 
+            'message' => $createdCount > 0
                 ? "{$createdCount} data guru pengampu berhasil ditambahkan."
                 : 'Data guru pengampu sudah ada.'
         ]);
@@ -157,10 +159,10 @@ class TeacherSubjectController extends Controller
             // Exclude semua record yang se-teacher+subject+academicYear dengan record ini
             $record = TeacherSubject::find($excludeTeacherSubjectId);
             if ($record) {
-                $query->where(function($q) use ($record) {
+                $query->where(function ($q) use ($record) {
                     $q->where('teacher_id', '!=', $record->teacher_id)
-                      ->orWhere('subject_id', '!=', $record->subject_id)
-                      ->orWhere('academic_year_id', '!=', $record->academic_year_id);
+                        ->orWhere('subject_id', '!=', $record->subject_id)
+                        ->orWhere('academic_year_id', '!=', $record->academic_year_id);
                 });
             }
         }
@@ -183,12 +185,12 @@ class TeacherSubjectController extends Controller
         // Hitung jumlah kelas unik per subject
         $assignedCounts = $query->get(['subject_id', 'classroom_id'])
             ->groupBy('subject_id')
-            ->map(function($rows) {
+            ->map(function ($rows) {
                 return $rows->pluck('classroom_id')->unique()->count();
             });
 
         // Subject yang sudah penuh (jumlah kelas assigned >= total kelas)
-        $fullSubjectIds = $assignedCounts->filter(function($count) use ($totalClassrooms) {
+        $fullSubjectIds = $assignedCounts->filter(function ($count) use ($totalClassrooms) {
             return $count >= $totalClassrooms;
         })->keys()->values();
 
@@ -209,14 +211,14 @@ class TeacherSubjectController extends Controller
     public function searchTeachers(Request $request)
     {
         $search = $request->input('q', '');
-        
+
         $teachers = Teacher::where('nama_lengkap', 'like', '%' . $search . '%')
             ->orderBy('nama_lengkap')
             ->take(20)
             ->get(['id', 'nama_lengkap']);
 
         return response()->json([
-            'results' => $teachers->map(function($teacher) {
+            'results' => $teachers->map(function ($teacher) {
                 return [
                     'id' => $teacher->id,
                     'text' => $teacher->nama_lengkap
@@ -228,14 +230,14 @@ class TeacherSubjectController extends Controller
     public function searchSubjects(Request $request)
     {
         $search = $request->input('q', '');
-        
+
         $subjects = Subject::where('nama_mapel', 'like', '%' . $search . '%')
             ->orderBy('nama_mapel')
             ->take(20)
             ->get(['id', 'nama_mapel']);
 
         return response()->json([
-            'results' => $subjects->map(function($subject) {
+            'results' => $subjects->map(function ($subject) {
                 return [
                     'id' => $subject->id,
                     'text' => $subject->nama_mapel
@@ -247,14 +249,14 @@ class TeacherSubjectController extends Controller
     public function searchClassrooms(Request $request)
     {
         $search = $request->input('q', '');
-        
+
         $classrooms = Classroom::where('nama_kelas', 'like', '%' . $search . '%')
             ->orderBy('nama_kelas')
             ->take(20)
             ->get(['id', 'nama_kelas']);
 
         return response()->json([
-            'results' => $classrooms->map(function($classroom) {
+            'results' => $classrooms->map(function ($classroom) {
                 return [
                     'id' => $classroom->id,
                     'text' => $classroom->nama_kelas
@@ -303,11 +305,15 @@ class TeacherSubjectController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv',
+            'import_mode' => 'nullable|in:auto_create,strict_existing',
         ]);
 
-        Excel::import(new TeacherSubjectsImport(), $request->file('file'));
+        $autoCreateMaster = $request->input('import_mode', 'auto_create') === 'auto_create';
+        $importer = new TeacherSubjectsImport($autoCreateMaster);
 
-        return redirect()->route('teacher-subjects.index')->with('success', 'Import data guru pengampu berhasil.');
+        Excel::import($importer, $request->file('file'));
+
+        return redirect()->route('teacher-subjects.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()

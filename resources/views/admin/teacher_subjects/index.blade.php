@@ -20,6 +20,11 @@
             <form id="formImportTeacherSubjects" action="{{ route('teacher-subjects.import') }}" method="POST"
                 enctype="multipart/form-data" class="d-inline-block mr-1">
                 @csrf
+                <select name="import_mode" id="importModeTeacherSubjects"
+                    class="form-control form-control-sm d-inline-block mr-1" style="width: 210px; vertical-align: middle;">
+                    <option value="auto_create" selected>Mode: Auto-create master</option>
+                    <option value="strict_existing">Mode: Hanya data existing</option>
+                </select>
                 <input type="file" name="file" id="fileImportTeacherSubjects" class="d-none" accept=".xlsx,.xls,.csv">
                 <button type="button" id="btnImportTeacherSubjects" class="btn btn-warning">
                     <i class="fas fa-file-import"></i>
@@ -36,6 +41,20 @@
                 <i class="fas fa-trash"></i>
                 Hapus Terpilih (<span id="selectedCountTeacherSubjects">0</span>)
             </button>
+
+            <div class="mt-2 text-right">
+                @if (!empty($activeAcademicYear))
+                    <span class="badge badge-success px-3 py-2">
+                        <i class="fas fa-check-circle mr-1"></i>
+                        Aktif: {{ $activeAcademicYear->tahun_ajaran }} - {{ $activeAcademicYear->semester }}
+                    </span>
+                @else
+                    <span class="badge badge-danger px-3 py-2">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Tahun ajaran aktif belum disetel
+                    </span>
+                @endif
+            </div>
         </div>
     </div>
 @stop
@@ -50,6 +69,19 @@
             @if ($errors->has('file'))
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
+
+            <div class="alert alert-info">
+                Import dari format jadwal guru pengampu didukung dan otomatis menggunakan tahun ajaran aktif.
+                Pilih mode import:
+                <strong>Auto-create master</strong> untuk membuat data guru/mapel/kelas yang belum ada,
+                atau <strong>Hanya data existing</strong> untuk memproses data yang sudah tersedia di database saja.
+                @if (!empty($activeAcademicYear))
+                    Tahun ajaran aktif saat ini:
+                    <strong>{{ $activeAcademicYear->tahun_ajaran }} - {{ $activeAcademicYear->semester }}</strong>.
+                @else
+                    Saat ini belum ada tahun ajaran aktif, sehingga sistem akan memakai data tahun ajaran terbaru.
+                @endif
+            </div>
 
             {{-- FILTER --}}
             <div class="row mb-3">
@@ -154,12 +186,32 @@
 
     <script>
         $(function() {
+            const importModeKey = 'teacher-subjects-import-mode';
+
             // Initialize Select2 for modal selects
             $('.select2').select2({
                 theme: 'bootstrap-5',
                 placeholder: '- Pilih -',
                 allowClear: true,
                 width: '100%'
+            });
+
+            // Restore last selected import mode from browser storage.
+            try {
+                const savedMode = localStorage.getItem(importModeKey);
+                if (savedMode && $('#importModeTeacherSubjects option[value="' + savedMode + '"]').length > 0) {
+                    $('#importModeTeacherSubjects').val(savedMode);
+                }
+            } catch (error) {
+                // Ignore storage access issues (private mode or blocked storage).
+            }
+
+            $('#importModeTeacherSubjects').on('change', function() {
+                try {
+                    localStorage.setItem(importModeKey, $(this).val());
+                } catch (error) {
+                    // Ignore storage access issues.
+                }
             });
 
             // Reinitialize Select2 when modals are shown
@@ -179,6 +231,12 @@
 
             $('#fileImportTeacherSubjects').on('change', function() {
                 if (this.files.length > 0) {
+                    try {
+                        localStorage.setItem(importModeKey, $('#importModeTeacherSubjects').val());
+                    } catch (error) {
+                        // Ignore storage access issues.
+                    }
+
                     $('#formImportTeacherSubjects').submit();
                 }
             });

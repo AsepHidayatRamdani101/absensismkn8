@@ -67,6 +67,11 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
+            <div class="alert alert-info mb-3">
+                Import siswa mendukung file ABSENSI (blok <strong>NO / NIS / NISN / NAMA SISWA</strong>)
+                dan otomatis menyesuaikan kelas sesuai data yang ada di database.
+            </div>
+
             {{-- FILTER --}}
             <form method="GET" action="{{ route('students.index') }}" class="mb-3" id="formFilterStudents">
                 <div class="row align-items-end">

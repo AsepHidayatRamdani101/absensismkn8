@@ -46,6 +46,12 @@
                 <div class="alert alert-danger">{{ $errors->first('file') }}</div>
             @endif
 
+            <div class="alert alert-info mb-3">
+                Import jadwal mendukung file jadwal harian guru (kolom slot <strong>SEN01</strong> s.d.
+                <strong>JUM11</strong>)
+                dan otomatis menyesuaikan dengan relasi guru pengampu yang sudah ada di database.
+            </div>
+
             <div class="row mb-3">
                 <div class="col-md-3 mb-2 mb-md-0">
                     <label for="filterTingkat" class="mb-1">Filter Tingkat</label>

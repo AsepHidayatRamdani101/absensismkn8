@@ -200,9 +200,11 @@ class TeacherController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        Excel::import(new TeachersImport(), $request->file('file'));
+        $importer = new TeachersImport();
 
-        return redirect()->route('teachers.index')->with('success', 'Import data guru berhasil.');
+        Excel::import($importer, $request->file('file'));
+
+        return redirect()->route('teachers.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()

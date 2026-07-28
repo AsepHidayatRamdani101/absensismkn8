@@ -220,9 +220,10 @@ class StudentController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        Excel::import(new StudentsImport(), $request->file('file'));
+        $importer = new StudentsImport();
+        $importer->importFile($request->file('file')->getRealPath());
 
-        return redirect()->route('students.index')->with('success', 'Import data siswa berhasil.');
+        return redirect()->route('students.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()

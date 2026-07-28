@@ -119,9 +119,11 @@ class ClassroomController extends Controller
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        Excel::import(new ClassroomsImport(), $request->file('file'));
+        $importer = new ClassroomsImport();
 
-        return redirect()->route('classrooms.index')->with('success', 'Import data kelas berhasil.');
+        Excel::import($importer, $request->file('file'));
+
+        return redirect()->route('classrooms.index')->with('success', $importer->getSuccessMessage());
     }
 
     public function export()
