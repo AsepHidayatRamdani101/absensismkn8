@@ -378,13 +378,9 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
                     $next = (int) $periods[$i + 1];
                     $nextTeacherSubjectId = (int) $periodTeacherSubjects[$next];
 
-                    $currentEnd = self::PERIOD_TIME_MAP[$current]['end'] ?? null;
-                    $nextStart = self::PERIOD_TIME_MAP[$next]['start'] ?? null;
-                    $isContinuousTime = $currentEnd !== null
-                        && $nextStart !== null
-                        && $nextStart === $currentEnd;
-
-                    if ($next === ($current + 1) && $nextTeacherSubjectId === $teacherSubjectId && $isContinuousTime) {
+                    // Keep one schedule entry for same subject-teacher across adjacent periods,
+                    // including transitions split by break time, so attendance is taken once.
+                    if ($next === ($current + 1) && $nextTeacherSubjectId === $teacherSubjectId) {
                         $endPeriod = $next;
                         $i++;
                         continue;
