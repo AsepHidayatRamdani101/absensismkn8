@@ -11,6 +11,7 @@ use App\Models\Major;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -251,46 +252,154 @@ class StudentController extends Controller
 
     public function generateAccounts()
     {
-        Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
+        $role = Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
+
+        $batchSize = (int) request()->input('batch_size', 300);
+        $batchSize = max(50, min(1000, $batchSize));
+
+        $afterId = (int) request()->input('after_id', 0);
+        $students = Student::query()
+            ->where('id', '>', $afterId)
+            ->orderBy('id')
+            ->limit($batchSize)
+            ->get(['id', 'nis', 'nisn', 'nama_lengkap']);
+
+        $total = Student::query()->count();
+
+        if ($students->isEmpty()) {
+            $payload = [
+                'done' => true,
+                'next_after_id' => $afterId,
+                'processed' => 0,
+                'created' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+                'total' => $total,
+                'processed_until' => Student::query()->max('id') ?? 0,
+                'message' => 'Generate akun siswa selesai.',
+            ];
+
+            if (request()->expectsJson()) {
+                return response()->json($payload);
+            }
+
+            return redirect()->route('students.index')->with('success', $payload['message']);
+        }
+
+        $usersByEmail = [];
+        $upsertRowsByEmail = [];
+        $skipped = 0;
+
+        foreach ($students as $student) {
+            $username = trim((string) $student->nisn);
+
+            if ($username === '') {
+                $username = trim((string) $student->nis);
+            }
+
+            if ($username === '') {
+                $skipped++;
+                continue;
+            }
+
+            // Keep one account per username when duplicate NIS/NISN exists.
+            if (isset($upsertRowsByEmail[$username])) {
+                continue;
+            }
+
+            $usersByEmail[] = $username;
+            $upsertRowsByEmail[$username] = [
+                'email' => $username,
+                'name' => $student->nama_lengkap,
+            ];
+        }
+
+        $existingEmailLookup = [];
+        if (!empty($usersByEmail)) {
+            $existingEmailLookup = User::query()
+                ->whereIn('email', $usersByEmail)
+                ->pluck('email')
+                ->flip()
+                ->all();
+        }
 
         $created = 0;
         $updated = 0;
-        $skipped = 0;
+        $now = now();
+        $defaultPasswordHash = Hash::make('siswa12345');
+        $upsertRows = [];
 
-        Student::query()->orderBy('id')->chunk(200, function ($students) use (&$created, &$updated, &$skipped) {
-            foreach ($students as $student) {
-                $username = trim((string) $student->nisn);
-
-                if ($username === '') {
-                    $username = trim((string) $student->nis);
-                }
-
-                if ($username === '') {
-                    $skipped++;
-                    continue;
-                }
-
-                $user = User::updateOrCreate(
-                    ['email' => $username],
-                    [
-                        'name' => $student->nama_lengkap,
-                        'password' => Hash::make('siswa12345'),
-                    ]
-                );
-
-                if ($user->wasRecentlyCreated) {
-                    $created++;
-                } else {
-                    $updated++;
-                }
-
-                $user->syncRoles(['siswa']);
+        foreach ($upsertRowsByEmail as $email => $row) {
+            if (isset($existingEmailLookup[$email])) {
+                $updated++;
+            } else {
+                $created++;
             }
-        });
+
+            $upsertRows[] = [
+                'email' => $email,
+                'name' => $row['name'],
+                'password' => $defaultPasswordHash,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (!empty($upsertRows)) {
+            User::query()->upsert(
+                $upsertRows,
+                ['email'],
+                ['name', 'password', 'updated_at']
+            );
+
+            $generatedUserIds = User::query()
+                ->whereIn('email', array_keys($upsertRowsByEmail))
+                ->pluck('id')
+                ->all();
+
+            if (!empty($generatedUserIds)) {
+                $roleRows = [];
+                foreach ($generatedUserIds as $userId) {
+                    $roleRows[] = [
+                        'role_id' => $role->id,
+                        'model_type' => User::class,
+                        'model_id' => $userId,
+                    ];
+                }
+
+                DB::table('model_has_roles')->insertOrIgnore($roleRows);
+            }
+        }
+
+        $lastIdInBatch = (int) $students->last()->id;
+        $remainingExists = Student::query()->where('id', '>', $lastIdInBatch)->exists();
+
+        $payload = [
+            'done' => !$remainingExists,
+            'next_after_id' => $lastIdInBatch,
+            'processed' => $students->count(),
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total' => $total,
+            'processed_until' => $lastIdInBatch,
+            'message' => 'Batch generate akun siswa diproses.',
+        ];
+
+        if (request()->expectsJson()) {
+            return response()->json($payload);
+        }
+
+        if ($payload['done']) {
+            return redirect()->route('students.index')->with(
+                'success',
+                "Generate akun siswa selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NISN/NIS kosong): {$skipped}."
+            );
+        }
 
         return redirect()->route('students.index')->with(
             'success',
-            "Generate akun siswa selesai. Dibuat: {$created}, Diperbarui: {$updated}, Dilewati (NISN/NIS kosong): {$skipped}."
+            "Batch generate akun siswa diproses. Jalankan lagi untuk batch berikutnya. after_id={$lastIdInBatch}."
         );
     }
 }

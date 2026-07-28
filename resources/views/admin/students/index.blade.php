@@ -233,6 +233,11 @@
             });
 
             $('#btnGenerateAccountsStudents').on('click', function() {
+                const $form = $('#formGenerateAccountsStudents');
+                const url = $form.attr('action');
+                const token = $form.find('input[name="_token"]').val();
+                const batchSize = 300;
+
                 Swal.fire({
                     title: 'Generate akun siswa?',
                     text: 'Username dari NISN (fallback NIS) dan password default siswa12345.',
@@ -242,16 +247,94 @@
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        let afterId = 0;
+                        let totalProcessed = 0;
+                        let totalCreated = 0;
+                        let totalUpdated = 0;
+                        let totalSkipped = 0;
+
                         Swal.fire({
                             title: 'Memproses generate akun...',
-                            text: 'Mohon tunggu, akun siswa sedang dibuat.',
+                            html: 'Memulai proses batch akun siswa...',
                             allowOutsideClick: false,
                             allowEscapeKey: false,
                             didOpen: () => {
                                 Swal.showLoading();
                             }
                         });
-                        $('#formGenerateAccountsStudents').submit();
+
+                        const processNextBatch = () => {
+                            $.ajax({
+                                url: url,
+                                method: 'POST',
+                                data: {
+                                    _token: token,
+                                    after_id: afterId,
+                                    batch_size: batchSize,
+                                },
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                success: function(resp) {
+                                    totalProcessed += Number(resp.processed || 0);
+                                    totalCreated += Number(resp.created || 0);
+                                    totalUpdated += Number(resp.updated || 0);
+                                    totalSkipped += Number(resp.skipped || 0);
+
+                                    const total = Number(resp.total || 0);
+                                    const percent = total > 0 ? Math.min(100, Math
+                                            .round((totalProcessed / total) * 100)
+                                            ) : 100;
+
+                                    Swal.update({
+                                        html: `
+                                            <div class="text-left">
+                                                <p class="mb-1">Progress: <strong>${totalProcessed}</strong> / <strong>${total}</strong> (${percent}%)</p>
+                                                <p class="mb-1">Dibuat: <strong>${totalCreated}</strong></p>
+                                                <p class="mb-1">Diperbarui: <strong>${totalUpdated}</strong></p>
+                                                <p class="mb-0">Dilewati: <strong>${totalSkipped}</strong></p>
+                                            </div>
+                                        `,
+                                    });
+
+                                    if (resp.done) {
+                                        Swal.fire({
+                                            icon: 'success',
+                                            title: 'Generate akun siswa selesai',
+                                            html: `
+                                                <div class="text-left">
+                                                    <p class="mb-1">Total diproses: <strong>${totalProcessed}</strong></p>
+                                                    <p class="mb-1">Dibuat: <strong>${totalCreated}</strong></p>
+                                                    <p class="mb-1">Diperbarui: <strong>${totalUpdated}</strong></p>
+                                                    <p class="mb-0">Dilewati: <strong>${totalSkipped}</strong></p>
+                                                </div>
+                                            `,
+                                        }).then(() => {
+                                            window.location.reload();
+                                        });
+                                        return;
+                                    }
+
+                                    afterId = Number(resp.next_after_id || afterId);
+                                    setTimeout(processNextBatch, 20);
+                                },
+                                error: function(xhr) {
+                                    const err = (xhr.responseJSON && xhr
+                                            .responseJSON.message) ?
+                                        xhr.responseJSON.message :
+                                        'Terjadi kesalahan saat generate akun siswa.';
+
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Generate gagal',
+                                        text: err,
+                                    });
+                                }
+                            });
+                        };
+
+                        processNextBatch();
                     }
                 });
             });
