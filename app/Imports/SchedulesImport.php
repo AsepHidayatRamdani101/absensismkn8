@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class SchedulesImport implements ToCollection, WithCalculatedFormulas
 {
@@ -43,6 +44,8 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
 
     private array $teacherSubjectCache = [];
 
+    private ?array $codeClassTeacherSubjectMap = null;
+
     private const DAY_PREFIX_MAP = [
         'SEN' => 'Senin',
         'SEL' => 'Selasa',
@@ -52,17 +55,17 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
     ];
 
     private const PERIOD_TIME_MAP = [
-        1 => ['start' => '07:00', 'end' => '07:40'],
-        2 => ['start' => '07:40', 'end' => '08:20'],
-        3 => ['start' => '08:20', 'end' => '09:00'],
-        4 => ['start' => '09:00', 'end' => '09:40'],
-        5 => ['start' => '09:40', 'end' => '10:20'],
-        6 => ['start' => '10:20', 'end' => '11:00'],
-        7 => ['start' => '11:00', 'end' => '11:40'],
-        8 => ['start' => '11:40', 'end' => '12:20'],
-        9 => ['start' => '12:20', 'end' => '13:00'],
-        10 => ['start' => '13:00', 'end' => '13:40'],
-        11 => ['start' => '13:40', 'end' => '14:20'],
+        1 => ['start' => '07:15', 'end' => '07:55'],
+        2 => ['start' => '07:55', 'end' => '08:35'],
+        3 => ['start' => '08:35', 'end' => '09:15'],
+        4 => ['start' => '09:15', 'end' => '09:55'],
+        5 => ['start' => '09:55', 'end' => '10:35'],
+        6 => ['start' => '10:35', 'end' => '11:15'],
+        7 => ['start' => '11:15', 'end' => '11:55'],
+        8 => ['start' => '11:55', 'end' => '12:35'],
+        9 => ['start' => '12:35', 'end' => '13:15'],
+        10 => ['start' => '13:15', 'end' => '13:55'],
+        11 => ['start' => '13:55', 'end' => '14:35'],
     ];
 
     public function collection(Collection $rows)
@@ -92,10 +95,16 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
 
                 return;
             }
+
+            if ($this->isHariWaktuHeader($row)) {
+                $this->importHariWaktuFormat($normalizedRows, $rowIndex, $row);
+
+                return;
+            }
         }
 
         throw ValidationException::withMessages([
-            'file' => 'Format file tidak dikenali. Gunakan template import jadwal atau file jadwal harian guru (kolom SEN01-...-JUM11).',
+            'file' => 'Format file tidak dikenali. Gunakan template import jadwal, file jadwal harian (SEN01...JUM11), atau jadwal hari dan waktu.',
         ]);
     }
 
@@ -104,6 +113,16 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
         if ($this->detectedFormat === 'template') {
             return 'Import jadwal selesai (template). Baris terbaca: ' . $this->rowsRead
                 . ', jadwal tersimpan: ' . $this->recordsSynced . '.';
+        }
+
+        if ($this->detectedFormat === 'hari_waktu') {
+            return 'Import jadwal selesai (hari dan waktu). Baris terbaca: ' . $this->rowsRead
+                . ', jadwal tersimpan: ' . $this->recordsSynced
+                . ', baris dilewati: ' . $this->rowsSkipped
+                . '. Tidak cocok master: guru ' . $this->skippedTeacher
+                . ', mapel ' . $this->skippedSubject
+                . ', kelas ' . $this->skippedClassroom
+                . ', relasi guru pengampu ' . $this->skippedTeacherSubject . '.';
         }
 
         return 'Import jadwal selesai (jadwal harian). Baris terbaca: ' . $this->rowsRead
@@ -251,6 +270,96 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
         }
     }
 
+    private function importHariWaktuFormat(Collection $rows, int $headerRowIndex, array $header): void
+    {
+        $this->detectedFormat = 'hari_waktu';
+
+        $dayIndex = $this->findHeaderIndex($header, ['HARI']);
+        $hourIndex = $this->findHeaderIndex($header, ['JAM KE']);
+        $timeIndex = $this->findHeaderIndex($header, ['WAKTU']);
+        $classColumns = $this->extractHariWaktuClassroomColumns($header);
+
+        if ($dayIndex === null || $hourIndex === null || $timeIndex === null || empty($classColumns)) {
+            throw ValidationException::withMessages([
+                'file' => 'Format jadwal hari dan waktu tidak valid. Pastikan kolom HARI, JAM KE, WAKTU, dan kolom kelas tersedia.',
+            ]);
+        }
+
+        $codeClassMap = $this->buildTeacherSubjectCodeClassMap();
+        if (empty($codeClassMap)) {
+            throw ValidationException::withMessages([
+                'file' => 'Mapping kode guru pengampu tidak ditemukan. Pastikan file referensi jadwal.xlsx tersedia untuk pemetaan kode.',
+            ]);
+        }
+
+        $currentDay = null;
+
+        foreach ($rows->slice($headerRowIndex + 1)->values() as $row) {
+            if ($this->isRowEmpty($row)) {
+                continue;
+            }
+
+            $dayRaw = trim((string) $this->cell($row, $dayIndex));
+            if ($dayRaw !== '') {
+                $normalizedDay = $this->normalizeDayName($dayRaw);
+                if ($normalizedDay !== null) {
+                    $currentDay = $normalizedDay;
+                }
+            }
+
+            $jamKe = trim((string) $this->cell($row, $hourIndex));
+            if (preg_match('/^\d+$/', $jamKe) !== 1) {
+                continue;
+            }
+
+            $timeRange = $this->parseTimeRange((string) $this->cell($row, $timeIndex));
+            if ($currentDay === null || $timeRange === null) {
+                continue;
+            }
+
+            $this->rowsRead++;
+            $assignedInRow = 0;
+
+            foreach ($classColumns as $column) {
+                $cellValue = trim((string) $this->cell($row, $column['index']));
+                if (!$this->looksLikeTeacherSubjectCode($cellValue)) {
+                    continue;
+                }
+
+                $code = $this->normalizeTeacherSubjectCode($cellValue);
+                if ($code === '') {
+                    continue;
+                }
+
+                $mapKey = $code . '|' . $column['classroom_id'];
+                $teacherSubjectId = $codeClassMap[$mapKey] ?? null;
+                if (!$teacherSubjectId) {
+                    $this->skippedTeacherSubject++;
+                    continue;
+                }
+
+                Schedule::updateOrCreate(
+                    [
+                        'teacher_subject_id' => $teacherSubjectId,
+                        'hari' => $currentDay,
+                        'jam_mulai' => $timeRange['start'],
+                        'jam_selesai' => $timeRange['end'],
+                    ],
+                    [
+                        'ruangan' => null,
+                    ]
+                );
+
+                $this->recordsSynced++;
+                $assignedInRow++;
+            }
+
+            if ($assignedInRow === 0) {
+                $this->rowsSkipped++;
+            }
+        }
+    }
+
     private function storeScheduleAssignments(array $assignmentsByDay): void
     {
         foreach ($assignmentsByDay as $day => $periodTeacherSubjects) {
@@ -325,6 +434,18 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
         return $hasIdentity && $hasSubject && !empty($this->extractSlotColumns($header));
     }
 
+    private function isHariWaktuHeader(array $header): bool
+    {
+        $dayIndex = $this->findHeaderIndex($header, ['HARI']);
+        $hourIndex = $this->findHeaderIndex($header, ['JAM KE']);
+        $timeIndex = $this->findHeaderIndex($header, ['WAKTU']);
+
+        return $dayIndex !== null
+            && $hourIndex !== null
+            && $timeIndex !== null
+            && !empty($this->extractHariWaktuClassroomColumns($header));
+    }
+
     private function extractSlotColumns(array $header): array
     {
         $columns = [];
@@ -354,6 +475,203 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
         }
 
         return $columns;
+    }
+
+    private function extractHariWaktuClassroomColumns(array $header): array
+    {
+        $columns = [];
+
+        foreach ($header as $index => $value) {
+            $label = trim((string) $value);
+            if (!$this->looksLikeClassLabel($label)) {
+                continue;
+            }
+
+            $classroom = $this->resolveClassroom($label);
+            if (!$classroom) {
+                continue;
+            }
+
+            $columns[] = [
+                'index' => $index,
+                'classroom_id' => $classroom->id,
+            ];
+        }
+
+        return $columns;
+    }
+
+    private function buildTeacherSubjectCodeClassMap(): array
+    {
+        if ($this->codeClassTeacherSubjectMap !== null) {
+            return $this->codeClassTeacherSubjectMap;
+        }
+
+        $this->codeClassTeacherSubjectMap = [];
+        $referencePath = public_path('jadwal.xlsx');
+
+        if (!is_file($referencePath)) {
+            return $this->codeClassTeacherSubjectMap;
+        }
+
+        $sheet = IOFactory::load($referencePath)->getActiveSheet();
+        $rows = collect($sheet->toArray(null, true, true, false))
+            ->map(fn($row) => $this->normalizeRow($row))
+            ->values();
+
+        $headerIndex = null;
+        $header = [];
+
+        foreach ($rows as $index => $row) {
+            if (
+                $this->findHeaderIndex($row, ['KODE']) !== null
+                && $this->findHeaderIndex($row, ['NAMA']) !== null
+                && $this->findHeaderIndex($row, ['MATA PELAJARAN YANG DIAMPU', 'MAPEL YANG DIAMPU']) !== null
+            ) {
+                $headerIndex = $index;
+                $header = $row;
+                break;
+            }
+        }
+
+        if ($headerIndex === null) {
+            return $this->codeClassTeacherSubjectMap;
+        }
+
+        $codeIndex = $this->findHeaderIndex($header, ['KODE']);
+        $teacherNameIndex = $this->findHeaderIndex($header, ['NAMA']);
+        $nipIndex = $this->findHeaderIndex($header, ['NIP/NIPPPK', 'NIP']);
+        $subjectFullIndex = $this->findHeaderIndex($header, ['MATA PELAJARAN YANG DIAMPU', 'MATA PELAJARAN YANG DI AMPU']);
+        $subjectShortIndex = $this->findHeaderIndex($header, ['MAPEL YANG DIAMPU', 'MAPEL YANG DI AMPU', 'MAPEL YG DIAMPU']);
+
+        if ($codeIndex === null || ($teacherNameIndex === null && $nipIndex === null) || ($subjectFullIndex === null && $subjectShortIndex === null)) {
+            return $this->codeClassTeacherSubjectMap;
+        }
+
+        $classColumns = $this->extractHariWaktuClassroomColumns($header);
+
+        foreach ($rows->slice($headerIndex + 1)->values() as $row) {
+            $code = $this->normalizeTeacherSubjectCode((string) $this->cell($row, $codeIndex));
+            if ($code === '') {
+                continue;
+            }
+
+            $teacherName = trim((string) $this->cell($row, $teacherNameIndex));
+            $nip = $this->sanitizeNip($this->cell($row, $nipIndex));
+            $subjectFull = trim((string) $this->cell($row, $subjectFullIndex));
+            $subjectShort = trim((string) $this->cell($row, $subjectShortIndex));
+
+            if (($teacherName === '' && $nip === '') || ($subjectFull === '' && $subjectShort === '')) {
+                continue;
+            }
+
+            $teacher = $this->resolveTeacher($nip, $teacherName);
+            $subject = $this->resolveSubject($subjectShort, $subjectFull);
+            if (!$teacher || !$subject) {
+                continue;
+            }
+
+            foreach ($classColumns as $column) {
+                $loadValue = $this->cell($row, $column['index']);
+                $teacherSubjectId = $this->resolveTeacherSubjectId($teacher->id, $subject->id, $column['classroom_id']);
+                if (!$teacherSubjectId) {
+                    continue;
+                }
+
+                $mapKey = $code . '|' . $column['classroom_id'];
+
+                if ($this->hasReferenceTeachingLoad($loadValue) || !isset($this->codeClassTeacherSubjectMap[$mapKey])) {
+                    $this->codeClassTeacherSubjectMap[$mapKey] = $teacherSubjectId;
+                }
+            }
+        }
+
+        return $this->codeClassTeacherSubjectMap;
+    }
+
+    private function hasReferenceTeachingLoad($value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return ((float) $value) > 0;
+        }
+
+        $value = trim((string) $value);
+        if ($value === '' || $value === '-' || strtoupper($value) === '0') {
+            return false;
+        }
+
+        if (is_numeric($value)) {
+            return ((float) $value) > 0;
+        }
+
+        return false;
+    }
+
+    private function looksLikeTeacherSubjectCode(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '' || $value === '-') {
+            return false;
+        }
+
+        $normalized = $this->normalizeLabel($value);
+        if ($normalized === '' || in_array($normalized, ['upacara', 'pembiasaan', 'rehat1', 'rehat2', 'istirahat'], true)) {
+            return false;
+        }
+
+        $code = $this->normalizeTeacherSubjectCode($value);
+
+        return preg_match('/^[A-Z]{1,5}[0-9]{2}$/', $code) === 1;
+    }
+
+    private function normalizeTeacherSubjectCode(string $value): string
+    {
+        $value = Str::upper(trim($value));
+
+        return (string) preg_replace('/[^A-Z0-9]+/', '', $value);
+    }
+
+    private function parseTimeRange(string $value): ?array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^(\d{1,2})[\.:](\d{2})\s*-\s*(\d{1,2})[\.:](\d{2})$/', $value, $matches) !== 1) {
+            return null;
+        }
+
+        $start = sprintf('%02d:%02d', (int) $matches[1], (int) $matches[2]);
+        $end = sprintf('%02d:%02d', (int) $matches[3], (int) $matches[4]);
+
+        if ($end <= $start) {
+            return null;
+        }
+
+        return [
+            'start' => $start,
+            'end' => $end,
+        ];
+    }
+
+    private function normalizeDayName(string $value): ?string
+    {
+        $normalized = $this->normalizeLabel($value);
+
+        return match ($normalized) {
+            'senin' => 'Senin',
+            'selasa' => 'Selasa',
+            'rabu' => 'Rabu',
+            'kamis' => 'Kamis',
+            'jumat' => 'Jumat',
+            'sabtu' => 'Sabtu',
+            default => null,
+        };
     }
 
     private function findHeaderIndex(array $header, array $possibleHeadings): ?int
@@ -683,5 +1001,6 @@ class SchedulesImport implements ToCollection, WithCalculatedFormulas
         $this->detectedFormat = 'unknown';
         $this->activeAcademicYearId = null;
         $this->teacherSubjectCache = [];
+        $this->codeClassTeacherSubjectMap = null;
     }
 }
