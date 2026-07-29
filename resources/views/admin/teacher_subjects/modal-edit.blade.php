@@ -16,6 +16,19 @@
 
                 <div class="modal-body">
                     <div class="form-group">
+                        <label>Tahun Ajaran <span class="text-danger">*</span></label>
+                        <select id="edit_academic_year_id" name="academic_year_id" class="form-control select2" required
+                            style="width: 100%;">
+                            <option value="">- Pilih Tahun Ajaran -</option>
+                            @foreach ($academicYears as $academicYear)
+                                <option value="{{ $academicYear->id }}">
+                                    {{ $academicYear->tahun_ajaran }} - {{ $academicYear->semester }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label>Guru <span class="text-danger">*</span></label>
                         <select id="edit_teacher_id" name="teacher_id" class="form-control select2" required
                             style="width: 100%;">
@@ -46,19 +59,6 @@
                             @endforeach
                         </select>
                         <small class="form-text text-muted">Dapat memilih multiple kelas</small>
-                    </div>
-
-                    <div class="form-group mb-0">
-                        <label>Tahun Ajaran <span class="text-danger">*</span></label>
-                        <select id="edit_academic_year_id" name="academic_year_id" class="form-control select2" required
-                            style="width: 100%;">
-                            <option value="">- Pilih Tahun Ajaran -</option>
-                            @foreach ($academicYears as $academicYear)
-                                <option value="{{ $academicYear->id }}">
-                                    {{ $academicYear->tahun_ajaran }} - {{ $academicYear->semester }}
-                                </option>
-                            @endforeach
-                        </select>
                     </div>
                 </div>
 
