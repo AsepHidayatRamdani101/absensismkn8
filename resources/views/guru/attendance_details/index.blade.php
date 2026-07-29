@@ -278,38 +278,6 @@
 
     <div id="guruAttendancePage">
 
-        @if ((!$isWeekendHoliday && count($teachersWithAttendance) > 0) || count($teachersWithoutAttendance) > 0)
-            <!-- Teacher Attendance Status Cards -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <a href="{{ route('guru.attendance-details.teacher-attendance-detail', ['filter' => 'sudah']) }}"
-                        class="text-decoration-none">
-                        <div class="info-box bg-success" style="cursor:pointer;">
-                            <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Guru Sudah Absen</span>
-                                <span class="info-box-number">{{ count($teachersWithAttendance) }}</span>
-                                <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a href="{{ route('guru.attendance-details.teacher-attendance-detail', ['filter' => 'belum']) }}"
-                        class="text-decoration-none">
-                        <div class="info-box bg-danger" style="cursor:pointer;">
-                            <span class="info-box-icon"><i class="fas fa-times-circle"></i></span>
-                            <div class="info-box-content">
-                                <span class="info-box-text">Guru Belum Absen</span>
-                                <span class="info-box-number">{{ count($teachersWithoutAttendance) }}</span>
-                                <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        @endif
-
         <div class="card mb-3">
             <div class="card-body">
                 <form method="GET" action="{{ route('guru.attendance-details.index') }}">

@@ -208,7 +208,7 @@
                                                 {{ \Carbon\Carbon::parse($schedule['jam_selesai'])->format('H:i') }}
                                             </td>
                                             <td>
-                                                @if ($item['has_attendance'])
+                                                @if ($schedule['has_attendance'])
                                                     <span class="badge badge-success status-badge">Sudah Absen</span>
                                                 @else
                                                     <span class="badge badge-danger status-badge">Belum Absen</span>
