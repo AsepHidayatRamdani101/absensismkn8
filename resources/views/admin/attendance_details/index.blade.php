@@ -23,6 +23,37 @@
 @stop
 
 @section('content')
+    @if (!$isWeekendHoliday)
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'sudah']) }}"
+                    class="text-decoration-none">
+                    <div class="info-box bg-success" style="cursor:pointer;">
+                        <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Guru Sudah Absen Hari Ini</span>
+                            <span class="info-box-number">{{ count($teachersWithAttendance) }}</span>
+                            <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-6">
+                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'belum']) }}"
+                    class="text-decoration-none">
+                    <div class="info-box bg-danger" style="cursor:pointer;">
+                        <span class="info-box-icon"><i class="fas fa-times-circle"></i></span>
+                        <div class="info-box-content">
+                            <span class="info-box-text">Guru Belum Absen Hari Ini</span>
+                            <span class="info-box-number">{{ count($teachersWithoutAttendance) }}</span>
+                            <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-body">
             <div class="row mb-3">

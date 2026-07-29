@@ -285,6 +285,64 @@ class AttendanceDetailController extends Controller
             $statusByStudentId[$row->student_id] = $row->status;
         }
 
+        // Get ALL schedules today (all teachers) for the teacher attendance summary cards
+        $allTodaySchedules = collect();
+        if ($todayDayName !== null && !$isWeekendHoliday) {
+            $allTodaySchedules = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
+                ->where('hari', $todayDayName)
+                ->whereHas('teacherSubject.teacher')
+                ->orderBy('jam_mulai')
+                ->get();
+        }
+
+        // Get teacher attendance statistics using ALL schedules
+        $allScheduleIds = $allTodaySchedules->pluck('id')->values();
+        $allTeacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $today->toDateString())
+            ->whereIn('schedule_id', $allScheduleIds)
+            ->get()
+            ->keyBy('schedule_id');
+
+        // Get all unique teachers from ALL today's schedules
+        $teachersFromSchedules = $allTodaySchedules
+            ->map(function ($schedule) {
+                $schedTeacher = $schedule->teacherSubject->teacher;
+                return [
+                    'schedule' => $schedule,
+                    'teacher' => $schedTeacher,
+                    'teacher_id' => $schedTeacher?->id,
+                ];
+            })
+            ->groupBy('teacher_id')
+            ->map(function ($items) use ($allTeacherAttendances) {
+                $schedules = $items->pluck('schedule');
+                $teacher = $items[0]['teacher'];
+
+                // Check if any of this teacher's schedules have attendance submitted
+                $hasAttendance = false;
+                $attendanceSchedule = null;
+
+                foreach ($schedules as $schedule) {
+                    if ($allTeacherAttendances->has($schedule->id)) {
+                        $hasAttendance = true;
+                        $attendanceSchedule = $schedule;
+                        break;
+                    }
+                }
+                
+                return [
+                    'teacher' => $teacher,
+                    'schedules' => $schedules,
+                    'has_attendance' => $hasAttendance,
+                    'attendance_schedule' => $attendanceSchedule,
+                ];
+            })
+            ->values();
+
+        $teachersWithAttendance = $teachersFromSchedules->filter(fn($item) => $item['has_attendance'])->values();
+        $teachersWithoutAttendance = $teachersFromSchedules->filter(fn($item) => !$item['has_attendance'])->values();
+
         return view('guru.attendance_details.index', [
             'teacher' => $teacher,
             'today' => $today,
@@ -294,11 +352,255 @@ class AttendanceDetailController extends Controller
             'selectedClassroomId' => $selectedClassroomId,
             'students' => $students,
             'statusByStudentId' => $statusByStudentId,
+            'teachersWithAttendance' => $teachersWithAttendance,
+            'teachersWithoutAttendance' => $teachersWithoutAttendance,
+            'allTeacherAttendances' => $allTeacherAttendances,
+            'todaySchedules' => $todaySchedules,
+        ]);
+    }
+
+    public function guruTeacherAttendanceDetail(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $today = Carbon::today();
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+
+        $todaySchedules = collect();
+        if ($todayDayName !== null && !$isWeekendHoliday) {
+            $todaySchedules = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
+                ->where('hari', $todayDayName)
+                ->whereHas('teacherSubject.teacher')
+                ->orderBy('jam_mulai')
+                ->get();
+        }
+
+        // Get all teacher attendance for today's schedules
+        $scheduleIds = $todaySchedules->pluck('id')->values();
+        $teacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $today->toDateString())
+            ->whereIn('schedule_id', $scheduleIds)
+            ->get()
+            ->keyBy('schedule_id');
+
+        // Get all unique teachers from today's schedules
+        $teachersData = $todaySchedules
+            ->map(function ($schedule) use ($teacherAttendances) {
+                $schedTeacher = $schedule->teacherSubject->teacher;
+                $hasAttendance = $teacherAttendances->has($schedule->id);
+                $teacherAttendanceRecord = $teacherAttendances->get($schedule->id);
+
+                return [
+                    'schedule' => $schedule,
+                    'teacher' => $schedTeacher,
+                    'teacher_id' => $schedTeacher?->id,
+                    'subject' => $schedule->teacherSubject->subject,
+                    'classroom' => $schedule->teacherSubject->classroom,
+                    'jam_mulai' => $schedule->jam_mulai,
+                    'jam_selesai' => $schedule->jam_selesai,
+                    'has_attendance' => $hasAttendance,
+                    'status' => $hasAttendance ? ($teacherAttendanceRecord?->kehadiran_guru ?? 'Hadir') : 'Belum Absen',
+                    'teacher_attendance_id' => $teacherAttendanceRecord?->id,
+                ];
+            })
+            ->groupBy('teacher_id')
+            ->map(function ($items) {
+                $firstItem = $items[0];
+                $hasAnyAttendance = $items->contains('has_attendance', true);
+
+                return [
+                    'teacher' => $firstItem['teacher'],
+                    'schedules' => $items->values(),
+                    'has_attendance' => $hasAnyAttendance,
+                    'status' => $hasAnyAttendance ? 'Sudah Absen' : 'Belum Absen',
+                ];
+            })
+            ->sortBy(fn($item) => $item['teacher']?->nama_lengkap ?? '')
+            ->values();
+
+        $teachersWithAttendance = $teachersData->filter(fn($item) => $item['has_attendance'])->values();
+        $teachersWithoutAttendance = $teachersData->filter(fn($item) => !$item['has_attendance'])->values();
+
+        $filter = $request->query('filter', 'all'); // 'all', 'sudah', 'belum'
+        if (!in_array($filter, ['all', 'sudah', 'belum'])) {
+            $filter = 'all';
+        }
+
+        return view('guru.attendance_details.teacher_attendance_detail', [
+            'teacher' => $teacher,
+            'today' => $today,
+            'todayDayName' => $todayDayName,
+            'isWeekendHoliday' => $isWeekendHoliday,
+            'todaySchedules' => $todaySchedules,
+            'teachersData' => $teachersData,
+            'teachersWithAttendance' => $teachersWithAttendance,
+            'teachersWithoutAttendance' => $teachersWithoutAttendance,
+            'filter' => $filter,
+        ]);
+    }
+
+    public function adminTeacherAttendanceDetail(Request $request)
+    {
+        $today = Carbon::today();
+        $dayMap = [
+            1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu',
+            4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu',
+        ];
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+
+        $todaySchedules = collect();
+        if ($todayDayName !== null && !$isWeekendHoliday) {
+            $todaySchedules = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
+                ->where('hari', $todayDayName)
+                ->whereHas('teacherSubject.teacher')
+                ->orderBy('jam_mulai')
+                ->get();
+        }
+
+        $scheduleIds = $todaySchedules->pluck('id')->values();
+        $teacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $today->toDateString())
+            ->whereIn('schedule_id', $scheduleIds)
+            ->get()
+            ->keyBy('schedule_id');
+
+        $teachersData = $todaySchedules
+            ->map(function ($schedule) use ($teacherAttendances) {
+                $schedTeacher = $schedule->teacherSubject->teacher;
+                $hasAttendance = $teacherAttendances->has($schedule->id);
+                $record = $teacherAttendances->get($schedule->id);
+                return [
+                    'schedule' => $schedule,
+                    'teacher' => $schedTeacher,
+                    'teacher_id' => $schedTeacher?->id,
+                    'subject' => $schedule->teacherSubject->subject,
+                    'classroom' => $schedule->teacherSubject->classroom,
+                    'jam_mulai' => $schedule->jam_mulai,
+                    'jam_selesai' => $schedule->jam_selesai,
+                    'has_attendance' => $hasAttendance,
+                    'status' => $hasAttendance ? ($record?->kehadiran_guru ?? 'Hadir') : 'Belum Absen',
+                    'teacher_attendance_id' => $record?->id,
+                ];
+            })
+            ->groupBy('teacher_id')
+            ->map(function ($items) {
+                $firstItem = $items[0];
+                $hasAny = $items->contains('has_attendance', true);
+                return [
+                    'teacher' => $firstItem['teacher'],
+                    'schedules' => $items->values(),
+                    'has_attendance' => $hasAny,
+                    'status' => $hasAny ? 'Sudah Absen' : 'Belum Absen',
+                ];
+            })
+            ->sortBy(fn($item) => $item['teacher']?->nama_lengkap ?? '')
+            ->values();
+
+        $teachersWithAttendance = $teachersData->filter(fn($i) => $i['has_attendance'])->values();
+        $teachersWithoutAttendance = $teachersData->filter(fn($i) => !$i['has_attendance'])->values();
+
+        $filter = $request->query('filter', 'all');
+        if (!in_array($filter, ['all', 'sudah', 'belum'])) {
+            $filter = 'all';
+        }
+
+        return view('admin.attendance_details.teacher_attendance_detail', [
+            'today' => $today,
+            'todayDayName' => $todayDayName,
+            'isWeekendHoliday' => $isWeekendHoliday,
+            'todaySchedules' => $todaySchedules,
+            'teachersData' => $teachersData,
+            'teachersWithAttendance' => $teachersWithAttendance,
+            'teachersWithoutAttendance' => $teachersWithoutAttendance,
+            'filter' => $filter,
         ]);
     }
 
     public function index()
     {
+        $today = Carbon::today();
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+
+        $allTodaySchedules = collect();
+        if ($todayDayName !== null && !$isWeekendHoliday) {
+            $allTodaySchedules = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
+                ->where('hari', $todayDayName)
+                ->whereHas('teacherSubject.teacher')
+                ->orderBy('jam_mulai')
+                ->get();
+        }
+
+        $allScheduleIds = $allTodaySchedules->pluck('id')->values();
+        $todayTeacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $today->toDateString())
+            ->whereIn('schedule_id', $allScheduleIds)
+            ->get()
+            ->keyBy('schedule_id');
+
+        $teachersFromSchedules = $allTodaySchedules
+            ->map(function ($schedule) {
+                $schedTeacher = $schedule->teacherSubject->teacher;
+                return [
+                    'schedule' => $schedule,
+                    'teacher' => $schedTeacher,
+                    'teacher_id' => $schedTeacher?->id,
+                ];
+            })
+            ->groupBy('teacher_id')
+            ->map(function ($items) use ($todayTeacherAttendances) {
+                $schedules = $items->pluck('schedule');
+                $teacher = $items[0]['teacher'];
+                $hasAttendance = false;
+                foreach ($schedules as $schedule) {
+                    if ($todayTeacherAttendances->has($schedule->id)) {
+                        $hasAttendance = true;
+                        break;
+                    }
+                }
+                return [
+                    'teacher' => $teacher,
+                    'has_attendance' => $hasAttendance,
+                ];
+            })
+            ->values();
+
+        $teachersWithAttendance = $teachersFromSchedules->filter(fn($i) => $i['has_attendance'])->values();
+        $teachersWithoutAttendance = $teachersFromSchedules->filter(fn($i) => !$i['has_attendance'])->values();
+
         $attendanceDetails = AttendanceDetail::with([
             'teacherAttendance.teacher',
             'teacherAttendance.classroom',
@@ -372,7 +674,11 @@ class AttendanceDetailController extends Controller
             'filterGurus',
             'filterMapels',
             'filterKelas',
-            'filterStatuses'
+            'filterStatuses',
+            'teachersWithAttendance',
+            'teachersWithoutAttendance',
+            'isWeekendHoliday',
+            'todayDayName'
         ));
     }
 

@@ -95,6 +95,8 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('teacher-attendances', TeacherAttendanceController::class)->except(['show', 'create']);
         Route::delete('attendance-details/destroy-multiple', [AttendanceDetailController::class, 'destroyMultiple'])
             ->name('attendance-details.destroy-multiple');
+        Route::get('attendance-details/teacher-attendance-detail', [AttendanceDetailController::class, 'adminTeacherAttendanceDetail'])
+            ->name('attendance-details.teacher-attendance-detail');
         Route::resource('attendance-details', AttendanceDetailController::class)->except(['show', 'create']);
 
         Route::get('kurikulum/guru-leave-requests', [TeacherLeaveRequestController::class, 'approvalIndex'])
@@ -148,6 +150,8 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::post('/guru/agenda/{schedule}', [GuruAgendaController::class, 'store'])->name('guru.agenda.store');
     Route::get('/guru/attendance-details', [AttendanceDetailController::class, 'guruIndex'])
         ->name('guru.attendance-details.index');
+    Route::get('/guru/attendance-details/teacher-attendance-detail', [AttendanceDetailController::class, 'guruTeacherAttendanceDetail'])
+        ->name('guru.attendance-details.teacher-attendance-detail');
     Route::get('/guru/pengajuan', [TeacherLeaveRequestController::class, 'index'])
         ->name('guru.leave-requests.index');
     Route::post('/guru/pengajuan', [TeacherLeaveRequestController::class, 'store'])
