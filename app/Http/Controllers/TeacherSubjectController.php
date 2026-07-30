@@ -93,22 +93,15 @@ class TeacherSubjectController extends Controller
             'academic_year_id' => 'required|exists:academic_years,id',
         ]);
 
-        // Delete all old records for this teacher+subject+academic_year combination
-        TeacherSubject::where('teacher_id', $validated['teacher_id'])
-            ->where('subject_id', $validated['subject_id'])
-            ->where('academic_year_id', $validated['academic_year_id'])
-            ->delete();
+        // Edit hanya record yang dipilih agar data lain tidak ikut terhapus.
+        $classroomId = (int) ($validated['classroom_id'][0] ?? 0);
 
-        // Create new records for selected classrooms
-        $classroomIds = $validated['classroom_id'];
-        foreach ($classroomIds as $classroomId) {
-            TeacherSubject::create([
-                'teacher_id'      => $validated['teacher_id'],
-                'subject_id'      => $validated['subject_id'],
-                'classroom_id'    => $classroomId,
-                'academic_year_id' => $validated['academic_year_id'],
-            ]);
-        }
+        $teacherSubject->update([
+            'teacher_id'       => $validated['teacher_id'],
+            'subject_id'       => $validated['subject_id'],
+            'classroom_id'     => $classroomId,
+            'academic_year_id' => $validated['academic_year_id'],
+        ]);
 
         return response()->json([
             'success' => true,

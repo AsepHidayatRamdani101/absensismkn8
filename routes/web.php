@@ -77,6 +77,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('teacher-subjects/export', [TeacherSubjectController::class, 'export'])->name('teacher-subjects.export');
         Route::delete('teacher-subjects/destroy-multiple', [TeacherSubjectController::class, 'destroyMultiple'])->name('teacher-subjects.destroy-multiple');
         Route::get('teacher-subjects/classrooms/{teacher}/{subject}/{academicYear}', [TeacherSubjectController::class, 'getClassrooms'])->name('teacher-subjects.classrooms');
+        Route::get('teacher-subjects/all-classrooms', [TeacherSubjectController::class, 'getAllClassrooms'])->name('teacher-subjects.all-classrooms');
         Route::get('teacher-subjects/search-teachers', [TeacherSubjectController::class, 'searchTeachers'])->name('teacher-subjects.search-teachers');
         Route::get('teacher-subjects/search-subjects', [TeacherSubjectController::class, 'searchSubjects'])->name('teacher-subjects.search-subjects');
         Route::get('teacher-subjects/search-classrooms', [TeacherSubjectController::class, 'searchClassrooms'])->name('teacher-subjects.search-classrooms');

@@ -234,16 +234,6 @@
             }
         }
 
-        $('#modalCreate').on('shown.bs.modal', function() {
-            $('#create_teacher_id, #create_subject_id, #create_classroom_id, #create_academic_year_id')
-                .select2({
-                    theme: 'bootstrap-5',
-                    placeholder: '- Pilih -',
-                    dropdownParent: $('#modalCreate'),
-                    width: '100%'
-                });
-        });
-
         $('#create_academic_year_id').on('change', function() {
             updateCreateSubjectOptions();
             updateCreateClassroomOptions();
@@ -289,43 +279,22 @@
 
         $('.btn-edit').click(function() {
             let id = $(this).data('id');
+            let classroomName = $(this).closest('tr').data('classroom') || '-';
 
             $.get('/teacher-subjects/' + id + '/edit', function(data) {
                 $('#edit_id').val(data.id);
-                $('#edit_teacher_id').val(data.teacher_id).change();
-                $('#edit_subject_id').val(data.subject_id).change();
-                $('#edit_academic_year_id').val(data.academic_year_id).change();
+                $('#edit_classroom_id_value').val(String(data.classroom_id));
+                $('#edit_academic_year_id').val(String(data.academic_year_id)).trigger(
+                    'change');
+                $('#edit_teacher_id').val(String(data.teacher_id)).trigger('change');
+                $('#edit_subject_id').val(String(data.subject_id)).trigger('change');
 
-                // Fetch kelas yang sudah di-assign di guru+mapel+tahun ajaran ini
-                $.get("{{ route('teacher-subjects.classrooms', ['teacher' => '__TEACHER__', 'subject' => '__SUBJECT__', 'academicYear' => '__YEAR__']) }}"
-                    .replace('__TEACHER__', data.teacher_id)
-                    .replace('__SUBJECT__', data.subject_id)
-                    .replace('__YEAR__', data.academic_year_id),
-                    function(currentClassrooms) {
-                        // Fetch kelas yang sudah di-assign guru lain (exclude record ini)
-                        $.get("{{ route('teacher-subjects.assigned-classrooms') }}", {
-                                subject_id: data.subject_id,
-                                academic_year_id: data.academic_year_id,
-                                exclude_id: data.id
-                            },
-                            function(assignedByOthers) {
-                                // Enable semua dulu
-                                $('#edit_classroom_id option').prop('disabled', false);
-
-                                // Disable kelas yang sudah di-assign guru lain
-                                $.each(assignedByOthers, function(_, classroomId) {
-                                    $('#edit_classroom_id option[value="' +
-                                            classroomId + '"]')
-                                        .prop('disabled', true)
-                                        .prop('selected', false);
-                                });
-
-                                // Set selected kelas milik guru ini
-                                $('#edit_classroom_id').val(currentClassrooms).trigger(
-                                    'change');
-                            }
-                        );
-                    });
+                $('#edit_classroom_id')
+                    .empty()
+                    .append('<option value="' + data.classroom_id + '">' + classroomName +
+                        '</option>')
+                    .val(String(data.classroom_id))
+                    .trigger('change');
 
                 $('#modalEdit').modal('show');
             });
@@ -340,6 +309,27 @@
             e.preventDefault();
 
             let id = $('#edit_id').val();
+            let classroomRaw = $('#edit_classroom_id_value').val();
+            if (!classroomRaw) {
+                classroomRaw = $('#edit_classroom_id').val();
+            }
+
+            // Ensure we always send one numeric classroom id (no nested array/string labels).
+            let classroomId = Array.isArray(classroomRaw) ? classroomRaw[0] : classroomRaw;
+            classroomId = classroomId ? parseInt(classroomId, 10) : NaN;
+
+            if (!Number.isNaN(classroomId)) {
+                $('#edit_classroom_id_value').val(String(classroomId));
+            }
+
+            if (Number.isNaN(classroomId) || classroomId <= 0) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal',
+                    text: 'Kelas tidak valid'
+                });
+                return;
+            }
 
             $.ajax({
                 url: '/teacher-subjects/' + id,
@@ -349,7 +339,7 @@
                     _method: 'PUT',
                     teacher_id: $('#edit_teacher_id').val(),
                     subject_id: $('#edit_subject_id').val(),
-                    'classroom_id[]': $('#edit_classroom_id').val() || [],
+                    classroom_id: [classroomId],
                     academic_year_id: $('#edit_academic_year_id').val(),
                 },
                 success: function(res) {
