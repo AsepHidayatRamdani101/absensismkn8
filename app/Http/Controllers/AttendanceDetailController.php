@@ -7,6 +7,7 @@ use App\Models\AttendanceDetail;
 use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\StudentLeaveRequest;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -330,7 +331,7 @@ class AttendanceDetailController extends Controller
                         break;
                     }
                 }
-                
+
                 return [
                     'teacher' => $teacher,
                     'schedules' => $schedules,
@@ -464,8 +465,13 @@ class AttendanceDetailController extends Controller
     {
         $today = Carbon::today();
         $dayMap = [
-            1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu',
-            4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
         ];
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
@@ -1078,14 +1084,32 @@ class AttendanceDetailController extends Controller
             ->get()
             ->keyBy('id');
 
+        // Pre-load siswa yang sudah diverifikasi izin/sakit oleh wali kelas untuk hari ini
+        $approvedLeaveStudentIds = StudentLeaveRequest::query()
+            ->whereIn('student_id', $studentIds->all())
+            ->where('status_pengajuan', 'Disetujui')
+            ->whereDate('tanggal_mulai', '<=', $today->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $today->toDateString())
+            ->pluck('student_id')
+            ->map(fn($id) => (int) $id)
+            ->flip()
+            ->all();
+
         $teacherAttendanceBySchedule = [];
         $savedCount = 0;
+        $skippedCount = 0;
         $status = $validated['bulk_status'] === 'Alpa' ? 'Alpha' : $validated['bulk_status'];
 
         foreach ($studentIds as $studentId) {
             $student = $students->get($studentId);
 
             if (!$student) {
+                continue;
+            }
+
+            // Jangan ubah status siswa yang sudah diverifikasi izin/sakit oleh wali kelas
+            if (isset($approvedLeaveStudentIds[$studentId])) {
+                $skippedCount++;
                 continue;
             }
 
@@ -1146,8 +1170,13 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Tidak ada data yang tersimpan. Pastikan siswa berada pada kelas sesuai jadwal Anda hari ini.');
         }
 
+        $message = "Berhasil menyimpan absensi {$savedCount} siswa.";
+        if ($skippedCount > 0) {
+            $message .= " {$skippedCount} siswa dilewati karena memiliki izin/sakit yang sudah diverifikasi wali kelas.";
+        }
+
         return redirect()->route('guru.attendance-details.index', ['classroom_id' => $selectedClassroomId])
-            ->with('success', "Berhasil menyimpan absensi {$savedCount} siswa.");
+            ->with('success', $message);
     }
 
     public function submitBulkForOfficer(Request $request)

@@ -95,6 +95,38 @@
                 </div>
             </div>
 
+            <div class="row mb-3">
+                <div class="col-md-4 mb-2 mb-md-0">
+                    <label for="filterGuru" class="mb-1">Filter Guru</label>
+                    <select id="filterGuru" class="form-control form-control-sm">
+                        <option value="">Semua Guru</option>
+                        @foreach ($filterGurus as $guru)
+                            <option value="{{ $guru }}">{{ $guru }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-4 mb-2 mb-md-0">
+                    <label for="filterMapel" class="mb-1">Filter Mata Pelajaran</label>
+                    <select id="filterMapel" class="form-control form-control-sm">
+                        <option value="">Semua Mata Pelajaran</option>
+                        @foreach ($filterMapels as $mapel)
+                            <option value="{{ $mapel }}">{{ $mapel }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="filterHari" class="mb-1">Filter Hari</label>
+                    <select id="filterHari" class="form-control form-control-sm">
+                        <option value="">Semua Hari</option>
+                        @foreach (['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'] as $hari)
+                            <option value="{{ $hari }}">{{ $hari }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
             <div class="table-responsive">
                 <table id="tableSchedules" class="table table-bordered table-striped">
                     <thead>
@@ -114,7 +146,10 @@
                         @foreach ($schedules as $schedule)
                             <tr data-tingkat="{{ $schedule->teacherSubject->classroom->tingkat ?? '' }}"
                                 data-jurusan="{{ $schedule->teacherSubject->classroom->major->nama_jurusan ?? '' }}"
-                                data-kelas="{{ $schedule->teacherSubject->classroom->nama_kelas ?? '' }}">
+                                data-kelas="{{ $schedule->teacherSubject->classroom->nama_kelas ?? '' }}"
+                                data-guru="{{ $schedule->teacherSubject->teacher->nama_lengkap ?? '' }}"
+                                data-mapel="{{ $schedule->teacherSubject->subject->nama_mapel ?? '' }}"
+                                data-hari="{{ $schedule->hari ?? '' }}">
                                 <td>{{ $loop->iteration }}</td>
                                 <td>{{ $schedule->teacherSubject->teacher->nama_lengkap ?? '-' }}</td>
                                 <td>{{ $schedule->teacherSubject->subject->nama_mapel ?? '-' }}</td>

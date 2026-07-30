@@ -48,16 +48,16 @@
                 <strong>Jabatan:</strong> {{ $student->jabatan_kelas_label }}
             </div>
 
-            <form method="GET" action="{{ route('siswa.teacher-attendances.index') }}" class="mb-3">
+            <form method="GET" action="{{ route('siswa.teacher-attendances.index') }}" class="mb-3" id="filterForm">
                 <div class="row align-items-end">
                     <div class="col-md-3">
                         <label for="tanggal" class="mb-1">Filter Tanggal</label>
-                        <input type="date" id="tanggal" name="tanggal" class="form-control"
+                        <input type="date" id="tanggal" name="tanggal" class="form-control filter-input"
                             value="{{ $selectedDate ?? now()->toDateString() }}">
                     </div>
                     <div class="col-md-5 mt-2 mt-md-0">
                         <label for="guru_mapel" class="mb-1">Filter Guru-Mapel</label>
-                        <select id="guru_mapel" name="guru_mapel" class="form-control">
+                        <select id="guru_mapel" name="guru_mapel" class="form-control filter-input">
                             <option value="0">Semua Guru-Mapel</option>
                             @foreach ($guruMapelOptions as $option)
                                 <option value="{{ $option['id'] }}" @selected((int) ($selectedGuruMapelId ?? 0) === (int) $option['id'])>
@@ -67,7 +67,6 @@
                         </select>
                     </div>
                     <div class="col-md-4 mt-2 mt-md-0">
-                        <button type="submit" class="btn btn-primary mr-2">Terapkan</button>
                         <a href="{{ route('siswa.teacher-attendances.index') }}"
                             class="btn btn-outline-secondary">Reset</a>
                     </div>
@@ -473,6 +472,11 @@
 
             $(document).on('change', '.foto-input', function() {
                 syncHadirButton($(this).closest('form'));
+            });
+
+            // Auto-submit filter form on filter change
+            $('.filter-input').on('change', function() {
+                $('#filterForm').submit();
             });
         });
     </script>

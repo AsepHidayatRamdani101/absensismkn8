@@ -284,7 +284,8 @@
                     <div class="row align-items-end">
                         <div class="col-md-8 col-lg-6">
                             <label for="classroom_id" class="mb-1">Filter Kelas (sesuai jadwal hari ini)</label>
-                            <select name="classroom_id" id="classroom_id" class="form-control">
+                            <select name="classroom_id" id="classroom_id" class="form-control"
+                                onchange="this.form.submit()">
                                 <option value="0">Semua Kelas Hari Ini</option>
                                 @foreach ($classOptions as $classroom)
                                     <option value="{{ $classroom->id }}" @selected($selectedClassroomId === (int) $classroom->id)>
@@ -292,12 +293,6 @@
                                     </option>
                                 @endforeach
                             </select>
-                        </div>
-                        <div class="col-md-4 col-lg-3 mt-2 mt-md-0">
-                            <button type="submit" class="btn btn-primary filter-submit-btn">
-                                <i class="fas fa-filter"></i>
-                                Terapkan Filter
-                            </button>
                         </div>
                     </div>
                 </form>
