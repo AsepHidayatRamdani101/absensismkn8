@@ -1,5 +1,6 @@
 <script>
     $(function() {
+        const filterStorageKey = 'teacher-subjects-filter-state';
 
         //----------------------------------
         // DATATABLE
@@ -72,6 +73,55 @@
 
             return true;
         });
+
+        function saveFilterState() {
+            const payload = {
+                teacher: $('#filterTeacher').val() || '',
+                subject: $('#filterSubject').val() || '',
+                classroom: $('#filterClassroom').val() || ''
+            };
+
+            try {
+                localStorage.setItem(filterStorageKey, JSON.stringify(payload));
+            } catch (error) {
+                // Ignore storage write issues.
+            }
+        }
+
+        function restoreFilterState() {
+            let saved = null;
+
+            try {
+                saved = JSON.parse(localStorage.getItem(filterStorageKey) || 'null');
+            } catch (error) {
+                saved = null;
+            }
+
+            if (!saved) {
+                return;
+            }
+
+            $('#filterTeacher').val(saved.teacher || '');
+            syncSubjectOptions();
+
+            const subjectValue = saved.subject || '';
+            if (subjectValue && $('#filterSubject option[value="' + subjectValue + '"]').length > 0) {
+                $('#filterSubject').val(subjectValue);
+            } else {
+                $('#filterSubject').val('');
+            }
+
+            syncClassroomOptions();
+
+            const classroomValue = saved.classroom || '';
+            if (classroomValue && $('#filterClassroom option[value="' + classroomValue + '"]').length > 0) {
+                $('#filterClassroom').val(classroomValue);
+            } else {
+                $('#filterClassroom').val('');
+            }
+
+            tableTeacherSubjects.draw();
+        }
 
         // Sync subject options based on teacher filter
         function syncSubjectOptions() {
@@ -147,17 +197,30 @@
         $('#filterTeacher').on('change', function() {
             syncSubjectOptions();
             syncClassroomOptions();
+            saveFilterState();
             tableTeacherSubjects.draw();
         });
 
         $('#filterSubject').on('change', function() {
             syncClassroomOptions();
+            saveFilterState();
             tableTeacherSubjects.draw();
         });
 
         $('#filterClassroom').on('change', function() {
+            saveFilterState();
             tableTeacherSubjects.draw();
         });
+
+        $('#btnResetTeacherSubjectsFilter').on('click', function() {
+            try {
+                localStorage.removeItem(filterStorageKey);
+            } catch (error) {
+                // Ignore storage delete issues.
+            }
+        });
+
+        restoreFilterState();
 
 
         //----------------------------------

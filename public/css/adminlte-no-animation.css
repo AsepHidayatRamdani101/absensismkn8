@@ -1,0 +1,35 @@
+/* Disable visual animations/transitions for faster AdminLTE interactions. */
+body,
+.wrapper,
+.main-sidebar,
+.main-header,
+.main-footer,
+.content-wrapper,
+.card,
+.nav-sidebar .nav-item>.nav-link,
+.dropdown-menu,
+.modal,
+.modal-dialog,
+.modal-content,
+.fade,
+.collapsing,
+.btn,
+.form-control,
+.custom-select,
+.select2-container,
+.select2-selection {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Remove Bootstrap fade effects for modals/backdrop. */
+.modal.fade .modal-dialog {
+    transform: none !important;
+}
+
+.modal-backdrop,
+.modal-backdrop.fade,
+.modal-backdrop.show {
+    transition: none !important;
+    animation: none !important;
+}

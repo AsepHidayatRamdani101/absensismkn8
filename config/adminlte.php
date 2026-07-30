@@ -109,7 +109,7 @@ return [
     */
 
     'preloader' => [
-        'enabled' => true,
+        'enabled' => false,
         'mode' => 'fullscreen',
         'img' => [
             'path' => 'vendor/adminlte/dist/img/AdminLTELogo.png',
@@ -221,7 +221,7 @@ return [
     'sidebar_scrollbar_theme' => 'os-theme-light',
     'sidebar_scrollbar_auto_hide' => 'l',
     'sidebar_nav_accordion' => true,
-    'sidebar_nav_animation_speed' => 300,
+    'sidebar_nav_animation_speed' => 0,
 
     /*
     |--------------------------------------------------------------------------
@@ -731,6 +731,16 @@ return [
                     'type' => 'js',
                     'asset' => true,
                     'location' => 'js/mobile-table-enhancements.js',
+                ],
+            ],
+        ],
+        'NoAnimation' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'css',
+                    'asset' => true,
+                    'location' => 'css/adminlte-no-animation.css',
                 ],
             ],
         ],
