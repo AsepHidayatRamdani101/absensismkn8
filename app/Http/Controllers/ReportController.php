@@ -263,6 +263,63 @@ class ReportController extends Controller
         );
     }
 
+    public function guruWaliKelasRecapDetail(Request $request, Student $student)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::with('waliClassroom.major')
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        // Verify student belongs to teacher's wali class
+        if ($student->classroom_id !== $teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        // Get all attendance details for this student in the period
+        $attendanceQuery = AttendanceDetail::query()
+            ->with(['teacherAttendance.subject', 'teacherAttendance.teacher'])
+            ->where('student_id', $student->id)
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->orderByDesc('teacher_attendances.tanggal')
+            ->orderByDesc('attendance_details.id');
+
+        if ($startDate && $endDate) {
+            $attendanceQuery->whereBetween('teacher_attendances.tanggal', [$startDate, $endDate]);
+        }
+
+        $attendances = $attendanceQuery
+            ->select('attendance_details.*')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'student' => [
+                'nama' => $student->nama_lengkap,
+                'nis' => $student->nis,
+                'nisn' => $student->nisn,
+            ],
+            'attendances' => $attendances->map(function ($attendance) {
+                return [
+                    'tanggal' => $attendance->teacherAttendance->tanggal->format('Y-m-d'),
+                    'hari' => $attendance->teacherAttendance->tanggal->isoFormat('DDDD'),
+                    'mapel' => $attendance->teacherAttendance->subject->nama_mapel ?? '-',
+                    'guru' => $attendance->teacherAttendance->teacher->nama_lengkap ?? '-',
+                    'status' => $attendance->status,
+                    'keterangan' => $attendance->keterangan ?? '-',
+                ];
+            }),
+            'period' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
     private function buildGuruWaliKelasRecapPayload(Teacher $teacher, Request $request): array
     {
         $teacher->loadMissing('waliClassroom.major');
@@ -274,47 +331,90 @@ class ReportController extends Controller
             ->orderBy('nama_lengkap')
             ->get();
 
-        $summaryQuery = AttendanceDetail::query()
+        // Get all attendance details for the period
+        $attendanceQuery = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->select('attendance_details.student_id')
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Sakit' THEN 1 ELSE 0 END) as sakit")
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Izin' THEN 1 ELSE 0 END) as izin")
-            ->selectRaw("SUM(CASE WHEN attendance_details.status IN ('Alpha','Alpa') THEN 1 ELSE 0 END) as alpa")
-            ->selectRaw('COUNT(*) as total')
+            ->select('attendance_details.*', 'teacher_attendances.tanggal')
             ->whereIn('attendance_details.student_id', $students->pluck('id'));
 
         if ($startDate && $endDate) {
-            $summaryQuery->whereBetween('teacher_attendances.tanggal', [$startDate, $endDate]);
+            $attendanceQuery->whereBetween('teacher_attendances.tanggal', [$startDate, $endDate]);
         }
 
-        $summaries = $summaryQuery
-            ->groupBy('attendance_details.student_id')
-            ->get()
-            ->keyBy('student_id');
+        $attendances = $attendanceQuery->get();
 
-        $rows = $students->map(function (Student $student) use ($summaries) {
-            $summary = $summaries->get($student->id);
-            $total = (int) ($summary->total ?? 0);
-            $hadir = (int) ($summary->hadir ?? 0);
+        // Build rows with daily average calculation
+        $rows = $students->map(function (Student $student) use ($attendances) {
+            $studentAttendances = $attendances->where('student_id', $student->id);
+
+            if ($studentAttendances->isEmpty()) {
+                return [
+                    'student' => $student,
+                    'hadir' => 0,
+                    'sakit' => 0,
+                    'izin' => 0,
+                    'alpa' => 0,
+                    'total' => 0,
+                    'persen_hadir' => 0,
+                ];
+            }
+
+            // Group by date to calculate daily averages
+            $attendancesByDate = $studentAttendances->groupBy('tanggal');
+            $dailyAverages = [];
+            $allStatuses = [];
+
+            foreach ($attendancesByDate as $date => $dateAttendances) {
+                $totalSubjects = $dateAttendances->count();
+                $score = 0;
+
+                foreach ($dateAttendances as $attendance) {
+                    // Hadir dan Terlambat = 1, else = 0
+                    if (in_array($attendance['status'], ['Hadir', 'Terlambat'])) {
+                        $score += 1;
+                    }
+
+                    // Accumulate all statuses for counting
+                    $status = $attendance['status'];
+                    if (!isset($allStatuses[$status])) {
+                        $allStatuses[$status] = 0;
+                    }
+                    $allStatuses[$status] += 1;
+                }
+
+                // Daily average for this date
+                $dailyAverages[] = $score / $totalSubjects;
+            }
+
+            // Calculate totals from daily averages
+            $totalAveraged = array_sum($dailyAverages);
+            $hadir = isset($allStatuses['Hadir']) ? (int) $allStatuses['Hadir'] : 0;
+            $terlambat = isset($allStatuses['Terlambat']) ? (int) $allStatuses['Terlambat'] : 0;
+            $sakit = isset($allStatuses['Sakit']) ? (int) $allStatuses['Sakit'] : 0;
+            $izin = isset($allStatuses['Izin']) ? (int) $allStatuses['Izin'] : 0;
+            $alpa = isset($allStatuses['Alpa']) || isset($allStatuses['Alpha']) ?
+                ((int) ($allStatuses['Alpa'] ?? 0) + (int) ($allStatuses['Alpha'] ?? 0)) : 0;
+
+            $totalRecords = (int) $studentAttendances->count();
+            $persenHadir = $totalRecords > 0 ? round((($hadir + $terlambat) / $totalRecords) * 100, 2) : 0;
 
             return [
                 'student' => $student,
-                'hadir' => $hadir,
-                'sakit' => (int) ($summary->sakit ?? 0),
-                'izin' => (int) ($summary->izin ?? 0),
-                'alpa' => (int) ($summary->alpa ?? 0),
-                'total' => $total,
-                'persen_hadir' => $total > 0 ? round(($hadir / $total) * 100, 2) : 0,
+                'hadir' => round($totalAveraged, 2),
+                'sakit' => $sakit,
+                'izin' => $izin,
+                'alpa' => $alpa,
+                'total' => round($totalAveraged, 2),
+                'persen_hadir' => $persenHadir,
             ];
         });
 
         $totals = [
-            'hadir' => (int) $rows->sum('hadir'),
+            'hadir' => round($rows->sum('hadir'), 2),
             'sakit' => (int) $rows->sum('sakit'),
             'izin' => (int) $rows->sum('izin'),
             'alpa' => (int) $rows->sum('alpa'),
-            'total' => (int) $rows->sum('total'),
+            'total' => round($rows->sum('total'), 2),
         ];
 
         return [

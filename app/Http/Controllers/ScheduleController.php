@@ -30,12 +30,14 @@ class ScheduleController extends Controller
             ->pluck('teacherSubject.classroom.tingkat')
             ->filter()
             ->unique()
+            ->sort()
             ->values();
 
         $filterJurusans = $schedules
             ->pluck('teacherSubject.classroom.major.nama_jurusan')
             ->filter()
             ->unique()
+            ->sort()
             ->values();
 
         $filterKelas = $schedules
@@ -54,12 +56,28 @@ class ScheduleController extends Controller
             })
             ->values();
 
+        $filterGurus = $schedules
+            ->pluck('teacherSubject.teacher.nama_lengkap')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        $filterMapels = $schedules
+            ->pluck('teacherSubject.subject.nama_mapel')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
         return view('admin.schedules.index', compact(
             'schedules',
             'teacherSubjects',
             'filterTingkats',
             'filterJurusans',
-            'filterKelas'
+            'filterKelas',
+            'filterGurus',
+            'filterMapels'
         ));
     }
 

@@ -5,6 +5,7 @@
 @section('title', 'Rekap Siswa Wali Kelas')
 
 @section('plugins.Datatables', true)
+@section('plugins.Sweetalert2', true)
 
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -97,6 +98,7 @@
                             <th>Alpa</th>
                             <th>Total</th>
                             <th>% Hadir</th>
+                            <th width="8%">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -125,6 +127,13 @@
                                 <td>{{ $row['alpa'] }}</td>
                                 <td>{{ $row['total'] }}</td>
                                 <td>{{ $row['persen_hadir'] }}%</td>
+                                <td>
+                                    <button type="button" class="btn btn-primary btn-xs btn-student-detail"
+                                        data-student-id="{{ $row['student']->id }}"
+                                        data-student-name="{{ $row['student']->nama_lengkap }}" title="Detail Absensi">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -136,13 +145,26 @@
                             <th>{{ $totals['izin'] }}</th>
                             <th>{{ $totals['alpa'] }}</th>
                             <th>{{ $totals['total'] }}</th>
-                            <th>-</th>
+                            <th colspan="2">-</th>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
     </div>
+@stop
+
+@section('css')
+    <style>
+        .swal-detail-popup {
+            max-width: calc(100vw - 40px) !important;
+        }
+
+        .swal-detail-popup .swal2-content {
+            padding: 0 4px;
+            overflow-x: hidden;
+        }
+    </style>
 @stop
 
 @section('footer')
@@ -191,6 +213,181 @@
                         </div>
                     `,
                     confirmButtonText: 'Tutup'
+                });
+            });
+
+            $('.btn-student-detail').on('click', function() {
+                const button = $(this);
+                const studentId = button.data('student-id');
+                const studentName = button.data('student-name');
+                const params = new URLSearchParams(window.location.search);
+                const queryString = params.toString() ? '?' + params.toString() : '';
+
+                $.ajax({
+                    url: `/guru/wali-kelas/rekap-siswa/detail/${studentId}${queryString}`,
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            const allAttendances = response.attendances;
+                            const uniqueMapels = [...new Set(allAttendances.map(a => a.mapel))]
+                                .sort();
+
+                            // Build rows HTML helper
+                            const buildRowsHtml = function(attendances) {
+                                if (!attendances.length) {
+                                    return `<tr class="no-data-row"><td colspan="6" class="text-center text-muted">Tidak ada data sesuai filter</td></tr>`;
+                                }
+                                return attendances.map(function(a) {
+                                    let cls = 'badge-secondary';
+                                    if (a.status === 'Hadir' || a.status ===
+                                        'Terlambat') cls = 'badge-success';
+                                    else if (a.status === 'Sakit') cls =
+                                        'badge-info';
+                                    else if (a.status === 'Izin') cls =
+                                        'badge-warning';
+                                    else if (a.status === 'Alpa' || a.status ===
+                                        'Alpha') cls = 'badge-danger';
+                                    return `<tr class="detail-row" data-tanggal="${a.tanggal}" data-mapel="${a.mapel}">
+                                        <td>${a.tanggal}</td><td>${a.hari}</td><td>${a.mapel}</td>
+                                        <td>${a.guru}</td>
+                                        <td><span class="badge ${cls}">${a.status}</span></td>
+                                        <td>${a.keterangan}</td>
+                                    </tr>`;
+                                }).join('');
+                            };
+
+                            // Build mapel options for a given set of attendances
+                            const buildMapelOptions = function(attendances, selectedMapel) {
+                                const mapels = [...new Set(attendances.map(a => a.mapel))]
+                                    .sort();
+                                let opts = '<option value="">-- Semua Mapel --</option>';
+                                mapels.forEach(m => {
+                                    opts +=
+                                        `<option value="${m}" ${m === selectedMapel ? 'selected' : ''}>${m}</option>`;
+                                });
+                                return opts;
+                            };
+
+                            let filterHtml = `
+                                <div class="text-left">
+                                    <p class="mb-1"><strong>Siswa:</strong> ${response.student.nama} (${response.student.nis})</p>
+                                    <p class="mb-3"><strong>Periode:</strong> ${response.period}</p>
+                                    <div class="row mb-3">
+                                        <div class="col-md-5">
+                                            <label style="font-size: 12px; margin-bottom: 4px;"><strong>Filter Tanggal</strong></label>
+                                            <div class="input-group input-group-sm">
+                                                <input type="date" id="filterTanggal" class="form-control form-control-sm">
+                                                <div class="input-group-append">
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearTanggal" title="Reset">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-7">
+                                            <label style="font-size: 12px; margin-bottom: 4px;"><strong>Filter Mapel</strong></label>
+                                            <select id="filterMapel" class="form-control form-control-sm">
+                                                ${buildMapelOptions(allAttendances, '')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+                                        <table class="table table-sm table-bordered table-hover" style="font-size: 13px; margin-bottom: 0; min-width: 650px;">
+                                            <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
+                                                <tr>
+                                                    <th style="white-space:nowrap;">Tanggal</th>
+                                                    <th style="white-space:nowrap;">Hari</th>
+                                                    <th>Mapel</th>
+                                                    <th>Guru</th>
+                                                    <th style="white-space:nowrap;">Status</th>
+                                                    <th>Keterangan</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="detailTableBody">
+                                                ${buildRowsHtml(allAttendances)}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>`;
+
+                            Swal.fire({
+                                title: 'Detail Absensi - ' + studentName,
+                                html: filterHtml,
+                                width: Math.min(1100, window.innerWidth - 40),
+                                confirmButtonText: 'Tutup',
+                                customClass: {
+                                    popup: 'swal-detail-popup'
+                                },
+                                onOpen: function(popup) {
+                                    const elTanggal = popup.querySelector(
+                                        '#filterTanggal');
+                                    const elMapel = popup.querySelector(
+                                        '#filterMapel');
+                                    const elClear = popup.querySelector(
+                                        '#btnClearTanggal');
+                                    const elTbody = popup.querySelector(
+                                        '#detailTableBody');
+
+                                    const applyFilters = function() {
+                                        const tanggal = elTanggal.value;
+                                        const mapel = elMapel.value;
+                                        const filtered = allAttendances.filter(
+                                            a =>
+                                            (!tanggal || a.tanggal ===
+                                                tanggal) &&
+                                            (!mapel || a.mapel === mapel)
+                                        );
+                                        elTbody.innerHTML = buildRowsHtml(
+                                            filtered);
+                                    };
+
+                                    // Tanggal change → rebuild mapel options + filter table
+                                    elTanggal.addEventListener('change',
+                                        function() {
+                                            const tanggal = elTanggal.value;
+                                            const currentMapel = elMapel.value;
+                                            const base = tanggal ?
+                                                allAttendances.filter(a => a
+                                                    .tanggal === tanggal) :
+                                                allAttendances;
+
+                                            elMapel.innerHTML =
+                                                buildMapelOptions(base, '');
+
+                                            // Restore mapel if still available
+                                            const available = [...new Set(base
+                                                .map(a => a.mapel))];
+                                            if (available.includes(
+                                                    currentMapel)) {
+                                                elMapel.value = currentMapel;
+                                            }
+
+                                            applyFilters();
+                                        });
+
+                                    // Mapel change → filter table only
+                                    elMapel.addEventListener('change', function() {
+                                        applyFilters();
+                                    });
+
+                                    // Clear tanggal button
+                                    elClear.addEventListener('click', function() {
+                                        elTanggal.value = '';
+                                        elTanggal.dispatchEvent(new Event(
+                                            'change'));
+                                    });
+                                }
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Gagal memuat data detail absensi'
+                        });
+                    }
                 });
             });
         });

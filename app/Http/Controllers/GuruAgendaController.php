@@ -42,6 +42,58 @@ class GuruAgendaController extends Controller
                 ->get();
         }
 
+        // Load semua jadwal dari kelas yang diajar guru hari ini untuk menghitung jam ke yang akurat
+        $classroomIds = $todaySchedules
+            ->map(fn($s) => (int) ($s->teacherSubject?->classroom_id ?? 0))
+            ->filter()->unique()->values()->all();
+
+        $allClassroomSchedules = collect();
+        if (!empty($classroomIds) && $todayDayName !== null) {
+            $allClassroomSchedules = Schedule::query()
+                ->with('teacherSubject')
+                ->whereHas('teacherSubject', fn($q) => $q->whereIn('classroom_id', $classroomIds))
+                ->where('hari', $todayDayName)
+                ->orderBy('jam_mulai')
+                ->get()
+                ->groupBy(fn($s) => (int) ($s->teacherSubject?->classroom_id ?? 0));
+        }
+
+        // Helper: hitung jam ke berdasarkan posisi kumulatif + durasi per kelas
+        $calcJamKe = function (Schedule $schedule) use ($allClassroomSchedules): string {
+            $classroomId = (int) ($schedule->teacherSubject?->classroom_id ?? 0);
+            $classSchedules = ($allClassroomSchedules->get($classroomId) ?? collect())
+                ->sortBy('jam_mulai')
+                ->values();
+
+            if ($classSchedules->isEmpty()) {
+                return '-';
+            }
+
+            // Tentukan durasi dasar 1 jam pelajaran (durasi terpendek, min 30 menit)
+            $durations = $classSchedules->map(
+                fn($s) => Carbon::parse($s->jam_mulai)->diffInMinutes(Carbon::parse($s->jam_selesai))
+            )->filter()->sort()->values();
+
+            $baseDuration = max(30, $durations->first() ?? 45);
+
+            // Bangun peta jam mulai → [jam_ke_mulai, jam_ke_selesai] secara kumulatif
+            $currentPeriod = 1;
+            $periodMap     = [];
+            foreach ($classSchedules as $cs) {
+                $dur     = Carbon::parse($cs->jam_mulai)->diffInMinutes(Carbon::parse($cs->jam_selesai));
+                $periods = max(1, (int) round($dur / $baseDuration));
+                $periodMap[$cs->jam_mulai] = [$currentPeriod, $currentPeriod + $periods - 1];
+                $currentPeriod += $periods;
+            }
+
+            if (isset($periodMap[$schedule->jam_mulai])) {
+                [$start, $end] = $periodMap[$schedule->jam_mulai];
+                return $start === $end ? (string) $start : "{$start}-{$end}";
+            }
+
+            return '-';
+        };
+
         $scheduleIds = $todaySchedules->pluck('id')->values();
 
         $teacherAttendances = TeacherAttendance::query()
@@ -56,11 +108,11 @@ class GuruAgendaController extends Controller
             ->groupBy('teacher_attendance_id')
             ->pluck('total_hadir', 'teacher_attendance_id');
 
-        $rows = $todaySchedules->values()->map(function ($schedule, $index) use ($teacherAttendances, $presentCountByAttendance, $teacher) {
+        $rows = $todaySchedules->values()->map(function ($schedule, $index) use ($teacherAttendances, $presentCountByAttendance, $teacher, $calcJamKe) {
             $teacherAttendance = $teacherAttendances->get($schedule->id);
 
             return [
-                'jam_ke' => $index + 1,
+                'jam_ke' => $calcJamKe($schedule),
                 'schedule' => $schedule,
                 'teacher' => $teacher,
                 'teacher_attendance' => $teacherAttendance,

@@ -188,6 +188,10 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::get('/guru/wali-kelas/rekap-siswa', [ReportController::class, 'guruWaliKelasRecap'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.rekap-siswa');
+    Route::get('/guru/wali-kelas/rekap-siswa/detail/{student}', [ReportController::class, 'guruWaliKelasRecapDetail'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.rekap-siswa.detail')
+        ->where('student', '[0-9]+');
     Route::get('/guru/wali-kelas/rekap-siswa/pdf', [ReportController::class, 'guruWaliKelasRecapPdf'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.rekap-siswa.pdf');

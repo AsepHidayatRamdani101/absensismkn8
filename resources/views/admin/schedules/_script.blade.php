@@ -20,6 +20,9 @@
             let tingkatFilter = $('#filterTingkat').val();
             let jurusanFilter = $('#filterJurusan').val();
             let kelasFilter = $('#filterKelas').val();
+            let guruFilter = $('#filterGuru').val();
+            let mapelFilter = $('#filterMapel').val();
+            let hariFilter = $('#filterHari').val();
 
             let rowNode = tableSchedules.row(dataIndex).node();
 
@@ -30,18 +33,16 @@
             let rowTingkat = $(rowNode).data('tingkat') ? String($(rowNode).data('tingkat')) : '';
             let rowJurusan = $(rowNode).data('jurusan') ? String($(rowNode).data('jurusan')) : '';
             let rowKelas = $(rowNode).data('kelas') ? String($(rowNode).data('kelas')) : '';
+            let rowGuru = $(rowNode).data('guru') ? String($(rowNode).data('guru')) : '';
+            let rowMapel = $(rowNode).data('mapel') ? String($(rowNode).data('mapel')) : '';
+            let rowHari = $(rowNode).data('hari') ? String($(rowNode).data('hari')) : '';
 
-            if (tingkatFilter && rowTingkat !== tingkatFilter) {
-                return false;
-            }
-
-            if (jurusanFilter && rowJurusan !== jurusanFilter) {
-                return false;
-            }
-
-            if (kelasFilter && rowKelas !== kelasFilter) {
-                return false;
-            }
+            if (tingkatFilter && rowTingkat !== tingkatFilter) return false;
+            if (jurusanFilter && rowJurusan !== jurusanFilter) return false;
+            if (kelasFilter && rowKelas !== kelasFilter) return false;
+            if (guruFilter && rowGuru !== guruFilter) return false;
+            if (mapelFilter && rowMapel !== mapelFilter) return false;
+            if (hariFilter && rowHari !== hariFilter) return false;
 
             return true;
         });
@@ -103,7 +104,7 @@
             tableSchedules.draw();
         });
 
-        $('#filterKelas').on('change', function() {
+        $('#filterKelas, #filterGuru, #filterMapel, #filterHari').on('change', function() {
             tableSchedules.draw();
         });
 
