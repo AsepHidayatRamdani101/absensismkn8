@@ -19,8 +19,12 @@
                 <i class="fas fa-file-excel"></i>
                 Export Excel
             </a>
-            <form id="formImportStudents" action="{{ route('students.import') }}" method="POST" enctype="multipart/form-data"
-                class="d-inline-block mr-1">
+            <a href="{{ route('students.export-accounts-pdf', request()->query()) }}" class="btn btn-danger mr-1">
+                <i class="fas fa-file-pdf"></i>
+                Export PDF Akun
+            </a>
+            <form id="formImportStudents" action="{{ route('students.import') }}" method="POST"
+                enctype="multipart/form-data" class="d-inline-block mr-1">
                 @csrf
                 <input type="file" name="file" id="fileImportStudents" class="d-none" accept=".xlsx,.xls,.csv">
                 <button type="button" id="btnImportStudents" class="btn btn-warning">
@@ -61,6 +65,10 @@
 
             @if (session('success'))
                 <div class="alert alert-success">{{ session('success') }}</div>
+            @endif
+
+            @if (session('error'))
+                <div class="alert alert-danger">{{ session('error') }}</div>
             @endif
 
             @if ($errors->has('file'))
@@ -284,8 +292,8 @@
 
                                     const total = Number(resp.total || 0);
                                     const percent = total > 0 ? Math.min(100, Math
-                                            .round((totalProcessed / total) * 100)
-                                            ) : 100;
+                                        .round((totalProcessed / total) * 100)
+                                    ) : 100;
 
                                     Swal.update({
                                         html: `

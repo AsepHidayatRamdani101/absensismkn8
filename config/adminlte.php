@@ -416,6 +416,12 @@ return [
                     'can' => 'admin',
                 ],
                 [
+                    'text' => 'Absensi Guru (Kombinasi)',
+                    'route' => 'reports.teacher-attendance-recognition',
+                    'icon' => 'fas fa-check-double',
+                    'can' => 'admin',
+                ],
+                [
                     'text' => 'Log Device',
                     'url' => '#',
                     'icon' => 'fas fa-history',
@@ -516,6 +522,11 @@ return [
                             'text' => 'Approve Pengajuan Izin Guru',
                             'route' => 'kurikulum.teacher-leave-requests.index',
                             'icon' => 'fas fa-file-signature',
+                        ],
+                        [
+                            'text' => 'Approve Izin Absen Kelas',
+                            'route' => 'kurikulum.officer-attendance-permits.index',
+                            'icon' => 'fas fa-user-check',
                         ],
                     ],
                 ],

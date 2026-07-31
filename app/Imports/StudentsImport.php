@@ -109,8 +109,7 @@ class StudentsImport
                 continue;
             }
 
-            $identity = $nis !== '' ? $nis : $nisn;
-            if ($identity === '') {
+            if ($nis === '' && $nisn === '') {
                 $this->rowsSkipped++;
                 $this->skippedInvalidIdentity++;
                 continue;
@@ -128,16 +127,22 @@ class StudentsImport
                 $jabatan = null;
             }
 
-            Student::updateOrCreate(
-                ['nis' => $identity],
-                [
-                    'nisn' => $nisn !== '' ? $nisn : null,
-                    'nama_lengkap' => $nama,
-                    'jenis_kelamin' => $jenisKelamin,
-                    'classroom_id' => $classroom->id,
-                    'jabatan_kelas' => $jabatan,
-                ]
-            );
+            $payload = [
+                'nama_lengkap'  => $nama,
+                'jenis_kelamin' => $jenisKelamin,
+                'classroom_id'  => $classroom->id,
+                'jabatan_kelas' => $jabatan,
+            ];
+
+            if ($nisn !== '') {
+                // NISN is nationally unique — use it as the primary lookup key
+                $payload['nis'] = $nis !== '' ? $nis : null;
+                Student::updateOrCreate(['nisn' => $nisn], $payload);
+            } else {
+                // No NISN — fall back to NIS
+                $payload['nisn'] = null;
+                Student::updateOrCreate(['nis' => $nis], $payload);
+            }
 
             $this->recordsSynced++;
         }

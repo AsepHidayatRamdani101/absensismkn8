@@ -84,8 +84,8 @@
                             <th width="12%">Status Guru</th>
                             <th width="14%">Tugas</th>
                             <th width="10%">Foto</th>
-                            <th width="10%">Status Anda</th>
-                            <th width="24%">Aksi</th>
+                            <th width="10%">Keterangan Guru</th>
+                            <th width="18%">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -123,11 +123,25 @@
                                         class="text-muted d-block">{{ $schedule->teacherSubject->teacher->nama_lengkap ?? '-' }}</small>
                                 </td>
                                 <td>
-                                    @if ($approvedLeave)
-                                        <span class="badge badge-warning">{{ $guruStatus }}</span>
-                                    @else
-                                        <span class="badge badge-secondary">{{ $guruStatus }}</span>
-                                    @endif
+                                    @php
+                                        $guruBadgeClass = 'badge-secondary';
+                                        $guruTooltip = 'Belum diabsen';
+                                        if ($approvedLeave) {
+                                            $guruBadgeClass = 'badge-warning';
+                                            $guruTooltip = 'Guru izin/cuti';
+                                        } elseif ($selectedAction === 'Hadir') {
+                                            $guruBadgeClass = 'badge-success';
+                                            $guruTooltip = 'Hadir';
+                                        } elseif ($selectedAction === 'Tugas') {
+                                            $guruBadgeClass = 'badge-info';
+                                            $guruTooltip = 'Tugas';
+                                        } elseif ($selectedAction === 'Tanpa Keterangan') {
+                                            $guruBadgeClass = 'badge-danger';
+                                            $guruTooltip = 'Tanpa Keterangan';
+                                        }
+                                    @endphp
+                                    <span class="badge {{ $guruBadgeClass }}" data-toggle="tooltip" data-placement="top"
+                                        title="{{ $guruTooltip }}">{{ $guruStatus }}</span>
 
                                     @if ($todayLeaveRequest)
                                         @php
@@ -182,13 +196,17 @@
                                 </td>
                                 <td>
                                     @if ($selectedAction === 'Hadir')
-                                        <span class="badge badge-success">Hadir</span>
+                                        <span class="badge badge-success" data-toggle="tooltip" data-placement="top"
+                                            title="Hadir">Hadir</span>
                                     @elseif ($selectedAction === 'Tugas')
-                                        <span class="badge badge-warning">Tugas</span>
+                                        <span class="badge badge-warning" data-toggle="tooltip" data-placement="top"
+                                            title="Tugas">Tugas</span>
                                     @elseif ($selectedAction === 'Tanpa Keterangan')
-                                        <span class="badge badge-danger">Tanpa Keterangan</span>
+                                        <span class="badge badge-danger" data-toggle="tooltip" data-placement="top"
+                                            title="Tanpa Keterangan">Tanpa Keterangan</span>
                                     @else
-                                        <span class="badge badge-secondary">Belum Absen</span>
+                                        <span class="badge badge-secondary" data-toggle="tooltip" data-placement="top"
+                                            title="Belum diabsen">Belum</span>
                                     @endif
                                 </td>
                                 <td>
@@ -204,10 +222,6 @@
                                                 capture="environment">
 
                                             <div class="d-flex flex-wrap align-items-center" style="gap: 0.3rem;">
-                                                <button type="button" class="btn btn-light btn-xs btn-pilih-foto"
-                                                    data-input-id="foto_input_{{ $schedule->id }}" title="Pilih Foto">
-                                                    <i class="fas fa-image"></i>
-                                                </button>
                                                 <button type="button" class="btn btn-light btn-xs btn-open-kamera"
                                                     data-form-id="form_absen_{{ $schedule->id }}" title="Open Kamera">
                                                     <i class="fas fa-camera"></i>
@@ -221,7 +235,7 @@
                                             </div>
 
                                             <small class="text-muted d-block mt-1 kamera-file-label"
-                                                id="kamera_label_{{ $schedule->id }}">Gunakan ikon gambar/kamera.</small>
+                                                id="kamera_label_{{ $schedule->id }}">Gunakan ikon kamera.</small>
                                             <small class="text-muted d-block upload-status-label"
                                                 id="status_label_{{ $schedule->id }}">Hadir butuh foto.</small>
                                         </form>
@@ -300,16 +314,10 @@
                 },
                 columnDefs: [{
                     orderable: false,
-                    targets: [4, 6, 7]
-                }]
-            });
-
-            $(document).on('click', '.btn-pilih-foto', function() {
-                const inputId = $(this).data('input-id');
-                const input = document.getElementById(inputId);
-
-                if (input) {
-                    input.click();
+                    targets: [4, 5, 6, 7]
+                }],
+                initComplete: function() {
+                    $('[data-toggle="tooltip"]').tooltip();
                 }
             });
 
@@ -383,7 +391,7 @@
                     const statusLabel = activeForm.find('.upload-status-label');
                     if (statusLabel.length) {
                         statusLabel.text(
-                            'Tidak bisa membuka kamera langsung. Gunakan pilih foto atau izinkan kamera browser.'
+                            'Tidak bisa membuka kamera langsung. Coba izinkan akses kamera browser lalu ulangi.'
                         );
                     }
                 }

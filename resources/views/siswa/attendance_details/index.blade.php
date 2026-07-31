@@ -8,7 +8,8 @@
     <div class="d-flex justify-content-between align-items-end flex-wrap">
         <div>
             <h1 class="mb-1">Absensi Siswa Kelas</h1>
-            <p class="text-muted mb-0">KM/Sekretaris/Bendahara dapat mengisi absensi siswa saat guru mengajukan izin.</p>
+            <p class="text-muted mb-0">KM/Sekretaris/Bendahara dapat mengisi absensi siswa saat guru izin disetujui kurikulum
+                dan izin petugas disetujui kurikulum.</p>
         </div>
         <span class="badge badge-light border px-3 py-2 mt-2 mt-md-0">
             {{ $today->format('d M Y') }} - {{ $todayDayName }}
@@ -47,7 +48,7 @@
             <form method="GET" action="{{ route('siswa.attendance-details.index') }}">
                 <div class="row align-items-end">
                     <div class="col-md-8 col-lg-6">
-                        <label for="schedule_id" class="mb-1">Pilih Jadwal Guru Yang Mengajukan Izin</label>
+                        <label for="schedule_id" class="mb-1">Pilih Jadwal Guru Dengan Izin Disetujui Kurikulum</label>
                         <select name="schedule_id" id="schedule_id" class="form-control">
                             <option value="0">Pilih Jadwal</option>
                             @foreach ($leaveSchedules as $schedule)
@@ -73,7 +74,7 @@
 
     @if ($leaveSchedules->isEmpty() && !$isWeekendHoliday)
         <div class="alert alert-warning">
-            Belum ada guru yang mengajukan izin pada jadwal kelas Anda hari ini.
+            Belum ada guru dengan izin yang disetujui kurikulum pada jadwal kelas Anda hari ini.
         </div>
     @endif
 
@@ -82,10 +83,7 @@
             <div class="card-body py-2">
                 <strong>Status Pengajuan Guru:</strong>
                 <span class="badge badge-warning ml-1">{{ $activeLeaveRequest->jenis_pengajuan }}</span>
-                <span
-                    class="badge badge-{{ $activeLeaveRequest->status_pengajuan === 'Disetujui' ? 'success' : 'secondary' }} ml-1">
-                    {{ $activeLeaveRequest->status_pengajuan }}
-                </span>
+                <span class="badge badge-success ml-1">{{ $activeLeaveRequest->status_pengajuan }}</span>
 
                 @if (!empty($activeLeaveRequest->deskripsi_tugas))
                     <div class="mt-2"><strong>Tugas:</strong> {{ $activeLeaveRequest->deskripsi_tugas }}</div>
@@ -96,6 +94,47 @@
                         class="btn btn-outline-primary btn-xs mt-2">
                         <i class="fas fa-paperclip"></i> Lihat Lampiran Tugas
                     </a>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    @if ($selectedSchedule && $activeLeaveRequest)
+        <div class="card mb-3 border-info">
+            <div class="card-body">
+                <h6 class="mb-2">Pengajuan Izin Petugas Absen Kelas ke Kurikulum</h6>
+                @if ($officerPermit)
+                    <div class="mb-2">
+                        <span
+                            class="badge badge-{{ $officerPermit->status_pengajuan === 'Disetujui' ? 'success' : ($officerPermit->status_pengajuan === 'Ditolak' ? 'danger' : 'warning') }}">
+                            Status: {{ $officerPermit->status_pengajuan }}
+                        </span>
+                    </div>
+                    <div class="mb-2"><strong>Alasan:</strong> {{ $officerPermit->alasan }}</div>
+                    @if (!empty($officerPermit->catatan_kurikulum))
+                        <div class="mb-2"><strong>Catatan Kurikulum:</strong> {{ $officerPermit->catatan_kurikulum }}
+                        </div>
+                    @endif
+                @else
+                    <div class="alert alert-warning mb-2 py-2">
+                        Aksi absensi kelas dikunci sampai izin petugas disetujui kurikulum.
+                    </div>
+                @endif
+
+                @if (!$officerPermit || in_array($officerPermit->status_pengajuan, ['Menunggu', 'Ditolak'], true))
+                    <form method="POST" action="{{ route('siswa.attendance-details.permit.store') }}">
+                        @csrf
+                        <input type="hidden" name="schedule_id" value="{{ $selectedSchedule->id }}">
+                        <div class="form-group mb-2">
+                            <label class="mb-1">Alasan Pengajuan</label>
+                            <textarea name="alasan" class="form-control" rows="2" required
+                                placeholder="Contoh: Mengajukan izin sebagai petugas absen kelas pada jadwal ini."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-paper-plane"></i>
+                            {{ $officerPermit && $officerPermit->status_pengajuan === 'Ditolak' ? 'Ajukan Ulang ke Kurikulum' : 'Ajukan ke Kurikulum' }}
+                        </button>
+                    </form>
                 @endif
             </div>
         </div>
@@ -119,19 +158,19 @@
                 </small>
                 <div class="d-flex flex-wrap" style="gap: .4rem;">
                     <button type="button" class="btn btn-success btn-sm btn-bulk-status" data-status="Hadir"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule) disabled @endif>
+                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                         Hadir
                     </button>
                     <button type="button" class="btn btn-warning btn-sm btn-bulk-status" data-status="Sakit"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule) disabled @endif>
+                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                         Sakit
                     </button>
                     <button type="button" class="btn btn-info btn-sm btn-bulk-status" data-status="Izin"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule) disabled @endif>
+                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                         Izin
                     </button>
                     <button type="button" class="btn btn-danger btn-sm btn-bulk-status" data-status="Alpa"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule) disabled @endif>
+                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                         Alpa
                     </button>
                 </div>
@@ -143,7 +182,7 @@
                         <tr>
                             <th width="5%" class="text-center">
                                 <input type="checkbox" id="check_all_students"
-                                    @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule) disabled @endif>
+                                    @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                             </th>
                             <th width="5%">No</th>
                             <th>Nama Siswa</th>
@@ -162,7 +201,7 @@
                                 <td class="text-center">
                                     <input type="checkbox" class="check-student" name="student_ids[]"
                                         value="{{ $student->id }}" form="bulkAttendanceForm"
-                                        @if ($isWeekendHoliday || !$selectedSchedule) disabled @endif>
+                                        @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                                 </td>
                                 <td>{{ $loop->iteration }}</td>
                                 <td>{{ $student->nama_lengkap }}</td>
@@ -191,7 +230,7 @@
                                             <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
                                             <input type="hidden" name="status" value="Hadir">
                                             <button type="submit" class="btn btn-success btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule) disabled @endif>Hadir</button>
+                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Hadir</button>
                                         </form>
 
                                         <form method="POST"
@@ -203,7 +242,7 @@
                                             <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
                                             <input type="hidden" name="status" value="Sakit">
                                             <button type="submit" class="btn btn-warning btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule) disabled @endif>Sakit</button>
+                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Sakit</button>
                                         </form>
 
                                         <form method="POST"
@@ -215,7 +254,7 @@
                                             <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
                                             <input type="hidden" name="status" value="Izin">
                                             <button type="submit" class="btn btn-info btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule) disabled @endif>Izin</button>
+                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Izin</button>
                                         </form>
 
                                         <form method="POST"
@@ -227,7 +266,7 @@
                                             <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
                                             <input type="hidden" name="status" value="Alpa">
                                             <button type="submit" class="btn btn-danger btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule) disabled @endif>Alpa</button>
+                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Alpa</button>
                                         </form>
                                     </div>
                                 </td>

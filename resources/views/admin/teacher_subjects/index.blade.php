@@ -98,7 +98,7 @@
                     <label for="filterSubject" class="mb-1">Filter Mata Pelajaran</label>
                     <select id="filterSubject" class="form-control form-control-sm">
                         <option value="">Semua Mata Pelajaran</option>
-                        @foreach ($teacherSubjects->unique('subject_id')->pluck('subject')->sortBy('nama_mapel') as $subject)
+                        @foreach ($subjects as $subject)
                             <option value="{{ $subject->nama_mapel }}" data-subject-name="{{ $subject->nama_mapel }}">
                                 {{ $subject->nama_mapel }}</option>
                         @endforeach
@@ -116,7 +116,8 @@
                 </div>
                 <div class="col-md-3">
                     <label>&nbsp;</label>
-                    <a href="{{ route('teacher-subjects.index') }}" class="btn btn-outline-secondary btn-sm btn-block">
+                    <a href="{{ route('teacher-subjects.index') }}" id="btnResetTeacherSubjectsFilter"
+                        class="btn btn-outline-secondary btn-sm btn-block">
                         <i class="fas fa-redo"></i> Reset
                     </a>
                 </div>
@@ -170,31 +171,16 @@
     @include('admin.teacher_subjects.modal-edit')
 @stop
 
-@section('css')
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
-        rel="stylesheet" />
-@endsection
-
 @section('footer')
     @include('components.app-footer')
 @stop
 
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
         $(function() {
             const importModeKey = 'teacher-subjects-import-mode';
-
-            // Initialize Select2 for modal selects
-            $('.select2').select2({
-                theme: 'bootstrap-5',
-                placeholder: '- Pilih -',
-                allowClear: true,
-                width: '100%'
-            });
 
             // Restore last selected import mode from browser storage.
             try {
@@ -214,16 +200,7 @@
                 }
             });
 
-            // Reinitialize Select2 when modals are shown
-            $('#modalEdit').on('shown.bs.modal', function() {
-                $('#edit_teacher_id, #edit_subject_id, #edit_classroom_id, #edit_academic_year_id')
-                    .select2({
-                        theme: 'bootstrap-5',
-                        placeholder: '- Pilih -',
-                        dropdownParent: $('#modalEdit'),
-                        width: '100%'
-                    });
-            });
+            // Pengisian data modal edit ditangani di file script teacher_subjects.
 
             $('#btnImportTeacherSubjects').on('click', function() {
                 $('#fileImportTeacherSubjects').trigger('click');

@@ -26,6 +26,18 @@
             </div>
         </div>
         <div class="col-md-4 mb-3">
+            <div class="small-box bg-primary">
+                <div class="inner">
+                    <h3>{{ $pendingOfficerAttendancePermits }}</h3>
+                    <p>Izin Absen Kelas Menunggu</p>
+                </div>
+                <div class="icon"><i class="fas fa-user-check"></i></div>
+                <a href="{{ route('kurikulum.officer-attendance-permits.index') }}" class="small-box-footer">
+                    Buka Approval <i class="fas fa-arrow-circle-right"></i>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
             <div class="small-box bg-warning">
                 <div class="inner">
                     <h3>{{ $pendingStudentLeaveRequests }}</h3>
@@ -63,7 +75,8 @@
                         Siswa</a>
                 </div>
                 <div class="col-md-4">
-                    <a href="{{ route('reports.teacher-agenda') }}" class="btn btn-outline-primary btn-block">Laporan Agenda
+                    <a href="{{ route('reports.teacher-agenda') }}" class="btn btn-outline-primary btn-block">Laporan
+                        Agenda
                         Guru</a>
                 </div>
             </div>

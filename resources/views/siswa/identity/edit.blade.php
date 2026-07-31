@@ -97,13 +97,32 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-light border">
-                        Data inti seperti NIS, NISN, nama, kelas, dan jenis kelamin dikelola admin. Silakan isi identitas
-                        pendukung di bawah ini.
+                        Data inti seperti NIS, NISN, nama, dan kelas dikelola admin. Anda dapat mengubah jenis kelamin dan
+                        password di form ini.
                     </div>
 
                     <form method="POST" action="{{ route('siswa.identity.update') }}" id="studentIdentityForm">
                         @csrf
                         @method('PUT')
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Jenis Kelamin</label>
+                                    <select name="jenis_kelamin" class="form-control">
+                                        <option value="">-- Pilih --</option>
+                                        <option value="L"
+                                            {{ old('jenis_kelamin', $student->jenis_kelamin) === 'L' ? 'selected' : '' }}>
+                                            Laki-laki</option>
+                                        <option value="P"
+                                            {{ old('jenis_kelamin', $student->jenis_kelamin) === 'P' ? 'selected' : '' }}>
+                                            Perempuan</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                            </div>
+                        </div>
 
                         <div class="row">
                             <div class="col-md-6">
@@ -149,6 +168,35 @@
                         <div class="form-group">
                             <label>Alamat</label>
                             <textarea name="alamat" class="form-control" rows="4">{{ old('alamat', $student->alamat) }}</textarea>
+                        </div>
+
+                        <hr>
+                        <h6 class="font-weight-bold mb-3">Ubah Password</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Password Saat Ini</label>
+                                    <input type="password" name="current_password" class="form-control"
+                                        placeholder="Kosongkan jika tidak ingin ubah">
+                                    @error('current_password')
+                                        <small class="text-danger">{{ $message }}</small>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Password Baru</label>
+                                    <input type="password" name="password" class="form-control"
+                                        placeholder="Min. 8 karakter">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Konfirmasi Password Baru</label>
+                                    <input type="password" name="password_confirmation" class="form-control"
+                                        placeholder="Ulangi password baru">
+                                </div>
+                            </div>
                         </div>
 
                         <button type="submit" class="btn btn-primary">

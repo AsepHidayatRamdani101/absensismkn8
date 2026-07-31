@@ -324,12 +324,12 @@
                             @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
                             Hadir
                         </button>
-                        <button type="button" class="btn btn-warning btn-xs btn-bulk-status" data-status="Sakit"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                        <button type="button" class="btn btn-warning btn-xs" disabled
+                            title="Nonaktif, gunakan approval izin/sakit wali kelas">
                             Sakit
                         </button>
-                        <button type="button" class="btn btn-info btn-xs btn-bulk-status" data-status="Izin"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                        <button type="button" class="btn btn-info btn-xs" disabled
+                            title="Nonaktif, gunakan approval izin/sakit wali kelas">
                             Izin
                         </button>
                         <button type="button" class="btn btn-danger btn-xs btn-bulk-status" data-status="Alpa"
@@ -428,8 +428,8 @@
                                                 <input type="hidden" name="classroom_id"
                                                     value="{{ $student->classroom_id }}">
                                                 <input type="hidden" name="status" value="Sakit">
-                                                <button type="submit" class="btn btn-warning btn-xs"
-                                                    @if ($isWeekendHoliday) disabled @endif>Sakit</button>
+                                                <button type="button" class="btn btn-warning btn-xs" disabled
+                                                    title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>
                                             </form>
 
                                             <form method="POST"
@@ -439,8 +439,8 @@
                                                 <input type="hidden" name="classroom_id"
                                                     value="{{ $student->classroom_id }}">
                                                 <input type="hidden" name="status" value="Izin">
-                                                <button type="submit" class="btn btn-info btn-xs"
-                                                    @if ($isWeekendHoliday) disabled @endif>Izin</button>
+                                                <button type="button" class="btn btn-info btn-xs" disabled
+                                                    title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>
                                             </form>
 
                                             <form method="POST"

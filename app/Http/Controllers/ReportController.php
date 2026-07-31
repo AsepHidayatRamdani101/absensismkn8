@@ -8,6 +8,7 @@ use App\Exports\StudentLeaveReportExport;
 use App\Exports\StudentAttendanceReportExport;
 use App\Exports\TeacherAgendaReportExport;
 use App\Exports\TeacherAttendanceReportExport;
+use App\Exports\TeacherAttendanceRecognitionMissingSessionsExport;
 use App\Exports\TeacherLeaveReportExport;
 use App\Models\AttendanceDetail;
 use App\Models\Classroom;
@@ -26,6 +27,144 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    public function teacherAttendanceRecognition(Request $request)
+    {
+        $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
+
+        $rows = $baseRows->map(function (TeacherAttendance $item) {
+            return [
+                'item' => $item,
+                ...$this->buildTeacherAttendanceRecognitionRow($item),
+            ];
+        });
+
+        $summary = [
+            'total_sesi' => (int) $rows->count(),
+            'total_diakui' => (int) $rows->sum('recognized_point'),
+        ];
+        $summary['persentase_diakui'] = $summary['total_sesi'] > 0
+            ? round(($summary['total_diakui'] / $summary['total_sesi']) * 100, 2)
+            : 0;
+
+        $countUniqueTeachers = static function (Collection $collection): int {
+            return $collection
+                ->map(fn($row) => (int) ($row['item']->teacher_id ?? 0))
+                ->filter(fn($teacherId) => $teacherId > 0)
+                ->unique()
+                ->count();
+        };
+
+        $missingTeacherCards = [
+            'absen_siswa_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_absensi_siswa_oleh_guru'])),
+            'agenda_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_agenda_guru'])),
+            'foto_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_absensi_guru_siswa_kamera'])),
+        ];
+
+        $teachers = Teacher::orderBy('nama_lengkap')->get();
+        $majors = Major::orderBy('nama_jurusan')->get();
+        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+
+        return view('admin.reports.teacher-attendance-recognition', [
+            'rows' => $rows,
+            'summary' => $summary,
+            'missingTeacherCards' => $missingTeacherCards,
+            'teachers' => $teachers,
+            'majors' => $majors,
+            'classrooms' => $classrooms,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function teacherAttendanceRecognitionMissingTeachers(Request $request, string $type)
+    {
+        $typeConfig = $this->teacherAttendanceRecognitionTypeConfig();
+
+        if (!isset($typeConfig[$type])) {
+            abort(404);
+        }
+
+        $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
+
+        $rows = $baseRows->map(function (TeacherAttendance $item) {
+            return [
+                'item' => $item,
+                ...$this->buildTeacherAttendanceRecognitionRow($item),
+            ];
+        });
+
+        $filteredRows = $rows->filter($typeConfig[$type]['predicate'])->values();
+
+        $teacherRows = $filteredRows
+            ->groupBy(fn($row) => (int) ($row['item']->teacher_id ?? 0))
+            ->map(function (Collection $group) {
+                $first = $group->first();
+                $teacher = $first['item']->teacher;
+
+                return [
+                    'teacher_id' => (int) ($first['item']->teacher_id ?? 0),
+                    'teacher_name' => $teacher->nama_lengkap ?? '-',
+                    'total_sesi_belum' => (int) $group->count(),
+                    'mapel' => $group->map(fn($row) => $row['item']->subject->nama_mapel ?? '-')
+                        ->unique()
+                        ->values()
+                        ->implode(', '),
+                    'kelas' => $group->map(fn($row) => $row['item']->classroom->nama_kelas ?? '-')
+                        ->unique()
+                        ->values()
+                        ->implode(', '),
+                    'tanggal_terakhir' => $group->map(fn($row) => (string) $row['item']->tanggal)
+                        ->filter()
+                        ->max(),
+                ];
+            })
+            ->sortByDesc('total_sesi_belum')
+            ->values();
+
+        return view('admin.reports.teacher-attendance-recognition-missing-teachers', [
+            'title' => $typeConfig[$type]['title'],
+            'type' => $type,
+            'rows' => $teacherRows,
+            'filters' => $request->all(),
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function teacherAttendanceRecognitionMissingTeacherSessions(Request $request, string $type, Teacher $teacher)
+    {
+        $payload = $this->buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload($request, $type, $teacher);
+
+        return view('admin.reports.teacher-attendance-recognition-missing-teacher-sessions', [
+            ...$payload,
+            'filters' => $request->all(),
+        ]);
+    }
+
+    public function teacherAttendanceRecognitionMissingTeacherSessionsPdf(Request $request, string $type, Teacher $teacher)
+    {
+        $payload = $this->buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload($request, $type, $teacher);
+
+        $pdf = Pdf::loadView('admin.reports.pdf.teacher-attendance-recognition-missing-teacher-sessions', $payload)
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-sesi-guru-belum-' . $type . '-' . $teacher->id . '.pdf');
+    }
+
+    public function teacherAttendanceRecognitionMissingTeacherSessionsExcel(Request $request, string $type, Teacher $teacher)
+    {
+        $payload = $this->buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload($request, $type, $teacher);
+
+        return Excel::download(
+            new TeacherAttendanceRecognitionMissingSessionsExport(
+                $payload['rows'],
+                $payload['title'],
+                $payload['periodLabel'],
+                $teacher->nama_lengkap ?? 'Guru'
+            ),
+            'laporan-sesi-guru-belum-' . $type . '-' . $teacher->id . '.xlsx'
+        );
+    }
+
     public function teacherAttendance(Request $request)
     {
         $rows = $this->buildTeacherAttendanceQuery($request)->get();
@@ -529,6 +668,114 @@ class ReportController extends Controller
         }
 
         return $query;
+    }
+
+    private function buildTeacherAttendanceRecognitionQuery(Request $request)
+    {
+        $query = TeacherAttendance::with([
+            'teacher',
+            'subject',
+            'classroom.major',
+        ])->withCount('attendanceDetails')
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id');
+
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('tanggal', [$startDate, $endDate]);
+        }
+
+        if ($request->filled('teacher_id')) {
+            $query->where('teacher_id', $request->teacher_id);
+        }
+
+        if ($request->filled('major_id')) {
+            $query->whereHas('classroom', function ($classroomQuery) use ($request) {
+                $classroomQuery->where('major_id', $request->major_id);
+            });
+        }
+
+        if ($request->filled('classroom_id')) {
+            $query->where('classroom_id', $request->classroom_id);
+        }
+
+        return $query;
+    }
+
+    private function buildTeacherAttendanceRecognitionRow(TeacherAttendance $item): array
+    {
+        $hasAbsensiGuruSiswaKamera = !empty($item->foto_guru_path);
+        $hasAgendaGuru = $item->status === 'Selesai';
+        $hasAbsensiSiswaOlehGuru = $item->kehadiran_guru === 'Hadir' && (int) $item->attendance_details_count > 0;
+        $recognizedPoint = ($hasAbsensiGuruSiswaKamera && $hasAgendaGuru && $hasAbsensiSiswaOlehGuru) ? 1 : 0;
+
+        return [
+            'has_absensi_guru_siswa_kamera' => $hasAbsensiGuruSiswaKamera,
+            'has_agenda_guru' => $hasAgendaGuru,
+            'has_absensi_siswa_oleh_guru' => $hasAbsensiSiswaOlehGuru,
+            'recognized_point' => $recognizedPoint,
+        ];
+    }
+
+    private function teacherAttendanceRecognitionTypeConfig(): array
+    {
+        return [
+            'absen-siswa' => [
+                'title' => 'Guru Belum Melakukan Absen Siswa',
+                'predicate' => fn(array $row) => !$row['has_absensi_siswa_oleh_guru'],
+            ],
+            'agenda' => [
+                'title' => 'Guru Belum Mengisi Agenda',
+                'predicate' => fn(array $row) => !$row['has_agenda_guru'],
+            ],
+            'foto' => [
+                'title' => 'Guru Tidak Difoto Oleh Siswa',
+                'predicate' => fn(array $row) => !$row['has_absensi_guru_siswa_kamera'],
+            ],
+        ];
+    }
+
+    private function buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload(Request $request, string $type, Teacher $teacher): array
+    {
+        $typeConfig = $this->teacherAttendanceRecognitionTypeConfig();
+
+        if (!isset($typeConfig[$type])) {
+            abort(404);
+        }
+
+        $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
+
+        $rows = $baseRows->map(function (TeacherAttendance $item) {
+            return [
+                'item' => $item,
+                ...$this->buildTeacherAttendanceRecognitionRow($item),
+            ];
+        });
+
+        $sessionRows = $rows
+            ->filter($typeConfig[$type]['predicate'])
+            ->filter(fn($row) => (int) ($row['item']->teacher_id ?? 0) === (int) $teacher->id)
+            ->values()
+            ->map(function ($row) {
+                return [
+                    'tanggal' => (string) ($row['item']->tanggal ?? '-'),
+                    'mapel' => $row['item']->subject->nama_mapel ?? '-',
+                    'jurusan' => $row['item']->classroom->major->nama_jurusan ?? '-',
+                    'kelas' => $row['item']->classroom->nama_kelas ?? '-',
+                    'absensi_guru_siswa_kamera' => $row['has_absensi_guru_siswa_kamera'],
+                    'agenda_guru' => $row['has_agenda_guru'],
+                    'absensi_siswa_oleh_guru' => $row['has_absensi_siswa_oleh_guru'],
+                ];
+            });
+
+        return [
+            'title' => $typeConfig[$type]['title'] . ' - ' . ($teacher->nama_lengkap ?? 'Guru'),
+            'type' => $type,
+            'teacher' => $teacher,
+            'rows' => $sessionRows,
+            'periodLabel' => $this->buildPeriodLabel($request),
+        ];
     }
 
     private function buildTeacherAgendaQuery(Request $request)

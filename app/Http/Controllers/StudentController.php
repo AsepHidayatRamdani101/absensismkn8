@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\Classroom;
 use App\Models\Major;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,8 @@ use Spatie\Permission\Models\Role;
 
 class StudentController extends Controller
 {
+    private const PDF_EXPORT_MAX_ROWS = 800;
+
     private function resolveAuthenticatedStudent(): ?Student
     {
         return Student::query()
@@ -30,40 +33,10 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
-        $majorFilter     = $request->input('major_id', '');
-        $classroomFilter = $request->input('classroom_id', '');
+        $majorFilter     = (string) $request->input('major_id', '');
+        $classroomFilter = (string) $request->input('classroom_id', '');
 
-        $query = Student::with('classroom.major')->latest();
-
-        if ($majorFilter !== '') {
-            $query->whereHas('classroom', fn($q) => $q->where('major_id', $majorFilter));
-        }
-
-        if ($classroomFilter !== '') {
-            $query->where('classroom_id', $classroomFilter);
-        }
-
-        $students = $query->get();
-
-        $accountIdentifiers = $students
-            ->flatMap(fn(Student $student) => array_filter([
-                trim((string) $student->nisn),
-                trim((string) $student->nis),
-            ]))
-            ->unique()
-            ->values();
-
-        $existingAccounts = User::query()
-            ->whereIn('email', $accountIdentifiers)
-            ->pluck('email')
-            ->all();
-
-        $existingAccountLookup = array_fill_keys($existingAccounts, true);
-
-        $students->each(function (Student $student) use ($existingAccountLookup) {
-            $student->has_account = isset($existingAccountLookup[trim((string) $student->nisn)])
-                || isset($existingAccountLookup[trim((string) $student->nis)]);
-        });
+        $students = $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter);
 
         $majors = Major::orderBy('nama_jurusan')->get();
 
@@ -82,6 +55,31 @@ class StudentController extends Controller
                 'classroomFilter'
             )
         );
+    }
+
+    public function exportAccountsPdf(Request $request)
+    {
+        $majorFilter = (string) $request->input('major_id', '');
+        $classroomFilter = (string) $request->input('classroom_id', '');
+
+        $students = $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter);
+
+        if ($students->count() > self::PDF_EXPORT_MAX_ROWS) {
+            return redirect()
+                ->route('students.index', $request->query())
+                ->with(
+                    'error',
+                    'Export PDF akun dibatasi maksimal ' . self::PDF_EXPORT_MAX_ROWS . ' data per file. Gunakan filter jurusan/kelas terlebih dahulu.'
+                );
+        }
+
+        $pdf = Pdf::loadView('admin.students.pdf-accounts', [
+            'students' => $students,
+            'majorFilter' => $majorFilter,
+            'classroomFilter' => $classroomFilter,
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('akun-siswa.pdf');
     }
 
     public function store(Request $request)
@@ -192,14 +190,25 @@ class StudentController extends Controller
 
         $validated = $request->validate([
             'nama_orang_tua_wali' => 'nullable|string|max:255',
-            'alamat' => 'nullable|string',
-            'no_hp' => 'nullable|string|max:255',
-            'no_hp_orang_tua' => 'nullable|string|max:255',
-            'tinggi_badan' => 'nullable|numeric|min:0',
-            'berat_badan' => 'nullable|numeric|min:0',
+            'alamat'              => 'nullable|string',
+            'no_hp'               => 'nullable|string|max:255',
+            'no_hp_orang_tua'     => 'nullable|string|max:255',
+            'tinggi_badan'        => 'nullable|numeric|min:0',
+            'berat_badan'         => 'nullable|numeric|min:0',
+            'jenis_kelamin'       => 'nullable|in:L,P',
+            'current_password'    => 'nullable|string',
+            'password'            => 'nullable|string|min:8|confirmed',
         ]);
 
-        $student->update($validated);
+        $student->update(collect($validated)->except(['current_password', 'password', 'password_confirmation'])->filter(fn($v) => $v !== null)->toArray());
+
+        // Handle password change
+        if (!empty($validated['password'])) {
+            if (empty($validated['current_password']) || !Hash::check($validated['current_password'], auth()->user()->password)) {
+                return back()->withErrors(['current_password' => 'Password saat ini tidak sesuai.'])->withInput();
+            }
+            auth()->user()->update(['password' => Hash::make($validated['password'])]);
+        }
 
         return redirect()->route('siswa.identity.edit')->with('success', 'Identitas siswa berhasil diperbarui.');
     }
@@ -401,5 +410,49 @@ class StudentController extends Controller
             'success',
             "Batch generate akun siswa diproses. Jalankan lagi untuk batch berikutnya. after_id={$lastIdInBatch}."
         );
+    }
+
+    private function buildStudentsWithAccountStatus(?string $majorFilter = '', ?string $classroomFilter = '')
+    {
+        $majorFilter = (string) ($majorFilter ?? '');
+        $classroomFilter = (string) ($classroomFilter ?? '');
+
+        $query = Student::with('classroom.major')->latest();
+
+        if ($majorFilter !== '') {
+            $query->whereHas('classroom', fn($q) => $q->where('major_id', $majorFilter));
+        }
+
+        if ($classroomFilter !== '') {
+            $query->where('classroom_id', $classroomFilter);
+        }
+
+        $students = $query->get();
+
+        $accountIdentifiers = $students
+            ->flatMap(fn(Student $student) => array_filter([
+                trim((string) $student->nisn),
+                trim((string) $student->nis),
+            ]))
+            ->unique()
+            ->values();
+
+        $existingAccounts = User::query()
+            ->whereIn('email', $accountIdentifiers)
+            ->pluck('email')
+            ->all();
+
+        $existingAccountLookup = array_fill_keys($existingAccounts, true);
+
+        $students->each(function (Student $student) use ($existingAccountLookup) {
+            $studentNisn = trim((string) $student->nisn);
+            $studentNis = trim((string) $student->nis);
+
+            $student->username_akun = $studentNisn !== '' ? $studentNisn : $studentNis;
+            $student->has_account = isset($existingAccountLookup[$studentNisn])
+                || isset($existingAccountLookup[$studentNis]);
+        });
+
+        return $students;
     }
 }

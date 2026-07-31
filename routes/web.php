@@ -16,6 +16,7 @@ use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentLeaveRequestController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\OfficerAttendancePermitController;
 use App\Http\Controllers\TeacherAttendanceController;
 use App\Http\Controllers\TeacherLeaveRequestController;
 use App\Http\Controllers\TeacherSubjectController;
@@ -49,6 +50,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('students/import', [StudentController::class, 'import'])->name('students.import');
         Route::get('students/template', [StudentController::class, 'template'])->name('students.template');
         Route::get('students/export', [StudentController::class, 'export'])->name('students.export');
+        Route::get('students/export-accounts-pdf', [StudentController::class, 'exportAccountsPdf'])->name('students.export-accounts-pdf');
         Route::post('students/generate-accounts', [StudentController::class, 'generateAccounts'])->name('students.generate-accounts');
         Route::delete('students/destroy-multiple', [StudentController::class, 'destroyMultiple'])->name('students.destroy-multiple');
         Route::resource('students', StudentController::class)->except(['show', 'create']);
@@ -106,9 +108,25 @@ Route::middleware(['auth'])->group(function () {
             ->name('kurikulum.teacher-leave-requests.approve');
         Route::post('kurikulum/guru-leave-requests/{teacherLeaveRequest}/reject', [TeacherLeaveRequestController::class, 'reject'])
             ->name('kurikulum.teacher-leave-requests.reject');
+        Route::get('kurikulum/officer-attendance-permits', [OfficerAttendancePermitController::class, 'index'])
+            ->name('kurikulum.officer-attendance-permits.index');
+        Route::post('kurikulum/officer-attendance-permits/{permit}/approve', [OfficerAttendancePermitController::class, 'approve'])
+            ->name('kurikulum.officer-attendance-permits.approve');
+        Route::post('kurikulum/officer-attendance-permits/{permit}/reject', [OfficerAttendancePermitController::class, 'reject'])
+            ->name('kurikulum.officer-attendance-permits.reject');
 
         Route::get('reports/teacher-attendance', [ReportController::class, 'teacherAttendance'])
             ->name('reports.teacher-attendance');
+        Route::get('reports/teacher-attendance-recognition', [ReportController::class, 'teacherAttendanceRecognition'])
+            ->name('reports.teacher-attendance-recognition');
+        Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}', [ReportController::class, 'teacherAttendanceRecognitionMissingTeachers'])
+            ->name('reports.teacher-attendance-recognition.missing-teachers');
+        Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}/{teacher}', [ReportController::class, 'teacherAttendanceRecognitionMissingTeacherSessions'])
+            ->name('reports.teacher-attendance-recognition.missing-teacher-sessions');
+        Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}/{teacher}/pdf', [ReportController::class, 'teacherAttendanceRecognitionMissingTeacherSessionsPdf'])
+            ->name('reports.teacher-attendance-recognition.missing-teacher-sessions.pdf');
+        Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}/{teacher}/excel', [ReportController::class, 'teacherAttendanceRecognitionMissingTeacherSessionsExcel'])
+            ->name('reports.teacher-attendance-recognition.missing-teacher-sessions.excel');
         Route::get('reports/teacher-attendance/pdf', [ReportController::class, 'teacherAttendancePdf'])
             ->name('reports.teacher-attendance.pdf');
         Route::get('reports/teacher-attendance/excel', [ReportController::class, 'teacherAttendanceExcel'])
@@ -221,6 +239,9 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::post('/siswa/attendance-details/{student}/submit', [AttendanceDetailController::class, 'submitForOfficer'])
         ->middleware('can:siswa-absen-guru')
         ->name('siswa.attendance-details.submit');
+    Route::post('/siswa/attendance-details/permit', [OfficerAttendancePermitController::class, 'store'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.attendance-details.permit.store');
     Route::get('/siswa/pengajuan-izin-sakit', [StudentLeaveRequestController::class, 'siswaIndex'])
         ->name('siswa.leave-requests.index');
     Route::post('/siswa/pengajuan-izin-sakit', [StudentLeaveRequestController::class, 'siswaStore'])

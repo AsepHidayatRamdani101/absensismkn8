@@ -7,6 +7,7 @@ use App\Models\AttendanceDetail;
 use App\Models\AttendanceDevice;
 use App\Models\Classroom;
 use App\Models\Major;
+use App\Models\OfficerAttendancePermit;
 use App\Models\Schedule;
 use App\Models\SchoolSetting;
 use App\Models\Student;
@@ -533,6 +534,10 @@ class DashboardController extends Controller
             ? (int) \App\Models\TeacherLeaveRequest::query()->where('status_pengajuan', 'Menunggu')->count()
             : 0;
 
+        $pendingOfficerAttendancePermits = class_exists(OfficerAttendancePermit::class)
+            ? (int) OfficerAttendancePermit::query()->where('status_pengajuan', 'Menunggu')->count()
+            : 0;
+
         $pendingStudentLeaveRequests = class_exists(\App\Models\StudentLeaveRequest::class)
             ? (int) \App\Models\StudentLeaveRequest::query()->where('status_pengajuan', 'Menunggu')->count()
             : 0;
@@ -543,6 +548,7 @@ class DashboardController extends Controller
 
         return view('kurikulum.dashboard', compact(
             'pendingGuruLeaveRequests',
+            'pendingOfficerAttendancePermits',
             'pendingStudentLeaveRequests',
             'totalTeacherAttendancesToday'
         ));

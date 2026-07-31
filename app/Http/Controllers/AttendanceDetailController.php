@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\SiswaAttendanceHistoryExport;
 use App\Models\AttendanceDetail;
+use App\Models\OfficerAttendancePermit;
 use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
@@ -112,7 +113,7 @@ class AttendanceDetailController extends Controller
                     $query->where('classroom_id', $officer->classroom_id)
                         ->whereHas('teacher.leaveRequests', function ($leaveQuery) use ($today) {
                             $leaveQuery
-                                ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+                                ->where('status_pengajuan', 'Disetujui')
                                 ->whereDate('tanggal_mulai', '<=', $today->toDateString())
                                 ->whereDate('tanggal_selesai', '>=', $today->toDateString());
                         });
@@ -135,16 +136,29 @@ class AttendanceDetailController extends Controller
         $selectedSchedule = $leaveSchedules->firstWhere('id', $selectedScheduleId);
 
         $activeLeaveRequest = null;
+        $officerPermit = null;
+        $canOfficerFillAttendance = false;
         $statusByStudentId = [];
 
         if ($selectedSchedule && $selectedSchedule->teacherSubject) {
             $activeLeaveRequest = TeacherLeaveRequest::query()
                 ->where('teacher_id', $selectedSchedule->teacherSubject->teacher_id)
-                ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+                ->where('status_pengajuan', 'Disetujui')
                 ->whereDate('tanggal_mulai', '<=', $today->toDateString())
                 ->whereDate('tanggal_selesai', '>=', $today->toDateString())
                 ->latest('id')
                 ->first();
+
+            $officerPermit = OfficerAttendancePermit::query()
+                ->where('officer_student_id', $officer->id)
+                ->where('schedule_id', $selectedSchedule->id)
+                ->whereDate('request_date', $today->toDateString())
+                ->latest('id')
+                ->first();
+
+            $canOfficerFillAttendance = (bool) $activeLeaveRequest
+                && (bool) $officerPermit
+                && $officerPermit->status_pengajuan === 'Disetujui';
 
             $teacherAttendance = TeacherAttendance::query()
                 ->where('schedule_id', $selectedSchedule->id)
@@ -177,6 +191,8 @@ class AttendanceDetailController extends Controller
             'selectedScheduleId' => $selectedScheduleId,
             'selectedSchedule' => $selectedSchedule,
             'activeLeaveRequest' => $activeLeaveRequest,
+            'officerPermit' => $officerPermit,
+            'canOfficerFillAttendance' => $canOfficerFillAttendance,
             'students' => $students,
             'statusByStudentId' => $statusByStudentId,
         ]);
@@ -785,7 +801,7 @@ class AttendanceDetailController extends Controller
     public function submitForGuru(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'status' => 'required|in:Hadir,Sakit,Izin,Alpa,Terlambat',
+            'status' => 'required|in:Hadir,Alpa,Terlambat',
             'classroom_id' => 'required|integer',
         ]);
 
@@ -941,7 +957,7 @@ class AttendanceDetailController extends Controller
 
         $leaveRequest = TeacherLeaveRequest::query()
             ->where('teacher_id', $schedule->teacherSubject->teacher_id)
-            ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+            ->where('status_pengajuan', 'Disetujui')
             ->whereDate('tanggal_mulai', '<=', $today->toDateString())
             ->whereDate('tanggal_selesai', '>=', $today->toDateString())
             ->latest('id')
@@ -949,7 +965,19 @@ class AttendanceDetailController extends Controller
 
         if (!$leaveRequest) {
             return redirect()->route('siswa.attendance-details.index')
-                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru mengajukan izin.');
+                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru izin sudah disetujui kurikulum.');
+        }
+
+        $approvedPermit = OfficerAttendancePermit::query()
+            ->where('officer_student_id', $officer->id)
+            ->where('schedule_id', $schedule->id)
+            ->whereDate('request_date', $today->toDateString())
+            ->where('status_pengajuan', 'Disetujui')
+            ->exists();
+
+        if (!$approvedPermit) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+                ->with('error', 'Ajukan izin absen kelas ke kurikulum terlebih dahulu untuk jadwal ini.');
         }
 
         $teacherAttendance = TeacherAttendance::query()
@@ -1001,7 +1029,7 @@ class AttendanceDetailController extends Controller
     {
         $validated = $request->validate([
             'classroom_id' => 'nullable|integer',
-            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Alpa,Terlambat',
+            'bulk_status' => 'required|in:Hadir,Alpa,Terlambat',
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'required|integer|exists:students,id',
         ]);
@@ -1212,7 +1240,7 @@ class AttendanceDetailController extends Controller
 
         $leaveRequest = TeacherLeaveRequest::query()
             ->where('teacher_id', $schedule->teacherSubject->teacher_id)
-            ->whereIn('status_pengajuan', ['Menunggu', 'Disetujui'])
+            ->where('status_pengajuan', 'Disetujui')
             ->whereDate('tanggal_mulai', '<=', $today->toDateString())
             ->whereDate('tanggal_selesai', '>=', $today->toDateString())
             ->latest('id')
@@ -1220,7 +1248,19 @@ class AttendanceDetailController extends Controller
 
         if (!$leaveRequest) {
             return redirect()->route('siswa.attendance-details.index')
-                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru mengajukan izin.');
+                ->with('error', 'Absensi siswa oleh pengurus kelas hanya aktif saat guru izin sudah disetujui kurikulum.');
+        }
+
+        $approvedPermit = OfficerAttendancePermit::query()
+            ->where('officer_student_id', $officer->id)
+            ->where('schedule_id', $schedule->id)
+            ->whereDate('request_date', $today->toDateString())
+            ->where('status_pengajuan', 'Disetujui')
+            ->exists();
+
+        if (!$approvedPermit) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+                ->with('error', 'Ajukan izin absen kelas ke kurikulum terlebih dahulu untuk jadwal ini.');
         }
 
         $studentIds = collect($validated['student_ids'])->map(fn($id) => (int) $id)->values();
