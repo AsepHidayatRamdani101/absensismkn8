@@ -308,30 +308,26 @@ body.auth-body {
     text-decoration: underline;
 }
 
-.version-text {
-    margin-top: 14px;
-    text-align: center;
-    font-size: 0.9rem;
-    color: #607089;
+.login-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
 }
 
-.version-text-top {
-    margin-top: 0;
-    margin-bottom: 14px;
-    text-align: left;
-    font-size: 0.88rem;
+.login-meta-link,
+.login-meta-version {
+    font-size: 0.95rem;
+    color: #8a95a8;
+    line-height: 1.4;
 }
 
-.version-text .version-label {
-    display: inline-block;
-    color: #2f74df;
-    font-weight: 700;
-    margin-right: 6px;
+.login-meta-link {
+    text-decoration: none;
 }
 
-.version-text .version-separator {
-    color: #94a3b8;
-    margin: 0 6px;
+.login-meta-link:hover {
+    text-decoration: underline;
 }
 
 .form-line:-webkit-autofill,
@@ -394,12 +390,9 @@ body.auth-body {
         font-size: 0.86rem;
     }
 
-    .forgot-link {
-        font-size: 0.95rem;
-    }
-
-    .version-text {
-        font-size: 0.78rem;
+    .login-meta-link,
+    .login-meta-version {
+        font-size: 0.86rem;
     }
 }
 
@@ -421,7 +414,7 @@ body.auth-body {
         padding-bottom: 8px;
     }
 
-    .version-text {
-        margin-top: 10px;
+    .login-meta-row {
+        margin-top: 10px !important;
     }
 }
