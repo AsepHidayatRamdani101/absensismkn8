@@ -393,11 +393,6 @@ return [
                     'route' => 'app-settings.index',
                     'icon' => 'fas fa-tools',
                 ],
-                [
-                    'text' => 'Konfigurasi WA Fonnte',
-                    'route' => 'app-settings.index',
-                    'icon' => 'fab fa-whatsapp',
-                ],
             ],
         ],
         [
