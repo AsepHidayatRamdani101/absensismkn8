@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RoleSeeder::class,
+            PancawaluyaPermissionSeeder::class,
             UserSeeder::class,
             majorSeeder::class,
             classSeeder::class,
@@ -27,7 +28,7 @@ class DatabaseSeeder extends Seeder
             teacherSubjectSeeder::class,
             scheduleSeeder::class,
             DeviceSeeder::class,
+            CharacterDimensionSeeder::class,
         ]);
-
     }
 }

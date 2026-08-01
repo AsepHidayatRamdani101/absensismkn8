@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Http\Requests\Pancawaluya;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class UpdateRewardItemRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        $id = $this->route('reward')?->id;
+
+        return [
+            'reward_category_id' => ['required', 'integer', 'exists:reward_categories,id'],
+            'code' => ['required', 'string', 'min:2', 'max:40', Rule::unique('reward_items', 'code')->ignore($id)],
+            'name' => ['required', 'string', 'min:2', 'max:150'],
+            'point' => ['required', 'integer'],
+            'character_dimension_id' => ['required', 'integer', 'exists:character_dimensions,id'],
+            'weight' => ['required', 'numeric', 'min:0'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'is_active' => ['required', 'boolean'],
+        ];
+    }
+}

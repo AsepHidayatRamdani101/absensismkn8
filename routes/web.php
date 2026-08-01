@@ -22,6 +22,10 @@ use App\Http\Controllers\TeacherLeaveRequestController;
 use App\Http\Controllers\TeacherSubjectController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\TeacherController;
+use App\Http\Controllers\Pancawaluya\RewardCategoryController;
+use App\Http\Controllers\Pancawaluya\RewardController;
+use App\Http\Controllers\Pancawaluya\ViolationCategoryController;
+use App\Http\Controllers\Pancawaluya\ViolationController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
@@ -86,6 +90,216 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('academic-years', AcademicYearController::class)->except(['show', 'create']);
         Route::resource('attendance-devices', AttendanceDeviceController::class)->except(['show', 'create']);
         Route::resource('attendances', AttendanceController::class)->except(['show', 'create']);
+
+        Route::prefix('pancawaluya')->name('pancawaluya.')->middleware(['verified'])->group(function () {
+            Route::get('reward-categories/datatable', [RewardCategoryController::class, 'datatable'])
+                ->name('reward-categories.datatable')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::post('reward-categories/bulk-delete', [RewardCategoryController::class, 'bulkDelete'])
+                ->name('reward-categories.bulk-delete')
+                ->middleware('permission:pancawaluya.reward-category.delete');
+            Route::post('reward-categories/bulk-restore', [RewardCategoryController::class, 'bulkRestore'])
+                ->name('reward-categories.bulk-restore')
+                ->middleware('permission:pancawaluya.reward-category.restore');
+            Route::post('reward-categories/{id}/restore', [RewardCategoryController::class, 'restore'])
+                ->name('reward-categories.restore')
+                ->middleware('permission:pancawaluya.reward-category.restore');
+            Route::delete('reward-categories/{id}/force-delete', [RewardCategoryController::class, 'forceDelete'])
+                ->name('reward-categories.force-delete')
+                ->middleware('permission:pancawaluya.reward-category.force-delete');
+            Route::post('reward-categories/import', [RewardCategoryController::class, 'import'])
+                ->name('reward-categories.import')
+                ->middleware('permission:pancawaluya.reward-category.create');
+            Route::get('reward-categories/template', [RewardCategoryController::class, 'template'])
+                ->name('reward-categories.template')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories/export/excel', [RewardCategoryController::class, 'exportExcel'])
+                ->name('reward-categories.export.excel')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories/export/csv', [RewardCategoryController::class, 'exportCsv'])
+                ->name('reward-categories.export.csv')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories/export/pdf', [RewardCategoryController::class, 'exportPdf'])
+                ->name('reward-categories.export.pdf')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories/print', [RewardCategoryController::class, 'print'])
+                ->name('reward-categories.print')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories', [RewardCategoryController::class, 'index'])
+                ->name('reward-categories.index')
+                ->middleware('permission:pancawaluya.reward-category.view');
+            Route::get('reward-categories/create', [RewardCategoryController::class, 'create'])
+                ->name('reward-categories.create')
+                ->middleware('permission:pancawaluya.reward-category.create');
+            Route::post('reward-categories', [RewardCategoryController::class, 'store'])
+                ->name('reward-categories.store')
+                ->middleware('permission:pancawaluya.reward-category.create');
+            Route::get('reward-categories/{reward_category}/edit', [RewardCategoryController::class, 'edit'])
+                ->name('reward-categories.edit')
+                ->middleware('permission:pancawaluya.reward-category.update');
+            Route::put('reward-categories/{reward_category}', [RewardCategoryController::class, 'update'])
+                ->name('reward-categories.update')
+                ->middleware('permission:pancawaluya.reward-category.update');
+            Route::delete('reward-categories/{reward_category}', [RewardCategoryController::class, 'destroy'])
+                ->name('reward-categories.destroy')
+                ->middleware('permission:pancawaluya.reward-category.delete');
+
+            Route::get('rewards/datatable', [RewardController::class, 'datatable'])
+                ->name('rewards.datatable')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::post('rewards/bulk-delete', [RewardController::class, 'bulkDelete'])
+                ->name('rewards.bulk-delete')
+                ->middleware('permission:pancawaluya.reward.delete');
+            Route::post('rewards/bulk-restore', [RewardController::class, 'bulkRestore'])
+                ->name('rewards.bulk-restore')
+                ->middleware('permission:pancawaluya.reward.restore');
+            Route::post('rewards/{id}/restore', [RewardController::class, 'restore'])
+                ->name('rewards.restore')
+                ->middleware('permission:pancawaluya.reward.restore');
+            Route::delete('rewards/{id}/force-delete', [RewardController::class, 'forceDelete'])
+                ->name('rewards.force-delete')
+                ->middleware('permission:pancawaluya.reward.force-delete');
+            Route::post('rewards/import', [RewardController::class, 'import'])
+                ->name('rewards.import')
+                ->middleware('permission:pancawaluya.reward.create');
+            Route::get('rewards/template', [RewardController::class, 'template'])
+                ->name('rewards.template')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards/export/excel', [RewardController::class, 'exportExcel'])
+                ->name('rewards.export.excel')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards/export/csv', [RewardController::class, 'exportCsv'])
+                ->name('rewards.export.csv')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards/export/pdf', [RewardController::class, 'exportPdf'])
+                ->name('rewards.export.pdf')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards/print', [RewardController::class, 'print'])
+                ->name('rewards.print')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards', [RewardController::class, 'index'])
+                ->name('rewards.index')
+                ->middleware('permission:pancawaluya.reward.view');
+            Route::get('rewards/create', [RewardController::class, 'create'])
+                ->name('rewards.create')
+                ->middleware('permission:pancawaluya.reward.create');
+            Route::post('rewards', [RewardController::class, 'store'])
+                ->name('rewards.store')
+                ->middleware('permission:pancawaluya.reward.create');
+            Route::get('rewards/{reward}/edit', [RewardController::class, 'edit'])
+                ->name('rewards.edit')
+                ->middleware('permission:pancawaluya.reward.update');
+            Route::put('rewards/{reward}', [RewardController::class, 'update'])
+                ->name('rewards.update')
+                ->middleware('permission:pancawaluya.reward.update');
+            Route::delete('rewards/{reward}', [RewardController::class, 'destroy'])
+                ->name('rewards.destroy')
+                ->middleware('permission:pancawaluya.reward.delete');
+
+            Route::get('violation-categories/datatable', [ViolationCategoryController::class, 'datatable'])
+                ->name('violation-categories.datatable')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::post('violation-categories/bulk-delete', [ViolationCategoryController::class, 'bulkDelete'])
+                ->name('violation-categories.bulk-delete')
+                ->middleware('permission:pancawaluya.violation-category.delete');
+            Route::post('violation-categories/bulk-restore', [ViolationCategoryController::class, 'bulkRestore'])
+                ->name('violation-categories.bulk-restore')
+                ->middleware('permission:pancawaluya.violation-category.restore');
+            Route::post('violation-categories/{id}/restore', [ViolationCategoryController::class, 'restore'])
+                ->name('violation-categories.restore')
+                ->middleware('permission:pancawaluya.violation-category.restore');
+            Route::delete('violation-categories/{id}/force-delete', [ViolationCategoryController::class, 'forceDelete'])
+                ->name('violation-categories.force-delete')
+                ->middleware('permission:pancawaluya.violation-category.force-delete');
+            Route::post('violation-categories/import', [ViolationCategoryController::class, 'import'])
+                ->name('violation-categories.import')
+                ->middleware('permission:pancawaluya.violation-category.create');
+            Route::get('violation-categories/template', [ViolationCategoryController::class, 'template'])
+                ->name('violation-categories.template')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories/export/excel', [ViolationCategoryController::class, 'exportExcel'])
+                ->name('violation-categories.export.excel')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories/export/csv', [ViolationCategoryController::class, 'exportCsv'])
+                ->name('violation-categories.export.csv')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories/export/pdf', [ViolationCategoryController::class, 'exportPdf'])
+                ->name('violation-categories.export.pdf')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories/print', [ViolationCategoryController::class, 'print'])
+                ->name('violation-categories.print')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories', [ViolationCategoryController::class, 'index'])
+                ->name('violation-categories.index')
+                ->middleware('permission:pancawaluya.violation-category.view');
+            Route::get('violation-categories/create', [ViolationCategoryController::class, 'create'])
+                ->name('violation-categories.create')
+                ->middleware('permission:pancawaluya.violation-category.create');
+            Route::post('violation-categories', [ViolationCategoryController::class, 'store'])
+                ->name('violation-categories.store')
+                ->middleware('permission:pancawaluya.violation-category.create');
+            Route::get('violation-categories/{violation_category}/edit', [ViolationCategoryController::class, 'edit'])
+                ->name('violation-categories.edit')
+                ->middleware('permission:pancawaluya.violation-category.update');
+            Route::put('violation-categories/{violation_category}', [ViolationCategoryController::class, 'update'])
+                ->name('violation-categories.update')
+                ->middleware('permission:pancawaluya.violation-category.update');
+            Route::delete('violation-categories/{violation_category}', [ViolationCategoryController::class, 'destroy'])
+                ->name('violation-categories.destroy')
+                ->middleware('permission:pancawaluya.violation-category.delete');
+
+            Route::get('violations/datatable', [ViolationController::class, 'datatable'])
+                ->name('violations.datatable')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::post('violations/bulk-delete', [ViolationController::class, 'bulkDelete'])
+                ->name('violations.bulk-delete')
+                ->middleware('permission:pancawaluya.violation.delete');
+            Route::post('violations/bulk-restore', [ViolationController::class, 'bulkRestore'])
+                ->name('violations.bulk-restore')
+                ->middleware('permission:pancawaluya.violation.restore');
+            Route::post('violations/{id}/restore', [ViolationController::class, 'restore'])
+                ->name('violations.restore')
+                ->middleware('permission:pancawaluya.violation.restore');
+            Route::delete('violations/{id}/force-delete', [ViolationController::class, 'forceDelete'])
+                ->name('violations.force-delete')
+                ->middleware('permission:pancawaluya.violation.force-delete');
+            Route::post('violations/import', [ViolationController::class, 'import'])
+                ->name('violations.import')
+                ->middleware('permission:pancawaluya.violation.create');
+            Route::get('violations/template', [ViolationController::class, 'template'])
+                ->name('violations.template')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations/export/excel', [ViolationController::class, 'exportExcel'])
+                ->name('violations.export.excel')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations/export/csv', [ViolationController::class, 'exportCsv'])
+                ->name('violations.export.csv')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations/export/pdf', [ViolationController::class, 'exportPdf'])
+                ->name('violations.export.pdf')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations/print', [ViolationController::class, 'print'])
+                ->name('violations.print')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations', [ViolationController::class, 'index'])
+                ->name('violations.index')
+                ->middleware('permission:pancawaluya.violation.view');
+            Route::get('violations/create', [ViolationController::class, 'create'])
+                ->name('violations.create')
+                ->middleware('permission:pancawaluya.violation.create');
+            Route::post('violations', [ViolationController::class, 'store'])
+                ->name('violations.store')
+                ->middleware('permission:pancawaluya.violation.create');
+            Route::get('violations/{violation}/edit', [ViolationController::class, 'edit'])
+                ->name('violations.edit')
+                ->middleware('permission:pancawaluya.violation.update');
+            Route::put('violations/{violation}', [ViolationController::class, 'update'])
+                ->name('violations.update')
+                ->middleware('permission:pancawaluya.violation.update');
+            Route::delete('violations/{violation}', [ViolationController::class, 'destroy'])
+                ->name('violations.destroy')
+                ->middleware('permission:pancawaluya.violation.delete');
+        });
     });
 
     Route::middleware('role:admin|kurikulum')->group(function () {

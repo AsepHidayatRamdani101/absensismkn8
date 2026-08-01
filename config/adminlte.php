@@ -435,6 +435,34 @@ return [
                 ],
             ],
         ],
+
+        [
+            'text' => 'Pancawaluya',
+            'icon' => 'fas fa-star',
+            'can' => 'admin',
+            'submenu' => [
+                [
+                    'text' => 'Master Reward Category',
+                    'route' => 'pancawaluya.reward-categories.index',
+                    'icon' => 'fas fa-tags',
+                ],
+                [
+                    'text' => 'Master Reward',
+                    'route' => 'pancawaluya.rewards.index',
+                    'icon' => 'fas fa-gift',
+                ],
+                [
+                    'text' => 'Master Violation Category',
+                    'route' => 'pancawaluya.violation-categories.index',
+                    'icon' => 'fas fa-list-alt',
+                ],
+                [
+                    'text' => 'Master Violation',
+                    'route' => 'pancawaluya.violations.index',
+                    'icon' => 'fas fa-exclamation-triangle',
+                ],
+            ],
+        ],
         [
             'text' => 'Absensi',
             'route' => 'siswa.teacher-attendances.index',

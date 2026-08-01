@@ -2,6 +2,26 @@
 
 namespace App\Providers;
 
+use App\Models\RewardCategory;
+use App\Models\RewardItem;
+use App\Models\ViolationCategory;
+use App\Models\ViolationItem;
+use App\Policies\Pancawaluya\RewardCategoryPolicy;
+use App\Policies\Pancawaluya\RewardPolicy;
+use App\Policies\Pancawaluya\ViolationCategoryPolicy;
+use App\Policies\Pancawaluya\ViolationPolicy;
+use App\Repositories\Contracts\Pancawaluya\AuditLogCharacterRepositoryInterface;
+use App\Repositories\Contracts\Pancawaluya\CharacterMappingRepositoryInterface;
+use App\Repositories\Contracts\Pancawaluya\RewardCategoryRepositoryInterface;
+use App\Repositories\Contracts\Pancawaluya\RewardItemRepositoryInterface;
+use App\Repositories\Contracts\Pancawaluya\ViolationCategoryRepositoryInterface;
+use App\Repositories\Contracts\Pancawaluya\ViolationItemRepositoryInterface;
+use App\Repositories\Pancawaluya\AuditLogCharacterRepository;
+use App\Repositories\Pancawaluya\CharacterMappingRepository;
+use App\Repositories\Pancawaluya\RewardCategoryRepository;
+use App\Repositories\Pancawaluya\RewardItemRepository;
+use App\Repositories\Pancawaluya\ViolationCategoryRepository;
+use App\Repositories\Pancawaluya\ViolationItemRepository;
 use App\Models\Classroom;
 use App\Models\Major;
 use App\Models\SchoolSetting;
@@ -22,7 +42,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(RewardCategoryRepositoryInterface::class, RewardCategoryRepository::class);
+        $this->app->bind(RewardItemRepositoryInterface::class, RewardItemRepository::class);
+        $this->app->bind(ViolationCategoryRepositoryInterface::class, ViolationCategoryRepository::class);
+        $this->app->bind(ViolationItemRepositoryInterface::class, ViolationItemRepository::class);
+        $this->app->bind(CharacterMappingRepositoryInterface::class, CharacterMappingRepository::class);
+        $this->app->bind(AuditLogCharacterRepositoryInterface::class, AuditLogCharacterRepository::class);
     }
 
     /**
@@ -126,6 +151,16 @@ class AppServiceProvider extends ServiceProvider
                 ->whereNotNull('wali_classroom_id')
                 ->exists();
         });
+
+        Gate::policy(RewardCategory::class, RewardCategoryPolicy::class);
+        Gate::policy(RewardItem::class, RewardPolicy::class);
+        Gate::policy(ViolationCategory::class, ViolationCategoryPolicy::class);
+        Gate::policy(ViolationItem::class, ViolationPolicy::class);
+
+        Gate::define('ApproveViolation', fn($user) => $user->can('pancawaluya.violation.approve'));
+        Gate::define('ApproveReward', fn($user) => $user->can('pancawaluya.reward.approve'));
+        Gate::define('GenerateSP', fn($user) => $user->can('pancawaluya.sp.generate'));
+        Gate::define('ManageMapping', fn($user) => $user->can('pancawaluya.mapping.manage'));
     }
 
     private function applyPendingStudentLeaveRequestBadge(array $menu, int $pendingCount): array
