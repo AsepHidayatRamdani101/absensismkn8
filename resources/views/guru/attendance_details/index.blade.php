@@ -66,6 +66,32 @@
             font-weight: 600;
         }
 
+        #guruAttendanceTableWrap {
+            position: relative;
+            min-height: 220px;
+        }
+
+        #guruAttendanceTableWrap.table-hidden-initial .table-responsive {
+            visibility: hidden;
+        }
+
+        #guruAttendanceTableLoading {
+            position: absolute;
+            inset: 0;
+            z-index: 15;
+            background: rgba(255, 255, 255, .9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .65rem;
+            font-weight: 600;
+            color: #334155;
+        }
+
+        #guruAttendanceTableLoading.d-none {
+            display: none !important;
+        }
+
         #guruAttendancePage .mobile-only {
             display: none;
         }
@@ -280,7 +306,7 @@
 
         <div class="card mb-3">
             <div class="card-body">
-                <form method="GET" action="{{ route('guru.attendance-details.index') }}">
+                <form method="GET" action="{{ route('guru.attendance-details.index') }}" id="guruAttendanceFilterForm">
                     <div class="row align-items-end">
                         <div class="col-md-4 mb-2 mb-md-0">
                             <label for="tanggal" class="mb-1">Tanggal</label>
@@ -335,7 +361,7 @@
                         </small>
                         <div class="d-flex flex-wrap bulk-status-grid" style="gap: .4rem;">
                             <button type="button" class="btn btn-success btn-xs btn-bulk-status" data-status="Hadir"
-                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                @if ($disableAttendanceActions) disabled @endif>
                                 Hadir
                             </button>
                             <button type="button" class="btn btn-warning btn-xs" disabled
@@ -347,11 +373,11 @@
                                 Izin
                             </button>
                             <button type="button" class="btn btn-danger btn-xs btn-bulk-status" data-status="Alpa"
-                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                @if ($disableAttendanceActions) disabled @endif>
                                 Alpa
                             </button>
                             <button type="button" class="btn btn-warning btn-xs btn-bulk-status" data-status="Terlambat"
-                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                @if ($disableAttendanceActions) disabled @endif>
                                 Terlambat
                             </button>
                         </div>
@@ -367,133 +393,39 @@
                         <small class="text-muted mb-0">Pemilihan cepat siswa</small>
                         <div class="d-flex flex-wrap quick-tools-grid" style="gap: .4rem;">
                             <button type="button" id="btnSelectVisibleRows" class="btn btn-outline-primary btn-xs"
-                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                @if ($disableAttendanceActions) disabled @endif>
                                 Pilih Semua Terlihat
                             </button>
                             <button type="button" id="btnClearSelectedRows" class="btn btn-outline-secondary btn-xs"
-                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                @if ($disableAttendanceActions) disabled @endif>
                                 Bersihkan Pilihan
                             </button>
                         </div>
                     </div>
 
-                    <div class="table-responsive p-3 pt-2">
-                        <table id="tableGuruAttendanceDetails" class="table table-bordered table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" id="check_all_students"
-                                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                                    </th>
-                                    <th width="5%">No</th>
-                                    <th>Nama Siswa</th>
-                                    <th width="20%">Kelas</th>
-                                    <th width="18%">Status Saat Ini</th>
-                                    <th width="30%">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse ($students as $student)
-                                    @php
-                                        $rawStatus = $statusByStudentId[$student->id] ?? null;
-                                        $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus ?? 'Belum Absen';
-                                    @endphp
+                    <div id="guruAttendanceTableWrap" class="p-3 pt-2">
+                        <div id="guruAttendanceTableLoading">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            Memuat data absensi siswa...
+                        </div>
+                        <div class="table-responsive">
+                            <table id="tableGuruAttendanceDetails" class="table table-bordered table-striped mb-0">
+                                <thead>
                                     <tr>
-                                        <td class="col-check">
-                                            <input type="checkbox" class="check-student" name="student_ids[]"
-                                                value="{{ $student->id }}" form="bulkAttendanceForm"
-                                                @if ($isWeekendHoliday) disabled @endif>
-                                        </td>
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>{{ $student->nama_lengkap }}</td>
-                                        <td>{{ $student->classroom->nama_kelas ?? '-' }}</td>
-                                        <td>
-                                            @if ($displayStatus === 'Hadir')
-                                                <span class="badge badge-success status-badge">Hadir</span>
-                                            @elseif ($displayStatus === 'Sakit')
-                                                <span class="badge badge-warning status-badge">Sakit</span>
-                                            @elseif ($displayStatus === 'Izin')
-                                                <span class="badge badge-info status-badge">Izin</span>
-                                            @elseif ($displayStatus === 'Alpa')
-                                                <span class="badge badge-danger status-badge">Alpa</span>
-                                            @elseif ($displayStatus === 'Terlambat')
-                                                <span class="badge badge-warning status-badge">Terlambat</span>
-                                            @else
-                                                <span class="badge badge-secondary status-badge">Belum Absen</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <div class="attendance-actions">
-                                                <form method="POST"
-                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                    class="d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="classroom_id"
-                                                        value="{{ $student->classroom_id }}">
-                                                    <input type="hidden" name="status" value="Hadir">
-                                                    <button type="submit" class="btn btn-success btn-xs"
-                                                        @if ($isWeekendHoliday) disabled @endif>Hadir</button>
-                                                </form>
-
-                                                <form method="POST"
-                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                    class="d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="classroom_id"
-                                                        value="{{ $student->classroom_id }}">
-                                                    <input type="hidden" name="status" value="Sakit">
-                                                    <button type="button" class="btn btn-warning btn-xs" disabled
-                                                        title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>
-                                                </form>
-
-                                                <form method="POST"
-                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                    class="d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="classroom_id"
-                                                        value="{{ $student->classroom_id }}">
-                                                    <input type="hidden" name="status" value="Izin">
-                                                    <button type="button" class="btn btn-info btn-xs" disabled
-                                                        title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>
-                                                </form>
-
-                                                <form method="POST"
-                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                    class="d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="classroom_id"
-                                                        value="{{ $student->classroom_id }}">
-                                                    <input type="hidden" name="status" value="Alpa">
-                                                    <button type="submit" class="btn btn-danger btn-xs"
-                                                        @if ($isWeekendHoliday) disabled @endif>Alpa</button>
-                                                </form>
-
-                                                <form method="POST"
-                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                    class="d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="classroom_id"
-                                                        value="{{ $student->classroom_id }}">
-                                                    <input type="hidden" name="status" value="Terlambat">
-                                                    <button type="submit" class="btn btn-warning btn-xs"
-                                                        @if ($isWeekendHoliday) disabled @endif>Terlambat</button>
-                                                </form>
-                                            </div>
-                                        </td>
+                                        <th class="col-check">
+                                            <input type="checkbox" id="check_all_students"
+                                                @if ($disableAttendanceActions) disabled @endif>
+                                        </th>
+                                        <th width="5%">No</th>
+                                        <th>Nama Siswa</th>
+                                        <th width="20%">Kelas</th>
+                                        <th width="18%">Status Saat Ini</th>
+                                        <th width="30%">Aksi</th>
                                     </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="6" class="text-center py-3">
-                                            @if ($isWeekendHoliday)
-                                                Hari {{ $todayDayName }} libur otomatis.
-                                            @else
-                                                Tidak ada data siswa dari kelas yang memiliki jadwal Anda pada tanggal ini.
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -557,12 +489,66 @@
         })();
 
         $(function() {
+            const $tableWrap = $('#guruAttendanceTableWrap');
+            const $tableLoading = $('#guruAttendanceTableLoading');
+            let firstTableLoaded = false;
+
+            if ($tableWrap.length) {
+                $tableWrap.addClass('table-hidden-initial');
+            }
+
             let table = $('#tableGuruAttendanceDetails').DataTable({
+                processing: true,
+                serverSide: true,
                 responsive: false,
                 scrollX: true,
                 autoWidth: false,
+                ajax: {
+                    url: "{{ route('guru.attendance-details.datatable') }}",
+                    data: function(d) {
+                        d.tanggal = "{{ $hasFilter ? $tanggalFilter : '' }}";
+                        d.classroom_id = "{{ (int) $selectedClassroomId }}";
+                    }
+                },
+                columns: [{
+                        data: 'checkbox',
+                        name: 'checkbox',
+                        searchable: false,
+                        orderable: false
+                    },
+                    {
+                        data: 'no',
+                        name: 'no',
+                        searchable: false,
+                        orderable: false
+                    },
+                    {
+                        data: 'nama',
+                        name: 'nama'
+                    },
+                    {
+                        data: 'kelas',
+                        name: 'kelas'
+                    },
+                    {
+                        data: 'status',
+                        name: 'status',
+                        searchable: false,
+                        orderable: false
+                    },
+                    {
+                        data: 'aksi',
+                        name: 'aksi',
+                        searchable: false,
+                        orderable: false
+                    }
+                ],
                 language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json',
+                    emptyTable: @json(
+                        $isWeekendHoliday
+                            ? 'Hari ' . $todayDayName . ' libur otomatis.'
+                            : 'Tidak ada data siswa dari kelas yang memiliki jadwal Anda pada tanggal ini.')
                 },
                 columnDefs: [{
                     orderable: false,
@@ -570,7 +556,25 @@
                 }, {
                     orderable: false,
                     targets: 5
-                }]
+                }],
+                initComplete: function() {
+                    firstTableLoaded = true;
+                    $tableWrap.removeClass('table-hidden-initial');
+                    $tableLoading.addClass('d-none');
+                }
+            });
+
+            table.on('processing.dt', function(e, settings, isProcessing) {
+                if (!firstTableLoaded) {
+                    $tableLoading.toggleClass('d-none', !isProcessing);
+                }
+            });
+
+            $('#guruAttendanceFilterForm').on('submit', function() {
+                if ($tableWrap.length) {
+                    $tableWrap.addClass('table-hidden-initial');
+                    $tableLoading.removeClass('d-none');
+                }
             });
 
             function forceDesktopTableMode() {

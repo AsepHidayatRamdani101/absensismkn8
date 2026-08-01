@@ -146,78 +146,7 @@
 
                         </thead>
 
-                        <tbody>
-
-                            @foreach ($students as $student)
-                                <tr>
-
-                                    <td><input type="checkbox" class="check-student" value="{{ $student->id }}"></td>
-
-                                    <td>{{ $loop->iteration }}</td>
-
-                                    <td>{{ $student->nisn }}</td>
-
-                                    <td>{{ $student->nama_lengkap }}</td>
-
-                                    <td>
-                                        @if ($student->has_account)
-                                            <span class="badge badge-success">Sudah</span>
-                                        @else
-                                            <span class="badge badge-secondary">Belum</span>
-                                        @endif
-                                    </td>
-
-                                    <td>{{ $student->jenis_kelamin }}</td>
-
-                                    <td>
-
-                                        {{ $student->classroom->nama_kelas }}
-
-                                    </td>
-
-                                    <td>{{ $student->jabatan_kelas_label }}</td>
-
-                                    <td>{{ $student->no_hp }}</td>
-
-                                    <td class="text-center">
-                                        @if (!empty($student->qr_token))
-                                            <div class="mb-1" style="display:inline-block; line-height: 0;">
-                                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(70)->margin(1)->generate(route('students.qr.show', ['token' => $student->qr_token])) !!}
-                                            </div>
-                                            <a href="{{ route('students.qr.show', ['token' => $student->qr_token]) }}"
-                                                target="_blank" class="btn btn-info btn-xs d-block mt-1">
-                                                Lihat
-                                            </a>
-                                        @else
-                                            <span class="text-muted">-</span>
-                                        @endif
-                                    </td>
-
-                                    <td>
-
-                                        <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $student->id }}">
-
-                                            <i class="fas fa-edit"></i>
-
-                                        </button>
-
-                                        <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $student->id }}">
-
-                                            <i class="fas fa-trash"></i>
-
-                                        </button>
-
-                                        <a href="{{ route('students.qr-card', $student) }}" target="_blank"
-                                            class="btn btn-dark btn-xs" title="Cetak Kartu QR">
-                                            <i class="fas fa-qrcode"></i>
-                                        </a>
-
-                                    </td>
-
-                                </tr>
-                            @endforeach
-
-                        </tbody>
+                        <tbody></tbody>
 
                     </table>
                 @endif

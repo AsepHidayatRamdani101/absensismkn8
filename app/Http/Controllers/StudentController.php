@@ -10,15 +10,20 @@ use App\Models\Classroom;
 use App\Models\Major;
 use App\Models\SchoolSetting;
 use App\Models\User;
+use App\Support\ReferenceCache;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Spatie\Permission\Models\Role;
+use Throwable;
 
 class StudentController extends Controller
 {
@@ -39,20 +44,18 @@ class StudentController extends Controller
         $classroomFilter = (string) $request->input('classroom_id', '');
         $hasFilter       = $majorFilter !== '' || $classroomFilter !== '';
 
-        $students = $hasFilter
-            ? $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter)
-            : collect();
+        $students = collect();
 
-        if ($hasFilter && $students->isNotEmpty()) {
-            $this->ensureQrTokensForCollection($students);
-        }
+        $majors = Cache::remember('students:majors:list', now()->addMinutes(30), function () {
+            return Major::orderBy('nama_jurusan')->get();
+        });
 
-        $majors = Major::orderBy('nama_jurusan')->get();
-
-        $classrooms = Classroom::with('major')
-            ->orderBy('tingkat')
-            ->orderBy('rombel')
-            ->get();
+        $classrooms = Cache::remember('students:classrooms:list', now()->addMinutes(30), function () {
+            return Classroom::with('major')
+                ->orderBy('tingkat')
+                ->orderBy('rombel')
+                ->get();
+        });
 
         return view(
             'admin.students.index',
@@ -65,6 +68,123 @@ class StudentController extends Controller
                 'hasFilter'
             )
         );
+    }
+
+    public function datatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 10), 100), 10);
+        $majorFilter = (string) $request->input('major_id', '');
+        $classroomFilter = (string) $request->input('classroom_id', '');
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+
+        $query = Student::query()
+            ->with('classroom.major')
+            ->select('students.*');
+
+        if ($majorFilter !== '') {
+            $query->whereHas('classroom', fn($q) => $q->where('major_id', $majorFilter));
+        }
+
+        if ($classroomFilter !== '') {
+            $query->where('classroom_id', $classroomFilter);
+        }
+
+        $recordsTotal = (clone $query)->count();
+
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('students.nama_lengkap', 'like', "%{$searchValue}%")
+                    ->orWhere('students.nis', 'like', "%{$searchValue}%")
+                    ->orWhere('students.nisn', 'like', "%{$searchValue}%")
+                    ->orWhere('students.no_hp', 'like', "%{$searchValue}%")
+                    ->orWhereHas('classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 1);
+        $orderDirection = strtolower((string) data_get($request->input('order', []), '0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $columnOrderMap = [
+            1 => 'students.id',
+            2 => 'students.nisn',
+            3 => 'students.nama_lengkap',
+            5 => 'students.jenis_kelamin',
+            7 => 'students.jabatan_kelas',
+            8 => 'students.no_hp',
+        ];
+
+        $orderColumn = $columnOrderMap[$orderColumnIndex] ?? 'students.id';
+        $query->orderBy($orderColumn, $orderDirection);
+
+        $students = $query
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        if ($students->isNotEmpty()) {
+            $this->ensureQrTokensForCollection($students);
+        }
+
+        $accountIdentifiers = $students
+            ->flatMap(fn(Student $student) => array_filter([
+                trim((string) $student->nisn),
+                trim((string) $student->nis),
+            ]))
+            ->unique()
+            ->values();
+
+        $existingAccounts = User::query()
+            ->whereIn('email', $accountIdentifiers)
+            ->pluck('email')
+            ->all();
+        $existingAccountLookup = array_fill_keys($existingAccounts, true);
+
+        $rows = $students->values()->map(function (Student $student, int $index) use ($start, $existingAccountLookup) {
+            $studentNisn = trim((string) $student->nisn);
+            $studentNis = trim((string) $student->nis);
+            $hasAccount = isset($existingAccountLookup[$studentNisn]) || isset($existingAccountLookup[$studentNis]);
+
+            $statusHtml = $hasAccount
+                ? '<span class="badge badge-success">Sudah</span>'
+                : '<span class="badge badge-secondary">Belum</span>';
+
+            $qrHtml = '<span class="text-muted">-</span>';
+            if (!empty($student->qr_token)) {
+                $qrSvg = QrCode::size(70)->margin(1)->generate(route('students.qr.show', ['token' => $student->qr_token]));
+                $qrHtml = '<div class="mb-1" style="display:inline-block; line-height: 0;">' . $qrSvg . '</div>'
+                    . '<a href="' . route('students.qr.show', ['token' => $student->qr_token]) . '" target="_blank" class="btn btn-info btn-xs d-block mt-1">Lihat</a>';
+            }
+
+            $aksiHtml = '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $student->id . '"><i class="fas fa-edit"></i></button> '
+                . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $student->id . '"><i class="fas fa-trash"></i></button> '
+                . '<a href="' . route('students.qr-card', $student) . '" target="_blank" class="btn btn-dark btn-xs" title="Cetak Kartu QR"><i class="fas fa-qrcode"></i></a>';
+
+            return [
+                'checkbox' => '<input type="checkbox" class="check-student" value="' . $student->id . '">',
+                'no' => $start + $index + 1,
+                'nisn' => e((string) $student->nisn),
+                'nama' => e((string) $student->nama_lengkap),
+                'status' => $statusHtml,
+                'jk' => e((string) $student->jenis_kelamin),
+                'kelas' => e((string) ($student->classroom->nama_kelas ?? '-')),
+                'jabatan' => e((string) $student->jabatan_kelas_label),
+                'no_hp' => e((string) ($student->no_hp ?? '-')),
+                'qr' => $qrHtml,
+                'aksi' => $aksiHtml,
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $rows,
+        ]);
     }
 
     public function exportAccountsPdf(Request $request)
@@ -111,6 +231,7 @@ class StudentController extends Controller
         ]);
 
         Student::create($validated);
+        ReferenceCache::forgetStudentReferences();
 
         return response()->json([
             'success' => true,
@@ -158,6 +279,7 @@ class StudentController extends Controller
         ]);
 
         $student->update($validated);
+        ReferenceCache::forgetStudentReferences();
 
         return response()->json([
             'success' => true,
@@ -168,6 +290,7 @@ class StudentController extends Controller
     public function destroy(Student $student)
     {
         $student->delete();
+        ReferenceCache::forgetStudentReferences();
 
         return response()->json([
             'success' => true,
@@ -183,6 +306,7 @@ class StudentController extends Controller
         ]);
 
         Student::whereIn('id', $request->ids)->delete();
+        ReferenceCache::forgetStudentReferences();
 
         return response()->json([
             'success' => true,
@@ -234,6 +358,110 @@ class StudentController extends Controller
         $student->ensureQrToken();
 
         return view('siswa.identity.edit', compact('student'));
+    }
+
+    public function downloadOwnQrCode()
+    {
+        $student = $this->resolveAuthenticatedStudent();
+
+        if (!$student) {
+            return redirect()->route('siswa.dashboard')->with('error', 'Data siswa untuk akun ini tidak ditemukan.');
+        }
+
+        $token = $student->ensureQrToken();
+        $qrUrl = route('students.qr.show', ['token' => $token]);
+
+        $requestedFormat = strtolower((string) request()->query('format', 'png'));
+        if (!in_array($requestedFormat, ['png', 'jpg', 'jpeg'], true)) {
+            $requestedFormat = 'png';
+        }
+
+        $qrPng = $this->generateQrPngBinary($qrUrl);
+        if ($qrPng === null) {
+            return redirect()->route('siswa.identity.edit')->with(
+                'error',
+                'Gagal membuat file QR PNG/JPG. Coba lagi beberapa saat.'
+            );
+        }
+
+        $binary = $qrPng;
+        $extension = 'png';
+        $contentType = 'image/png';
+
+        if (in_array($requestedFormat, ['jpg', 'jpeg'], true)) {
+            $qrJpg = $this->convertPngToJpeg($qrPng);
+            if ($qrJpg !== null) {
+                $binary = $qrJpg;
+                $extension = 'jpg';
+                $contentType = 'image/jpeg';
+            }
+        }
+
+        $identifier = trim((string) ($student->nisn ?: $student->nis ?: $student->id));
+        $filename = 'qr-siswa-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $identifier) . '.' . $extension;
+
+        return response($binary, 200, [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
+    }
+
+    private function generateQrPngBinary(string $qrUrl): ?string
+    {
+        if (extension_loaded('imagick')) {
+            try {
+                return QrCode::format('png')
+                    ->size(900)
+                    ->margin(1)
+                    ->generate($qrUrl);
+            } catch (Throwable $e) {
+                // Fall through to HTTP-based PNG generator.
+            }
+        }
+
+        $response = Http::timeout(15)->get('https://quickchart.io/qr', [
+            'text' => $qrUrl,
+            'size' => 900,
+            'margin' => 1,
+            'format' => 'png',
+            'ecLevel' => 'M',
+        ]);
+
+        if (!$response->successful()) {
+            return null;
+        }
+
+        return $response->body();
+    }
+
+    private function convertPngToJpeg(string $pngBinary): ?string
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return null;
+        }
+
+        $sourceImage = @imagecreatefromstring($pngBinary);
+        if ($sourceImage === false) {
+            return null;
+        }
+
+        $width = imagesx($sourceImage);
+        $height = imagesy($sourceImage);
+
+        $targetImage = imagecreatetruecolor($width, $height);
+        $white = imagecolorallocate($targetImage, 255, 255, 255);
+        imagefilledrectangle($targetImage, 0, 0, $width, $height, $white);
+        imagecopy($targetImage, $sourceImage, 0, 0, 0, 0, $width, $height);
+
+        ob_start();
+        imagejpeg($targetImage, null, 95);
+        $jpegBinary = (string) ob_get_clean();
+
+        imagedestroy($sourceImage);
+        imagedestroy($targetImage);
+
+        return $jpegBinary !== '' ? $jpegBinary : null;
     }
 
     public function showPublicByQr(string $token)
@@ -304,6 +532,7 @@ class StudentController extends Controller
 
         $importer = new StudentsImport();
         $importer->importFile($request->file('file')->getRealPath());
+        ReferenceCache::forgetStudentReferences();
 
         return redirect()->route('students.index')->with('success', $importer->getSuccessMessage());
     }

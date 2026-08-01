@@ -115,29 +115,7 @@
                             <th>Status Agenda</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach ($rows as $item)
-                            <tr>
-                                <td>{{ $loop->iteration }}</td>
-                                <td>{{ $item->tanggal }}</td>
-                                <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                                <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
-                                <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
-                                <td>{{ $item->materi_pembelajaran ?? '-' }}</td>
-                                <td>{{ $item->kehadiran_guru ?? 'Hadir' }}</td>
-                                <td>
-                                    @if ($item->tugas_file_path)
-                                        Ada File
-                                    @elseif ($item->tugas_deskripsi)
-                                        {{ \Illuminate\Support\Str::limit($item->tugas_deskripsi, 40) }}
-                                    @else
-                                        -
-                                    @endif
-                                </td>
-                                <td>{{ $item->status }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
         </div>
@@ -152,7 +130,66 @@
     <script>
         $(function() {
             $('#tableTeacherAgendaReport').DataTable({
+                processing: true,
+                serverSide: true,
                 responsive: true,
+                ajax: {
+                    url: "{{ route('reports.teacher-agenda.datatable') }}",
+                    data: function(d) {
+                        d.period_type = "{{ $filters['period_type'] ?? '' }}";
+                        d.tanggal = "{{ $filters['tanggal'] ?? '' }}";
+                        d.minggu = "{{ $filters['minggu'] ?? '' }}";
+                        d.bulan = "{{ $filters['bulan'] ?? '' }}";
+                        d.tahun = "{{ $filters['tahun'] ?? '' }}";
+                        d.teacher_id = "{{ $filters['teacher_id'] ?? '' }}";
+                        d.major_id = "{{ $filters['major_id'] ?? '' }}";
+                        d.classroom_id = "{{ $filters['classroom_id'] ?? '' }}";
+                    }
+                },
+                columns: [{
+                        data: 'no',
+                        name: 'no',
+                        searchable: false,
+                        orderable: false
+                    },
+                    {
+                        data: 'tanggal',
+                        name: 'tanggal'
+                    },
+                    {
+                        data: 'guru',
+                        name: 'guru',
+                        orderable: false
+                    },
+                    {
+                        data: 'mapel',
+                        name: 'mapel',
+                        orderable: false
+                    },
+                    {
+                        data: 'kelas',
+                        name: 'kelas',
+                        orderable: false
+                    },
+                    {
+                        data: 'materi',
+                        name: 'materi',
+                        orderable: false
+                    },
+                    {
+                        data: 'kehadiran_guru',
+                        name: 'kehadiran_guru'
+                    },
+                    {
+                        data: 'tugas',
+                        name: 'tugas',
+                        orderable: false
+                    },
+                    {
+                        data: 'status',
+                        name: 'status'
+                    }
+                ],
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
                 }

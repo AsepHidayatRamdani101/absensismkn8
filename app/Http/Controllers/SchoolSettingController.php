@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SchoolSetting;
+use App\Support\ReferenceCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -43,6 +44,7 @@ class SchoolSettingController extends Controller
         }
 
         $setting->update($validated);
+        ReferenceCache::forgetSchoolSettings();
 
         return redirect()
             ->route('school-settings.index')

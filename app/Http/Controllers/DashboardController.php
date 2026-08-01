@@ -19,6 +19,7 @@ use App\Models\TeacherSubject;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -62,207 +63,219 @@ class DashboardController extends Controller
             ->where('last_activity', '>=', now()->subMinutes(30)->timestamp)
             ->count();
 
-        $totalStudents = Student::count();
-        $totalTeachers = Teacher::count();
-        $totalClassrooms = Classroom::count();
-        $totalMajors = Major::count();
-        $totalSubjects = Subject::count();
-        $totalDevices = AttendanceDevice::count();
-        $studentClassOfficers = Student::query()
-            ->whereIn('jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
-            ->count();
+        $cacheKey = 'dashboard:admin:metrics:' . now()->format('YmdHi');
+        $metrics = Cache::remember($cacheKey, now()->addMinutes(2), function () use (
+            $today,
+            $weekStart,
+            $weekEnd,
+            $monthStart,
+            $monthEnd
+        ) {
+            $totalStudents = Student::count();
+            $totalTeachers = Teacher::count();
+            $totalClassrooms = Classroom::count();
+            $totalMajors = Major::count();
+            $totalSubjects = Subject::count();
+            $totalDevices = AttendanceDevice::count();
+            $studentClassOfficers = Student::query()
+                ->whereIn('jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
+                ->count();
 
-        $ketuaKelasCount = Student::query()->where('jabatan_kelas', Student::JABATAN_KETUA_KELAS)->count();
-        $sekretarisCount = Student::query()->where('jabatan_kelas', Student::JABATAN_SEKRETARIS)->count();
-        $bendaharaCount = Student::query()->where('jabatan_kelas', Student::JABATAN_BENDAHARA)->count();
+            $ketuaKelasCount = Student::query()->where('jabatan_kelas', Student::JABATAN_KETUA_KELAS)->count();
+            $sekretarisCount = Student::query()->where('jabatan_kelas', Student::JABATAN_SEKRETARIS)->count();
+            $bendaharaCount = Student::query()->where('jabatan_kelas', Student::JABATAN_BENDAHARA)->count();
 
-        $todayTeacherAttendances = TeacherAttendance::whereDate('tanggal', $today)->count();
-        $todayStudentAttendanceByTeacher = AttendanceDetail::whereHas('teacherAttendance', function ($query) use ($today) {
-            $query->whereDate('tanggal', $today);
-        })->count();
-        $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
-        $todayOfficerAttendanceActions = AttendanceDetail::query()
-            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->join('students', 'students.id', '=', 'attendance_details.student_id')
-            ->whereDate('teacher_attendances.tanggal', $today)
-            ->whereIn('students.jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
-            ->count();
-
-        $teacherPresentToday = TeacherAttendance::whereDate('tanggal', $today)
-            ->distinct('teacher_id')
-            ->count('teacher_id');
-
-        $studentPresentToday = AttendanceDetail::where('status', 'Hadir')
-            ->whereHas('teacherAttendance', function ($query) use ($today) {
+            $todayTeacherAttendances = TeacherAttendance::whereDate('tanggal', $today)->count();
+            $todayStudentAttendanceByTeacher = AttendanceDetail::whereHas('teacherAttendance', function ($query) use ($today) {
                 $query->whereDate('tanggal', $today);
-            })
-            ->distinct('student_id')
-            ->count('student_id');
+            })->count();
+            $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
+            $todayOfficerAttendanceActions = AttendanceDetail::query()
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->join('students', 'students.id', '=', 'attendance_details.student_id')
+                ->whereDate('teacher_attendances.tanggal', $today)
+                ->whereIn('students.jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
+                ->count();
 
-        $teacherPresencePercent = $totalTeachers > 0
-            ? round(($teacherPresentToday / $totalTeachers) * 100, 2)
-            : 0;
+            $teacherPresentToday = TeacherAttendance::whereDate('tanggal', $today)
+                ->distinct('teacher_id')
+                ->count('teacher_id');
 
-        $studentPresencePercent = $totalStudents > 0
-            ? round(($studentPresentToday / $totalStudents) * 100, 2)
-            : 0;
+            $studentPresentToday = AttendanceDetail::where('status', 'Hadir')
+                ->whereHas('teacherAttendance', function ($query) use ($today) {
+                    $query->whereDate('tanggal', $today);
+                })
+                ->distinct('student_id')
+                ->count('student_id');
 
-        $teacherPresentThisWeek = TeacherAttendance::whereBetween('tanggal', [
-            $weekStart->toDateString(),
-            $weekEnd->toDateString(),
-        ])
-            ->distinct('teacher_id')
-            ->count('teacher_id');
+            $teacherPresencePercent = $totalTeachers > 0
+                ? round(($teacherPresentToday / $totalTeachers) * 100, 2)
+                : 0;
 
-        $teacherPresentThisMonth = TeacherAttendance::whereBetween('tanggal', [
-            $monthStart->toDateString(),
-            $monthEnd->toDateString(),
-        ])
-            ->distinct('teacher_id')
-            ->count('teacher_id');
+            $studentPresencePercent = $totalStudents > 0
+                ? round(($studentPresentToday / $totalStudents) * 100, 2)
+                : 0;
 
-        $studentPresentThisWeek = AttendanceDetail::where('status', 'Hadir')
-            ->whereHas('teacherAttendance', function ($query) use ($weekStart, $weekEnd) {
-                $query->whereBetween('tanggal', [
-                    $weekStart->toDateString(),
-                    $weekEnd->toDateString(),
-                ]);
-            })
-            ->distinct('student_id')
-            ->count('student_id');
+            $teacherPresentThisWeek = TeacherAttendance::whereBetween('tanggal', [
+                $weekStart->toDateString(),
+                $weekEnd->toDateString(),
+            ])
+                ->distinct('teacher_id')
+                ->count('teacher_id');
 
-        $studentPresentThisMonth = AttendanceDetail::where('status', 'Hadir')
-            ->whereHas('teacherAttendance', function ($query) use ($monthStart, $monthEnd) {
-                $query->whereBetween('tanggal', [
+            $teacherPresentThisMonth = TeacherAttendance::whereBetween('tanggal', [
+                $monthStart->toDateString(),
+                $monthEnd->toDateString(),
+            ])
+                ->distinct('teacher_id')
+                ->count('teacher_id');
+
+            $studentPresentThisWeek = AttendanceDetail::where('status', 'Hadir')
+                ->whereHas('teacherAttendance', function ($query) use ($weekStart, $weekEnd) {
+                    $query->whereBetween('tanggal', [
+                        $weekStart->toDateString(),
+                        $weekEnd->toDateString(),
+                    ]);
+                })
+                ->distinct('student_id')
+                ->count('student_id');
+
+            $studentPresentThisMonth = AttendanceDetail::where('status', 'Hadir')
+                ->whereHas('teacherAttendance', function ($query) use ($monthStart, $monthEnd) {
+                    $query->whereBetween('tanggal', [
+                        $monthStart->toDateString(),
+                        $monthEnd->toDateString(),
+                    ]);
+                })
+                ->distinct('student_id')
+                ->count('student_id');
+
+            $teacherPresencePercentWeek = $totalTeachers > 0
+                ? round(($teacherPresentThisWeek / $totalTeachers) * 100, 2)
+                : 0;
+
+            $teacherPresencePercentMonth = $totalTeachers > 0
+                ? round(($teacherPresentThisMonth / $totalTeachers) * 100, 2)
+                : 0;
+
+            $studentPresencePercentWeek = $totalStudents > 0
+                ? round(($studentPresentThisWeek / $totalStudents) * 100, 2)
+                : 0;
+
+            $studentPresencePercentMonth = $totalStudents > 0
+                ? round(($studentPresentThisMonth / $totalStudents) * 100, 2)
+                : 0;
+
+            $dailyChartRows = TeacherAttendance::query()
+                ->leftJoin('attendance_details', 'attendance_details.teacher_attendance_id', '=', 'teacher_attendances.id')
+                ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal')
+                ->selectRaw('COUNT(DISTINCT teacher_attendances.id) as total_absensi_guru')
+                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as total_siswa_hadir")
+                ->whereDate('teacher_attendances.tanggal', '>=', Carbon::today()->subDays(6))
+                ->groupBy('tanggal')
+                ->orderBy('tanggal')
+                ->get();
+
+            $dailyLabels = $dailyChartRows->pluck('tanggal')->map(function ($date) {
+                return Carbon::parse($date)->format('d M');
+            })->values();
+
+            $dailyTeacherCounts = $dailyChartRows->pluck('total_absensi_guru')->map(fn($v) => (int) $v)->values();
+            $dailyStudentPresentCounts = $dailyChartRows->pluck('total_siswa_hadir')->map(fn($v) => (int) $v)->values();
+
+            $studentStatusToday = AttendanceDetail::query()
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->select('attendance_details.status', DB::raw('COUNT(*) as total'))
+                ->whereDate('teacher_attendances.tanggal', $today)
+                ->groupBy('attendance_details.status')
+                ->pluck('total', 'attendance_details.status');
+
+            $statusLabels = ['Hadir', 'Izin', 'Sakit', 'Alpha', 'Terlambat'];
+            $statusData = collect($statusLabels)->map(function ($status) use ($studentStatusToday) {
+                return (int) ($studentStatusToday[$status] ?? 0);
+            })->values();
+
+            $teacherScheduleSummaryMonth = $this->buildTeacherScheduleSummary(
+                $monthStart->copy(),
+                $monthEnd->copy()
+            );
+
+            $topTeachersPresent = $teacherScheduleSummaryMonth
+                ->sortByDesc('hadir')
+                ->take(5)
+                ->values();
+
+            $topTeachersAbsent = $teacherScheduleSummaryMonth
+                ->sortByDesc('tidak_hadir')
+                ->take(5)
+                ->values();
+
+            $topStudentsPresent = AttendanceDetail::query()
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->join('students', 'students.id', '=', 'attendance_details.student_id')
+                ->select('students.id', 'students.nama_lengkap')
+                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
+                ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
+                ->whereBetween('teacher_attendances.tanggal', [
                     $monthStart->toDateString(),
                     $monthEnd->toDateString(),
-                ]);
-            })
-            ->distinct('student_id')
-            ->count('student_id');
+                ])
+                ->groupBy('students.id', 'students.nama_lengkap')
+                ->orderByDesc('hadir')
+                ->limit(5)
+                ->get();
 
-        $teacherPresencePercentWeek = $totalTeachers > 0
-            ? round(($teacherPresentThisWeek / $totalTeachers) * 100, 2)
-            : 0;
+            $topStudentsAbsent = AttendanceDetail::query()
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->join('students', 'students.id', '=', 'attendance_details.student_id')
+                ->select('students.id', 'students.nama_lengkap')
+                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
+                ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
+                ->whereBetween('teacher_attendances.tanggal', [
+                    $monthStart->toDateString(),
+                    $monthEnd->toDateString(),
+                ])
+                ->groupBy('students.id', 'students.nama_lengkap')
+                ->orderByDesc('tidak_hadir')
+                ->limit(5)
+                ->get();
 
-        $teacherPresencePercentMonth = $totalTeachers > 0
-            ? round(($teacherPresentThisMonth / $totalTeachers) * 100, 2)
-            : 0;
+            return compact(
+                'totalStudents',
+                'totalTeachers',
+                'totalClassrooms',
+                'totalMajors',
+                'totalSubjects',
+                'totalDevices',
+                'studentClassOfficers',
+                'ketuaKelasCount',
+                'sekretarisCount',
+                'bendaharaCount',
+                'todayTeacherAttendances',
+                'todayStudentAttendanceByTeacher',
+                'todayStudentAttendanceIoT',
+                'todayOfficerAttendanceActions',
+                'teacherPresencePercent',
+                'studentPresencePercent',
+                'teacherPresencePercentWeek',
+                'teacherPresencePercentMonth',
+                'studentPresencePercentWeek',
+                'studentPresencePercentMonth',
+                'dailyLabels',
+                'dailyTeacherCounts',
+                'dailyStudentPresentCounts',
+                'statusLabels',
+                'statusData',
+                'topTeachersPresent',
+                'topTeachersAbsent',
+                'topStudentsPresent',
+                'topStudentsAbsent'
+            );
+        });
 
-        $studentPresencePercentWeek = $totalStudents > 0
-            ? round(($studentPresentThisWeek / $totalStudents) * 100, 2)
-            : 0;
-
-        $studentPresencePercentMonth = $totalStudents > 0
-            ? round(($studentPresentThisMonth / $totalStudents) * 100, 2)
-            : 0;
-
-        $dailyChartRows = TeacherAttendance::query()
-            ->leftJoin('attendance_details', 'attendance_details.teacher_attendance_id', '=', 'teacher_attendances.id')
-            ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal')
-            ->selectRaw('COUNT(DISTINCT teacher_attendances.id) as total_absensi_guru')
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as total_siswa_hadir")
-            ->whereDate('teacher_attendances.tanggal', '>=', Carbon::today()->subDays(6))
-            ->groupBy('tanggal')
-            ->orderBy('tanggal')
-            ->get();
-
-        $dailyLabels = $dailyChartRows->pluck('tanggal')->map(function ($date) {
-            return Carbon::parse($date)->format('d M');
-        })->values();
-
-        $dailyTeacherCounts = $dailyChartRows->pluck('total_absensi_guru')->map(fn($v) => (int) $v)->values();
-        $dailyStudentPresentCounts = $dailyChartRows->pluck('total_siswa_hadir')->map(fn($v) => (int) $v)->values();
-
-        $studentStatusToday = AttendanceDetail::query()
-            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->select('attendance_details.status', DB::raw('COUNT(*) as total'))
-            ->whereDate('teacher_attendances.tanggal', $today)
-            ->groupBy('attendance_details.status')
-            ->pluck('total', 'attendance_details.status');
-
-        $statusLabels = ['Hadir', 'Izin', 'Sakit', 'Alpha', 'Terlambat'];
-        $statusData = collect($statusLabels)->map(function ($status) use ($studentStatusToday) {
-            return (int) ($studentStatusToday[$status] ?? 0);
-        })->values();
-
-        $teacherScheduleSummaryMonth = $this->buildTeacherScheduleSummary(
-            $monthStart->copy(),
-            $monthEnd->copy()
-        );
-
-        $topTeachersPresent = $teacherScheduleSummaryMonth
-            ->sortByDesc('hadir')
-            ->take(5)
-            ->values();
-
-        $topTeachersAbsent = $teacherScheduleSummaryMonth
-            ->sortByDesc('tidak_hadir')
-            ->take(5)
-            ->values();
-
-        $topStudentsPresent = AttendanceDetail::query()
-            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->join('students', 'students.id', '=', 'attendance_details.student_id')
-            ->select('students.id', 'students.nama_lengkap')
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
-            ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
-            ->whereBetween('teacher_attendances.tanggal', [
-                $monthStart->toDateString(),
-                $monthEnd->toDateString(),
-            ])
-            ->groupBy('students.id', 'students.nama_lengkap')
-            ->orderByDesc('hadir')
-            ->limit(5)
-            ->get();
-
-        $topStudentsAbsent = AttendanceDetail::query()
-            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->join('students', 'students.id', '=', 'attendance_details.student_id')
-            ->select('students.id', 'students.nama_lengkap')
-            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
-            ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
-            ->whereBetween('teacher_attendances.tanggal', [
-                $monthStart->toDateString(),
-                $monthEnd->toDateString(),
-            ])
-            ->groupBy('students.id', 'students.nama_lengkap')
-            ->orderByDesc('tidak_hadir')
-            ->limit(5)
-            ->get();
-
-        return view('admin.dashboard', compact(
-            'totalStudents',
-            'totalTeachers',
-            'totalClassrooms',
-            'totalMajors',
-            'totalSubjects',
-            'totalDevices',
-            'studentClassOfficers',
-            'ketuaKelasCount',
-            'sekretarisCount',
-            'bendaharaCount',
-            'todayTeacherAttendances',
-            'todayStudentAttendanceByTeacher',
-            'todayStudentAttendanceIoT',
-            'todayOfficerAttendanceActions',
-            'teacherPresencePercent',
-            'studentPresencePercent',
-            'teacherPresencePercentWeek',
-            'teacherPresencePercentMonth',
-            'studentPresencePercentWeek',
-            'studentPresencePercentMonth',
-            'dailyLabels',
-            'dailyTeacherCounts',
-            'dailyStudentPresentCounts',
-            'statusLabels',
-            'statusData',
-            'topTeachersPresent',
-            'topTeachersAbsent',
-            'topStudentsPresent',
-            'topStudentsAbsent',
-            'activeUsers'
-        ));
+        return view('admin.dashboard', array_merge($metrics, [
+            'activeUsers' => $activeUsers,
+        ]));
     }
 
     public function siswa()
@@ -356,7 +369,9 @@ class DashboardController extends Controller
                 ->first();
         }
 
-        $schoolSetting = SchoolSetting::first();
+        $schoolSetting = Cache::remember('school-settings:first', now()->addMinutes(30), function () {
+            return SchoolSetting::query()->first();
+        });
 
         return view('siswa.dashboard', compact(
             'student',
@@ -512,7 +527,9 @@ class DashboardController extends Controller
             }
         }
 
-        $schoolSetting = SchoolSetting::first();
+        $schoolSetting = Cache::remember('school-settings:first', now()->addMinutes(30), function () {
+            return SchoolSetting::query()->first();
+        });
 
         return view('guru.dashboard', compact(
             'teacher',

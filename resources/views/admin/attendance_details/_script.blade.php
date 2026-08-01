@@ -1,17 +1,113 @@
 <script>
     $(function() {
-
         //----------------------------------
         // DATATABLE
         //----------------------------------
 
         let tableAttendanceDetails = null;
         if ($('#tableAttendanceDetails').length) {
-            tableAttendanceDetails = $('#tableAttendanceDetails').DataTable({
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+            const dtLanguageId = {
+                processing: 'Sedang memproses...',
+                search: 'Cari:',
+                lengthMenu: 'Tampilkan _MENU_ entri',
+                info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ entri',
+                infoEmpty: 'Menampilkan 0 sampai 0 dari 0 entri',
+                infoFiltered: '(disaring dari _MAX_ entri keseluruhan)',
+                loadingRecords: 'Sedang memuat...',
+                zeroRecords: 'Tidak ditemukan data yang sesuai',
+                emptyTable: 'Tidak ada data tersedia pada tabel ini',
+                paginate: {
+                    first: 'Pertama',
+                    previous: 'Sebelumnya',
+                    next: 'Selanjutnya',
+                    last: 'Terakhir'
+                },
+                aria: {
+                    sortAscending: ': aktifkan untuk mengurutkan kolom naik',
+                    sortDescending: ': aktifkan untuk mengurutkan kolom turun'
                 }
+            };
+
+            tableAttendanceDetails = $('#tableAttendanceDetails').DataTable({
+                processing: true,
+                serverSide: true,
+                responsive: true,
+                ajax: {
+                    url: "{{ route('attendance-details.datatable') }}",
+                    data: function(d) {
+                        d.tahun_ajaran = $('select[name="tahun_ajaran"]').val() || '';
+                        d.tanggal = $('input[name="tanggal"]').val() || '';
+                        d.guru = $('select[name="guru"]').val() || '';
+                        d.mapel = $('select[name="mapel"]').val() || '';
+                        d.kelas = $('select[name="kelas"]').val() || '';
+                        d.status = $('select[name="status"]').val() || '';
+                    }
+                },
+                columns: [{
+                        data: 'checkbox',
+                        name: 'checkbox',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'no',
+                        name: 'no',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'tanggal',
+                        name: 'tanggal',
+                        orderable: false
+                    },
+                    {
+                        data: 'guru',
+                        name: 'guru',
+                        orderable: false
+                    },
+                    {
+                        data: 'mapel',
+                        name: 'mapel',
+                        orderable: false
+                    },
+                    {
+                        data: 'kelas',
+                        name: 'kelas',
+                        orderable: false
+                    },
+                    {
+                        data: 'siswa',
+                        name: 'siswa',
+                        orderable: false
+                    },
+                    {
+                        data: 'status',
+                        name: 'status',
+                        orderable: false
+                    },
+                    {
+                        data: 'jam_absen',
+                        name: 'jam_absen',
+                        orderable: false
+                    },
+                    {
+                        data: 'keterangan',
+                        name: 'keterangan',
+                        orderable: false
+                    },
+                    {
+                        data: 'aksi',
+                        name: 'aksi',
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                language: dtLanguageId
+            });
+
+            tableAttendanceDetails.on('draw', function() {
+                $('#checkAllAttendanceDetails').prop('checked', false);
+                updateAttendanceDetailsBulkBtn();
             });
         }
 
@@ -139,7 +235,7 @@
         // EDIT
         //----------------------------------
 
-        $('.btn-edit').click(function() {
+        $(document).on('click', '.btn-edit', function() {
             let id = $(this).data('id');
 
             $.get('/attendance-details/' + id + '/edit', function(data) {
@@ -203,7 +299,7 @@
         // DELETE
         //----------------------------------
 
-        $('.btn-delete').click(function() {
+        $(document).on('click', '.btn-delete', function() {
             let id = $(this).data('id');
 
             Swal.fire({

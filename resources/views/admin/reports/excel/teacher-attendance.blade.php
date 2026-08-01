@@ -29,7 +29,7 @@
                 <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
                 <td>{{ $item->pertemuan }}</td>
                 <td>{{ $item->status }}</td>
-                <td>{{ $item->attendanceDetails->count() }}</td>
+                <td>{{ (int) ($item->attendance_details_count ?? 0) }}</td>
             </tr>
         @endforeach
     </tbody>

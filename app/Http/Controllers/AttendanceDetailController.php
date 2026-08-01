@@ -14,6 +14,7 @@ use App\Models\TeacherLeaveRequest;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -258,113 +259,88 @@ class AttendanceDetailController extends Controller
             $selectedClassroomId = 0;
         }
 
-        $students = collect();
-        $statusByStudentId = [];
+        $studentsCount = 0;
 
-        if ($hasFilter) {
-            $studentsQuery = Student::query()
-                ->with('classroom')
-                ->whereIn('classroom_id', $allowedClassroomIds)
-                ->orderBy('nama_lengkap');
+        if ($hasFilter && !empty($allowedClassroomIds)) {
+            $studentsQuery = Student::query()->whereIn('classroom_id', $allowedClassroomIds);
 
             if ($selectedClassroomId !== 0) {
                 $studentsQuery->where('classroom_id', $selectedClassroomId);
             }
 
-            $students = $studentsQuery->get();
-
-            $primaryScheduleByClass = [];
-            foreach ($todaySchedules as $schedule) {
-                $classroomId = (int) ($schedule->teacherSubject->classroom_id ?? 0);
-
-                if ($classroomId === 0) {
-                    continue;
-                }
-
-                if (!isset($primaryScheduleByClass[$classroomId])) {
-                    $primaryScheduleByClass[$classroomId] = $schedule;
-                    continue;
-                }
-
-                if ($schedule->jam_mulai < $primaryScheduleByClass[$classroomId]->jam_mulai) {
-                    $primaryScheduleByClass[$classroomId] = $schedule;
-                }
-            }
-
-            $scheduleIds = collect($primaryScheduleByClass)->pluck('id')->values();
-
-            $teacherAttendances = TeacherAttendance::query()
-                ->whereDate('tanggal', $today->toDateString())
-                ->whereIn('schedule_id', $scheduleIds)
-                ->get()
-                ->keyBy('schedule_id');
-
-            $attendanceDetailRows = AttendanceDetail::query()
-                ->whereIn('teacher_attendance_id', $teacherAttendances->pluck('id'))
-                ->whereIn('student_id', $students->pluck('id'))
-                ->get();
-
-            foreach ($attendanceDetailRows as $row) {
-                $statusByStudentId[$row->student_id] = $row->status;
-            }
+            $studentsCount = (clone $studentsQuery)->count();
         }
 
         // Get ALL schedules for the selected date (for teacher attendance summary cards)
-        $allTodaySchedules = collect();
+        $summaryPayload = [
+            'allTeacherAttendances' => collect(),
+            'todaySchedules' => collect(),
+            'teachersWithAttendance' => collect(),
+            'teachersWithoutAttendance' => collect(),
+        ];
+
         if ($hasFilter && $todayDayName !== null && !$isWeekendHoliday) {
-            $allTodaySchedules = Schedule::query()
-                ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
-                ->where('hari', $todayDayName)
-                ->whereHas('teacherSubject.teacher')
-                ->orderBy('jam_mulai')
-                ->get();
-        }
+            $summaryPayload = Cache::remember(
+                $this->guruAttendanceSummaryCacheKey($today->toDateString()),
+                now()->addMinutes(2),
+                function () use ($today, $todayDayName) {
+                    $allTodaySchedules = Schedule::query()
+                        ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
+                        ->where('hari', $todayDayName)
+                        ->whereHas('teacherSubject.teacher')
+                        ->orderBy('jam_mulai')
+                        ->get();
 
-        // Get teacher attendance statistics using ALL schedules
-        $allScheduleIds = $allTodaySchedules->pluck('id')->values();
-        $allTeacherAttendances = TeacherAttendance::query()
-            ->whereDate('tanggal', $today->toDateString())
-            ->whereIn('schedule_id', $allScheduleIds)
-            ->get()
-            ->keyBy('schedule_id');
+                    $allScheduleIds = $allTodaySchedules->pluck('id')->values();
+                    $allTeacherAttendances = TeacherAttendance::query()
+                        ->whereDate('tanggal', $today->toDateString())
+                        ->whereIn('schedule_id', $allScheduleIds)
+                        ->get()
+                        ->keyBy('schedule_id');
 
-        // Get all unique teachers from ALL today's schedules
-        $teachersFromSchedules = $allTodaySchedules
-            ->map(function ($schedule) {
-                $schedTeacher = $schedule->teacherSubject->teacher;
-                return [
-                    'schedule' => $schedule,
-                    'teacher' => $schedTeacher,
-                    'teacher_id' => $schedTeacher?->id,
-                ];
-            })
-            ->groupBy('teacher_id')
-            ->map(function ($items) use ($allTeacherAttendances) {
-                $schedules = $items->pluck('schedule');
-                $teacher = $items[0]['teacher'];
+                    $teachersFromSchedules = $allTodaySchedules
+                        ->map(function ($schedule) {
+                            $schedTeacher = $schedule->teacherSubject->teacher;
+                            return [
+                                'schedule' => $schedule,
+                                'teacher' => $schedTeacher,
+                                'teacher_id' => $schedTeacher?->id,
+                            ];
+                        })
+                        ->groupBy('teacher_id')
+                        ->map(function ($items) use ($allTeacherAttendances) {
+                            $schedules = $items->pluck('schedule');
+                            $teacher = $items[0]['teacher'];
 
-                $hasAttendance = false;
-                $attendanceSchedule = null;
+                            $hasAttendance = false;
+                            $attendanceSchedule = null;
 
-                foreach ($schedules as $schedule) {
-                    if ($allTeacherAttendances->has($schedule->id)) {
-                        $hasAttendance = true;
-                        $attendanceSchedule = $schedule;
-                        break;
-                    }
+                            foreach ($schedules as $schedule) {
+                                if ($allTeacherAttendances->has($schedule->id)) {
+                                    $hasAttendance = true;
+                                    $attendanceSchedule = $schedule;
+                                    break;
+                                }
+                            }
+
+                            return [
+                                'teacher' => $teacher,
+                                'schedules' => $schedules,
+                                'has_attendance' => $hasAttendance,
+                                'attendance_schedule' => $attendanceSchedule,
+                            ];
+                        })
+                        ->values();
+
+                    return [
+                        'allTeacherAttendances' => $allTeacherAttendances,
+                        'todaySchedules' => $allTodaySchedules,
+                        'teachersWithAttendance' => $teachersFromSchedules->filter(fn($item) => $item['has_attendance'])->values(),
+                        'teachersWithoutAttendance' => $teachersFromSchedules->filter(fn($item) => !$item['has_attendance'])->values(),
+                    ];
                 }
-
-                return [
-                    'teacher' => $teacher,
-                    'schedules' => $schedules,
-                    'has_attendance' => $hasAttendance,
-                    'attendance_schedule' => $attendanceSchedule,
-                ];
-            })
-            ->values();
-
-        $teachersWithAttendance = $teachersFromSchedules->filter(fn($item) => $item['has_attendance'])->values();
-        $teachersWithoutAttendance = $teachersFromSchedules->filter(fn($item) => !$item['has_attendance'])->values();
+            );
+        }
 
         return view('guru.attendance_details.index', [
             'teacher' => $teacher,
@@ -375,12 +351,227 @@ class AttendanceDetailController extends Controller
             'selectedClassroomId' => $selectedClassroomId,
             'tanggalFilter' => $today->toDateString(),
             'hasFilter' => $hasFilter,
-            'students' => $students,
-            'statusByStudentId' => $statusByStudentId,
-            'teachersWithAttendance' => $teachersWithAttendance,
-            'teachersWithoutAttendance' => $teachersWithoutAttendance,
-            'allTeacherAttendances' => $allTeacherAttendances,
-            'todaySchedules' => $todaySchedules,
+            'studentsCount' => $studentsCount,
+            'disableAttendanceActions' => $isWeekendHoliday || !$hasFilter || $studentsCount === 0,
+            'teachersWithAttendance' => $summaryPayload['teachersWithAttendance'],
+            'teachersWithoutAttendance' => $summaryPayload['teachersWithoutAttendance'],
+            'allTeacherAttendances' => $summaryPayload['allTeacherAttendances'],
+            'todaySchedules' => $summaryPayload['todaySchedules'],
+        ]);
+    }
+
+    public function guruDatatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 10), 100), 10);
+
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $tanggalInput = (string) $request->query('tanggal', '');
+        $hasFilter = $tanggalInput !== '';
+
+        if (!$hasFilter) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $today = Carbon::parse($tanggalInput);
+        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+
+        if ($todayDayName === null || $isWeekendHoliday) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $todaySchedules = Schedule::query()
+            ->with(['teacherSubject.classroom', 'teacherSubject.subject'])
+            ->where('hari', $todayDayName)
+            ->whereHas('teacherSubject', function ($query) use ($teacher) {
+                $query->where('teacher_id', $teacher->id);
+            })
+            ->orderBy('jam_mulai')
+            ->get();
+
+        $classOptions = $todaySchedules
+            ->map(function ($schedule) {
+                return $schedule->teacherSubject->classroom;
+            })
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        $selectedClassroomId = (int) $request->query('classroom_id', 0);
+        $allowedClassroomIds = $classOptions->pluck('id')->map(fn($id) => (int) $id)->values()->all();
+
+        if ($selectedClassroomId !== 0 && !in_array($selectedClassroomId, $allowedClassroomIds, true)) {
+            $selectedClassroomId = 0;
+        }
+
+        if (empty($allowedClassroomIds)) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $studentsQuery = Student::query()
+            ->with('classroom')
+            ->whereIn('classroom_id', $allowedClassroomIds);
+
+        if ($selectedClassroomId !== 0) {
+            $studentsQuery->where('classroom_id', $selectedClassroomId);
+        }
+
+        $recordsTotal = (clone $studentsQuery)->count();
+
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+        if ($searchValue !== '') {
+            $studentsQuery->where(function ($query) use ($searchValue) {
+                $query->where('nama_lengkap', 'like', "%{$searchValue}%")
+                    ->orWhere('nis', 'like', "%{$searchValue}%")
+                    ->orWhereHas('classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $studentsQuery)->count();
+
+        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 2);
+        $orderDirection = strtolower((string) data_get($request->input('order', []), '0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $columnOrderMap = [
+            2 => 'students.nama_lengkap',
+            3 => 'students.classroom_id',
+        ];
+        $orderColumn = $columnOrderMap[$orderColumnIndex] ?? 'students.nama_lengkap';
+
+        $students = $studentsQuery
+            ->reorder()
+            ->orderBy($orderColumn, $orderDirection)
+            ->orderBy('students.id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $primaryScheduleByClass = [];
+        foreach ($todaySchedules as $schedule) {
+            $classroomId = (int) ($schedule->teacherSubject->classroom_id ?? 0);
+
+            if ($classroomId === 0) {
+                continue;
+            }
+
+            if (!isset($primaryScheduleByClass[$classroomId]) || $schedule->jam_mulai < $primaryScheduleByClass[$classroomId]->jam_mulai) {
+                $primaryScheduleByClass[$classroomId] = $schedule;
+            }
+        }
+
+        $scheduleIds = collect($primaryScheduleByClass)->pluck('id')->map(fn($id) => (int) $id)->values();
+
+        $teacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $today->toDateString())
+            ->whereIn('schedule_id', $scheduleIds)
+            ->get()
+            ->keyBy('schedule_id');
+
+        $attendanceStatusByStudent = AttendanceDetail::query()
+            ->whereIn('teacher_attendance_id', $teacherAttendances->pluck('id')->values())
+            ->whereIn('student_id', $students->pluck('id')->values())
+            ->pluck('status', 'student_id')
+            ->all();
+
+        $csrfToken = csrf_token();
+
+        $data = $students->values()->map(function (Student $student, int $index) use (
+            $start,
+            $attendanceStatusByStudent,
+            $csrfToken
+        ) {
+            $rawStatus = $attendanceStatusByStudent[$student->id] ?? null;
+            $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : ($rawStatus ?? 'Belum Absen');
+
+            if ($displayStatus === 'Hadir') {
+                $statusBadge = '<span class="badge badge-success status-badge">Hadir</span>';
+            } elseif ($displayStatus === 'Sakit') {
+                $statusBadge = '<span class="badge badge-warning status-badge">Sakit</span>';
+            } elseif ($displayStatus === 'Izin') {
+                $statusBadge = '<span class="badge badge-info status-badge">Izin</span>';
+            } elseif ($displayStatus === 'Alpa') {
+                $statusBadge = '<span class="badge badge-danger status-badge">Alpa</span>';
+            } elseif ($displayStatus === 'Terlambat') {
+                $statusBadge = '<span class="badge badge-warning status-badge">Terlambat</span>';
+            } else {
+                $statusBadge = '<span class="badge badge-secondary status-badge">Belum Absen</span>';
+            }
+
+            $buildActionForm = function (string $status, string $buttonClass, string $label) use ($student, $csrfToken) {
+                return '<form method="POST" action="' . route('guru.attendance-details.submit', $student->id) . '" class="d-inline">'
+                    . '<input type="hidden" name="_token" value="' . $csrfToken . '">'
+                    . '<input type="hidden" name="classroom_id" value="' . (int) $student->classroom_id . '">'
+                    . '<input type="hidden" name="status" value="' . e($status) . '">'
+                    . '<button type="submit" class="btn ' . $buttonClass . ' btn-xs">' . e($label) . '</button>'
+                    . '</form>';
+            };
+
+            $aksi = '<div class="attendance-actions">'
+                . $buildActionForm('Hadir', 'btn-success', 'Hadir')
+                . '<button type="button" class="btn btn-warning btn-xs" disabled title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>'
+                . '<button type="button" class="btn btn-info btn-xs" disabled title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>'
+                . $buildActionForm('Alpa', 'btn-danger', 'Alpa')
+                . $buildActionForm('Terlambat', 'btn-warning', 'Terlambat')
+                . '</div>';
+
+            return [
+                'checkbox' => '<input type="checkbox" class="check-student" name="student_ids[]" value="' . $student->id . '" form="bulkAttendanceForm">',
+                'no' => $start + $index + 1,
+                'nama' => e($student->nama_lengkap),
+                'kelas' => e($student->classroom->nama_kelas ?? '-'),
+                'status' => $statusBadge,
+                'aksi' => $aksi,
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
         ]);
     }
 
@@ -646,36 +837,6 @@ class AttendanceDetailController extends Controller
         $hasFilter  = (bool) array_filter($filters);
 
         $attendanceDetails = collect();
-        if ($hasFilter) {
-            $query = AttendanceDetail::with([
-                'teacherAttendance.teacher',
-                'teacherAttendance.classroom',
-                'teacherAttendance.subject',
-                'teacherAttendance.academicYear',
-                'student.classroom',
-            ])->latest();
-
-            if ($request->filled('tahun_ajaran')) {
-                $query->whereHas('teacherAttendance.academicYear', fn($q) => $q->where('tahun_ajaran', $request->tahun_ajaran));
-            }
-            if ($request->filled('tanggal')) {
-                $query->whereHas('teacherAttendance', fn($q) => $q->whereDate('tanggal', $request->tanggal));
-            }
-            if ($request->filled('guru')) {
-                $query->whereHas('teacherAttendance.teacher', fn($q) => $q->where('nama_lengkap', $request->guru));
-            }
-            if ($request->filled('mapel')) {
-                $query->whereHas('teacherAttendance.subject', fn($q) => $q->where('nama_mapel', $request->mapel));
-            }
-            if ($request->filled('kelas')) {
-                $query->whereHas('teacherAttendance.classroom', fn($q) => $q->where('nama_kelas', $request->kelas));
-            }
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-
-            $attendanceDetails = $query->get();
-        }
 
         $teacherAttendances = \App\Models\TeacherAttendance::with(['teacher', 'classroom', 'subject', 'academicYear'])
             ->orderByDesc('tanggal')->orderByDesc('id')->get();
@@ -698,6 +859,120 @@ class AttendanceDetailController extends Controller
             'isWeekendHoliday',
             'todayDayName'
         ));
+    }
+
+    public function adminDatatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 25), 100), 10);
+
+        $filters = [
+            'tahun_ajaran' => (string) $request->input('tahun_ajaran', ''),
+            'tanggal' => (string) $request->input('tanggal', ''),
+            'guru' => (string) $request->input('guru', ''),
+            'mapel' => (string) $request->input('mapel', ''),
+            'kelas' => (string) $request->input('kelas', ''),
+            'status' => (string) $request->input('status', ''),
+        ];
+
+        $hasFilter = (bool) array_filter($filters);
+        if (!$hasFilter) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $query = AttendanceDetail::query()
+            ->with([
+                'teacherAttendance.teacher',
+                'teacherAttendance.classroom',
+                'teacherAttendance.subject',
+                'teacherAttendance.academicYear',
+                'student.classroom',
+            ])
+            ->select('attendance_details.*');
+
+        if ($filters['tahun_ajaran'] !== '') {
+            $query->whereHas('teacherAttendance.academicYear', fn($q) => $q->where('tahun_ajaran', $filters['tahun_ajaran']));
+        }
+        if ($filters['tanggal'] !== '') {
+            $query->whereHas('teacherAttendance', fn($q) => $q->whereDate('tanggal', $filters['tanggal']));
+        }
+        if ($filters['guru'] !== '') {
+            $query->whereHas('teacherAttendance.teacher', fn($q) => $q->where('nama_lengkap', $filters['guru']));
+        }
+        if ($filters['mapel'] !== '') {
+            $query->whereHas('teacherAttendance.subject', fn($q) => $q->where('nama_mapel', $filters['mapel']));
+        }
+        if ($filters['kelas'] !== '') {
+            $query->whereHas('teacherAttendance.classroom', fn($q) => $q->where('nama_kelas', $filters['kelas']));
+        }
+        if ($filters['status'] !== '') {
+            $statusFilter = $filters['status'] === 'Alpa' ? 'Alpha' : $filters['status'];
+            $query->where('attendance_details.status', $statusFilter);
+        }
+
+        $recordsTotal = (clone $query)->count();
+
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+        if ($searchValue !== '') {
+            $query->where(function ($searchQuery) use ($searchValue) {
+                $searchQuery->where('attendance_details.status', 'like', "%{$searchValue}%")
+                    ->orWhere('attendance_details.keterangan', 'like', "%{$searchValue}%")
+                    ->orWhere('attendance_details.jam_absen', 'like', "%{$searchValue}%")
+                    ->orWhereHas('student', function ($studentQuery) use ($searchValue) {
+                        $studentQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('teacherAttendance.teacher', function ($teacherQuery) use ($searchValue) {
+                        $teacherQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('teacherAttendance.subject', function ($subjectQuery) use ($searchValue) {
+                        $subjectQuery->where('nama_mapel', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('teacherAttendance.classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        $rows = $query
+            ->latest('attendance_details.id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $data = $rows->values()->map(function (AttendanceDetail $item, int $index) use ($start) {
+            $rawStatus = (string) $item->status;
+            $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus;
+
+            return [
+                'checkbox' => '<input type="checkbox" class="check-attendance-detail" value="' . $item->id . '">',
+                'no' => $start + $index + 1,
+                'tanggal' => e((string) ($item->teacherAttendance->tanggal ?? '-')),
+                'guru' => e((string) ($item->teacherAttendance->teacher->nama_lengkap ?? '-')),
+                'mapel' => e((string) ($item->teacherAttendance->subject->nama_mapel ?? '-')),
+                'kelas' => e((string) ($item->student->classroom->nama_kelas ?? '-')),
+                'siswa' => e((string) ($item->student->nama_lengkap ?? '-')),
+                'status' => e($displayStatus),
+                'jam_absen' => e((string) ($item->jam_absen ?? '-')),
+                'keterangan' => e((string) ($item->keterangan ?? '-')),
+                'aksi' => '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $item->id . '"><i class="fas fa-edit"></i></button> '
+                    . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $item->id . '"><i class="fas fa-trash"></i></button>',
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function store(Request $request)
@@ -894,6 +1169,8 @@ class AttendanceDetailController extends Controller
                 'jam_absen' => now()->format('H:i:s'),
             ]
         );
+
+        $this->forgetGuruAttendanceSummaryCache($today->toDateString());
 
         return redirect()->route('guru.attendance-details.index', ['classroom_id' => $classroomId])
             ->with('success', 'Status absensi siswa berhasil disimpan.');
@@ -1124,6 +1401,7 @@ class AttendanceDetailController extends Controller
         $skippedCount = 0;
         $status = $validated['bulk_status'] === 'Alpa' ? 'Alpha' : $validated['bulk_status'];
 
+        $validPairs = [];
         foreach ($studentIds as $studentId) {
             $student = $students->get($studentId);
 
@@ -1131,7 +1409,6 @@ class AttendanceDetailController extends Controller
                 continue;
             }
 
-            // Jangan ubah status siswa yang sudah diverifikasi izin/sakit oleh wali kelas
             if (isset($approvedLeaveStudentIds[$studentId])) {
                 $skippedCount++;
                 continue;
@@ -1144,49 +1421,92 @@ class AttendanceDetailController extends Controller
                 continue;
             }
 
-            $scheduleId = (int) $schedule->id;
+            $validPairs[] = [
+                'student_id' => $studentId,
+                'schedule' => $schedule,
+            ];
+        }
 
-            if (!isset($teacherAttendanceBySchedule[$scheduleId])) {
-                $teacherAttendance = TeacherAttendance::query()
-                    ->where('schedule_id', $scheduleId)
-                    ->whereDate('tanggal', $today->toDateString())
-                    ->first();
+        $neededScheduleIds = collect($validPairs)
+            ->map(fn($pair) => (int) $pair['schedule']->id)
+            ->unique()
+            ->values();
 
-                if (!$teacherAttendance) {
-                    $lastPertemuan = (int) TeacherAttendance::query()
-                        ->where('schedule_id', $scheduleId)
-                        ->max('pertemuan');
+        if ($neededScheduleIds->isNotEmpty()) {
+            $teacherAttendanceBySchedule = TeacherAttendance::query()
+                ->whereDate('tanggal', $today->toDateString())
+                ->whereIn('schedule_id', $neededScheduleIds)
+                ->get()
+                ->keyBy('schedule_id')
+                ->all();
+
+            $missingScheduleIds = $neededScheduleIds
+                ->reject(fn($scheduleId) => isset($teacherAttendanceBySchedule[$scheduleId]))
+                ->values();
+
+            if ($missingScheduleIds->isNotEmpty()) {
+                $lastPertemuanBySchedule = TeacherAttendance::query()
+                    ->selectRaw('schedule_id, MAX(pertemuan) as max_pertemuan')
+                    ->whereIn('schedule_id', $missingScheduleIds)
+                    ->groupBy('schedule_id')
+                    ->pluck('max_pertemuan', 'schedule_id');
+
+                foreach ($missingScheduleIds as $scheduleId) {
+                    $schedule = $todaySchedules->firstWhere('id', (int) $scheduleId);
+
+                    if (!$schedule || !$schedule->teacherSubject) {
+                        continue;
+                    }
 
                     $teacherAttendance = TeacherAttendance::create([
                         'teacher_id' => $schedule->teacherSubject->teacher_id,
-                        'schedule_id' => $scheduleId,
+                        'schedule_id' => (int) $scheduleId,
                         'classroom_id' => $schedule->teacherSubject->classroom_id,
                         'subject_id' => $schedule->teacherSubject->subject_id,
                         'academic_year_id' => $schedule->teacherSubject->academic_year_id,
                         'tanggal' => $today->toDateString(),
-                        'pertemuan' => max($lastPertemuan + 1, 1),
+                        'pertemuan' => max(((int) ($lastPertemuanBySchedule[(int) $scheduleId] ?? 0)) + 1, 1),
                         'materi_pembelajaran' => null,
                         'catatan_guru' => null,
                         'status' => 'Draft',
                     ]);
-                }
 
-                $teacherAttendanceBySchedule[$scheduleId] = $teacherAttendance;
+                    $teacherAttendanceBySchedule[(int) $scheduleId] = $teacherAttendance;
+                }
+            }
+        }
+
+        $nowTime = now()->format('H:i:s');
+        $nowStamp = now();
+        $upsertRows = [];
+
+        foreach ($validPairs as $pair) {
+            $scheduleId = (int) $pair['schedule']->id;
+            $teacherAttendance = $teacherAttendanceBySchedule[$scheduleId] ?? null;
+
+            if (!$teacherAttendance) {
+                continue;
             }
 
-            AttendanceDetail::updateOrCreate(
-                [
-                    'teacher_attendance_id' => $teacherAttendanceBySchedule[$scheduleId]->id,
-                    'student_id' => $studentId,
-                ],
-                [
-                    'status' => $status,
-                    'keterangan' => null,
-                    'jam_absen' => now()->format('H:i:s'),
-                ]
+            $upsertRows[] = [
+                'teacher_attendance_id' => $teacherAttendance->id,
+                'student_id' => $pair['student_id'],
+                'status' => $status,
+                'keterangan' => null,
+                'jam_absen' => $nowTime,
+                'created_at' => $nowStamp,
+                'updated_at' => $nowStamp,
+            ];
+        }
+
+        if (!empty($upsertRows)) {
+            AttendanceDetail::query()->upsert(
+                $upsertRows,
+                ['teacher_attendance_id', 'student_id'],
+                ['status', 'keterangan', 'jam_absen', 'updated_at']
             );
 
-            $savedCount++;
+            $savedCount = count($upsertRows);
         }
 
         if ($savedCount === 0) {
@@ -1198,6 +1518,8 @@ class AttendanceDetailController extends Controller
         if ($skippedCount > 0) {
             $message .= " {$skippedCount} siswa dilewati karena memiliki izin/sakit yang sudah diverifikasi wali kelas.";
         }
+
+        $this->forgetGuruAttendanceSummaryCache($today->toDateString());
 
         return redirect()->route('guru.attendance-details.index', ['classroom_id' => $selectedClassroomId])
             ->with('success', $message);
@@ -1329,19 +1651,28 @@ class AttendanceDetailController extends Controller
 
         $status = $validated['bulk_status'] === 'Alpa' ? 'Alpha' : $validated['bulk_status'];
 
-        foreach ($students as $student) {
-            AttendanceDetail::updateOrCreate(
-                [
-                    'teacher_attendance_id' => $teacherAttendance->id,
-                    'student_id' => $student->id,
-                ],
-                [
-                    'status' => $status,
-                    'keterangan' => null,
-                    'jam_absen' => now()->format('H:i:s'),
-                ]
-            );
-        }
+        $nowTime = now()->format('H:i:s');
+        $nowStamp = now();
+
+        $upsertRows = $students->map(function ($student) use ($teacherAttendance, $status, $nowTime, $nowStamp) {
+            return [
+                'teacher_attendance_id' => $teacherAttendance->id,
+                'student_id' => $student->id,
+                'status' => $status,
+                'keterangan' => null,
+                'jam_absen' => $nowTime,
+                'created_at' => $nowStamp,
+                'updated_at' => $nowStamp,
+            ];
+        })->all();
+
+        AttendanceDetail::query()->upsert(
+            $upsertRows,
+            ['teacher_attendance_id', 'student_id'],
+            ['status', 'keterangan', 'jam_absen', 'updated_at']
+        );
+
+        $this->forgetGuruAttendanceSummaryCache($today->toDateString());
 
         return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
             ->with('success', 'Absensi siswa berhasil disimpan secara massal.');
@@ -1359,6 +1690,16 @@ class AttendanceDetailController extends Controller
         $student = $this->resolveCurrentStudent();
 
         return $student;
+    }
+
+    private function guruAttendanceSummaryCacheKey(string $date): string
+    {
+        return 'guru-attendance-summary:' . $date;
+    }
+
+    private function forgetGuruAttendanceSummaryCache(string $date): void
+    {
+        Cache::forget($this->guruAttendanceSummaryCacheKey($date));
     }
 
     private function buildSiswaHistoryPayload(Request $request, Student $student): array

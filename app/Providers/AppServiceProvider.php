@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\Classroom;
+use App\Models\Major;
+use App\Models\SchoolSetting;
 use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\Student;
+use App\Support\ReferenceCache;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->registerReferenceCacheInvalidationHooks();
+
         View::composer('*', function () {
             if (app()->runningInConsole() || !function_exists('auth') || !auth()->check()) {
                 return;
@@ -142,5 +148,23 @@ class AppServiceProvider extends ServiceProvider
         }
 
         return $menu;
+    }
+
+    private function registerReferenceCacheInvalidationHooks(): void
+    {
+        Major::saved(fn() => ReferenceCache::forgetAcademicReferences());
+        Major::deleted(fn() => ReferenceCache::forgetAcademicReferences());
+
+        Classroom::saved(fn() => ReferenceCache::forgetAcademicReferences());
+        Classroom::deleted(fn() => ReferenceCache::forgetAcademicReferences());
+
+        Student::saved(fn() => ReferenceCache::forgetStudentReferences());
+        Student::deleted(fn() => ReferenceCache::forgetStudentReferences());
+
+        Teacher::saved(fn() => ReferenceCache::forgetTeacherReferences());
+        Teacher::deleted(fn() => ReferenceCache::forgetTeacherReferences());
+
+        SchoolSetting::saved(fn() => ReferenceCache::forgetSchoolSettings());
+        SchoolSetting::deleted(fn() => ReferenceCache::forgetSchoolSettings());
     }
 }

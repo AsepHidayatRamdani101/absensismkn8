@@ -331,6 +331,27 @@
                             <i class="fas fa-id-card mr-1"></i>
                             Buka Identitas
                         </a>
+                        <div class="btn-group mt-2" role="group" aria-label="Format download QR siswa">
+                            <a href="{{ route('siswa.identity.qr.download', ['format' => 'png']) }}"
+                                class="btn btn-outline-primary">
+                                <i class="fas fa-download mr-1"></i>
+                                Download QR (PNG)
+                            </a>
+                            <button type="button" class="btn btn-outline-primary dropdown-toggle dropdown-toggle-split"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="sr-only">Pilih format lain</span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-right">
+                                <a class="dropdown-item"
+                                    href="{{ route('siswa.identity.qr.download', ['format' => 'png']) }}">
+                                    PNG (Disarankan)
+                                </a>
+                                <a class="dropdown-item"
+                                    href="{{ route('siswa.identity.qr.download', ['format' => 'jpg']) }}">
+                                    JPG
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

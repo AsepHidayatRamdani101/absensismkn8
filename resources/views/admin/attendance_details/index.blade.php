@@ -56,7 +56,8 @@
 
     <div class="card">
         <div class="card-body">
-            <form method="GET" action="{{ route('attendance-details.index') }}" class="mb-3">
+            <form method="GET" action="{{ route('attendance-details.index') }}" class="mb-3"
+                id="attendanceDetailsFilterForm">
                 <div class="row">
                     <div class="col-md-4 mb-2">
                         <label class="mb-1">Tahun Ajaran</label>
@@ -144,49 +145,26 @@
                     Terapkan filter terlebih dahulu untuk menampilkan data absensi siswa oleh guru.
                 </div>
             @else
-                <table id="tableAttendanceDetails" class="table table-bordered table-striped">
-                    <thead>
-                        <tr>
-                            <th width="3%"><input type="checkbox" id="checkAllAttendanceDetails"></th>
-                            <th width="5%">No</th>
-                            <th>Tanggal</th>
-                            <th>Guru</th>
-                            <th>Mapel</th>
-                            <th>Kelas</th>
-                            <th>Siswa</th>
-                            <th>Status</th>
-                            <th>Jam Absen</th>
-                            <th>Keterangan</th>
-                            <th width="15%">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($attendanceDetails as $item)
+                <div class="table-responsive">
+                    <table id="tableAttendanceDetails" class="table table-bordered table-striped">
+                        <thead>
                             <tr>
-                                <td><input type="checkbox" class="check-attendance-detail" value="{{ $item->id }}">
-                                </td>
-                                <td>{{ $loop->iteration }}</td>
-                                <td>{{ $item->teacherAttendance->tanggal ?? '-' }}</td>
-                                <td>{{ $item->teacherAttendance->teacher->nama_lengkap ?? '-' }}</td>
-                                <td>{{ $item->teacherAttendance->subject->nama_mapel ?? '-' }}</td>
-                                <td>{{ $item->student->classroom->nama_kelas ?? '-' }}</td>
-                                <td>{{ $item->student->nama_lengkap ?? '-' }}</td>
-                                <td>{{ $item->status }}</td>
-                                <td>{{ $item->jam_absen ?? '-' }}</td>
-                                <td>{{ $item->keterangan ?? '-' }}</td>
-                                <td>
-                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $item->id }}">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-
-                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $item->id }}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
+                                <th width="3%"><input type="checkbox" id="checkAllAttendanceDetails"></th>
+                                <th width="5%">No</th>
+                                <th>Tanggal</th>
+                                <th>Guru</th>
+                                <th>Mapel</th>
+                                <th>Kelas</th>
+                                <th>Siswa</th>
+                                <th>Status</th>
+                                <th>Jam Absen</th>
+                                <th>Keterangan</th>
+                                <th width="15%">Aksi</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             @endif
         </div>
     </div>

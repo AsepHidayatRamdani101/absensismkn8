@@ -8,6 +8,7 @@ use App\Imports\TeachersImport;
 use App\Models\Classroom;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Support\ReferenceCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -113,6 +114,7 @@ class TeacherController extends Controller
         $teacher = Teacher::create($validated);
 
         $this->syncTeacherRoles($teacher);
+        ReferenceCache::forgetTeacherReferences();
 
         return response()->json([
             'success' => true,
@@ -177,6 +179,7 @@ class TeacherController extends Controller
         $teacher->update($validated);
 
         $this->syncTeacherRoles($teacher->fresh());
+        ReferenceCache::forgetTeacherReferences();
 
         return response()->json([
             'success' => true,
@@ -187,6 +190,7 @@ class TeacherController extends Controller
     public function destroy(Teacher $teacher)
     {
         $teacher->delete();
+        ReferenceCache::forgetTeacherReferences();
 
         return response()->json([
             'success' => true,
@@ -203,6 +207,7 @@ class TeacherController extends Controller
         $importer = new TeachersImport();
 
         Excel::import($importer, $request->file('file'));
+        ReferenceCache::forgetTeacherReferences();
 
         return redirect()->route('teachers.index')->with('success', $importer->getSuccessMessage());
     }
@@ -281,6 +286,7 @@ class TeacherController extends Controller
         ]);
 
         Teacher::whereIn('id', $request->ids)->delete();
+        ReferenceCache::forgetTeacherReferences();
 
         return response()->json([
             'success' => true,

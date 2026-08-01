@@ -63,6 +63,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('students/template', [StudentController::class, 'template'])->name('students.template');
         Route::get('students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('students/export-accounts-pdf', [StudentController::class, 'exportAccountsPdf'])->name('students.export-accounts-pdf');
+        Route::get('students/datatable', [StudentController::class, 'datatable'])->name('students.datatable');
         Route::get('students/qr-card/{student}', [StudentController::class, 'qrCard'])->name('students.qr-card');
         Route::get('students/qr-cards/classroom', [StudentController::class, 'qrCardsByClassroom'])->name('students.qr-cards.classroom');
         Route::post('students/generate-accounts', [StudentController::class, 'generateAccounts'])->name('students.generate-accounts');
@@ -112,6 +113,8 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('teacher-attendances', TeacherAttendanceController::class)->except(['show', 'create']);
         Route::delete('attendance-details/destroy-multiple', [AttendanceDetailController::class, 'destroyMultiple'])
             ->name('attendance-details.destroy-multiple');
+        Route::get('attendance-details/datatable', [AttendanceDetailController::class, 'adminDatatable'])
+            ->name('attendance-details.datatable');
         Route::get('attendance-details/teacher-attendance-detail', [AttendanceDetailController::class, 'adminTeacherAttendanceDetail'])
             ->name('attendance-details.teacher-attendance-detail');
         Route::resource('attendance-details', AttendanceDetailController::class)->except(['show', 'create']);
@@ -131,6 +134,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('reports/teacher-attendance', [ReportController::class, 'teacherAttendance'])
             ->name('reports.teacher-attendance');
+        Route::get('reports/teacher-attendance/datatable', [ReportController::class, 'teacherAttendanceDatatable'])
+            ->name('reports.teacher-attendance.datatable');
         Route::get('reports/teacher-attendance-recognition', [ReportController::class, 'teacherAttendanceRecognition'])
             ->name('reports.teacher-attendance-recognition');
         Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}', [ReportController::class, 'teacherAttendanceRecognitionMissingTeachers'])
@@ -148,12 +153,16 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('reports/student-attendance', [ReportController::class, 'studentAttendance'])
             ->name('reports.student-attendance');
+        Route::get('reports/student-attendance/datatable', [ReportController::class, 'studentAttendanceDatatable'])
+            ->name('reports.student-attendance.datatable');
         Route::get('reports/student-attendance/pdf', [ReportController::class, 'studentAttendancePdf'])
             ->name('reports.student-attendance.pdf');
         Route::get('reports/student-attendance/excel', [ReportController::class, 'studentAttendanceExcel'])
             ->name('reports.student-attendance.excel');
         Route::get('reports/teacher-agenda', [ReportController::class, 'teacherAgenda'])
             ->name('reports.teacher-agenda');
+        Route::get('reports/teacher-agenda/datatable', [ReportController::class, 'teacherAgendaDatatable'])
+            ->name('reports.teacher-agenda.datatable');
         Route::get('reports/teacher-agenda/pdf', [ReportController::class, 'teacherAgendaPdf'])
             ->name('reports.teacher-agenda.pdf');
         Route::get('reports/teacher-agenda/excel', [ReportController::class, 'teacherAgendaExcel'])
@@ -183,6 +192,8 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::post('/guru/agenda/{schedule}', [GuruAgendaController::class, 'store'])->name('guru.agenda.store');
     Route::get('/guru/attendance-details', [AttendanceDetailController::class, 'guruIndex'])
         ->name('guru.attendance-details.index');
+    Route::get('/guru/attendance-details/datatable', [AttendanceDetailController::class, 'guruDatatable'])
+        ->name('guru.attendance-details.datatable');
     Route::get('/guru/attendance-details/teacher-attendance-detail', [AttendanceDetailController::class, 'guruTeacherAttendanceDetail'])
         ->name('guru.attendance-details.teacher-attendance-detail');
     Route::get('/guru/pengajuan', [TeacherLeaveRequestController::class, 'index'])
@@ -234,6 +245,8 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::get('/siswa', [DashboardController::class, 'siswa'])->name('siswa.dashboard');
     Route::get('/siswa/identitas', [StudentController::class, 'editOwnIdentity'])
         ->name('siswa.identity.edit');
+    Route::get('/siswa/identitas/qr/download', [StudentController::class, 'downloadOwnQrCode'])
+        ->name('siswa.identity.qr.download');
     Route::put('/siswa/identitas', [StudentController::class, 'updateOwnIdentity'])
         ->name('siswa.identity.update');
     Route::get('/siswa/riwayat-absen', [AttendanceDetailController::class, 'siswaHistory'])

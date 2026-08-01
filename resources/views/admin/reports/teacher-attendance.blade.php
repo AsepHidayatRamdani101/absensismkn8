@@ -133,21 +133,7 @@
                                 <th>Jumlah Siswa Diabsen</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            @foreach ($rows as $item)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $item->tanggal }}</td>
-                                    <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                                    <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
-                                    <td>{{ $item->classroom->major->nama_jurusan ?? '-' }}</td>
-                                    <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
-                                    <td>{{ $item->pertemuan }}</td>
-                                    <td>{{ $item->status }}</td>
-                                    <td>{{ $item->attendanceDetails->count() }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             @endif
@@ -164,7 +150,67 @@
         $(function() {
             if ($('#tableTeacherReport').length) {
                 $('#tableTeacherReport').DataTable({
+                    processing: true,
+                    serverSide: true,
                     responsive: true,
+                    ajax: {
+                        url: "{{ route('reports.teacher-attendance.datatable') }}",
+                        data: function(d) {
+                            d.period_type = "{{ $filters['period_type'] ?? '' }}";
+                            d.tanggal = "{{ $filters['tanggal'] ?? '' }}";
+                            d.minggu = "{{ $filters['minggu'] ?? '' }}";
+                            d.bulan = "{{ $filters['bulan'] ?? '' }}";
+                            d.tahun = "{{ $filters['tahun'] ?? '' }}";
+                            d.teacher_id = "{{ $filters['teacher_id'] ?? '' }}";
+                            d.major_id = "{{ $filters['major_id'] ?? '' }}";
+                            d.classroom_id = "{{ $filters['classroom_id'] ?? '' }}";
+                        }
+                    },
+                    columns: [{
+                            data: 'no',
+                            name: 'no',
+                            searchable: false,
+                            orderable: false
+                        },
+                        {
+                            data: 'tanggal',
+                            name: 'tanggal'
+                        },
+                        {
+                            data: 'guru',
+                            name: 'guru',
+                            orderable: false
+                        },
+                        {
+                            data: 'mapel',
+                            name: 'mapel',
+                            orderable: false
+                        },
+                        {
+                            data: 'jurusan',
+                            name: 'jurusan',
+                            orderable: false
+                        },
+                        {
+                            data: 'kelas',
+                            name: 'kelas',
+                            orderable: false
+                        },
+                        {
+                            data: 'pertemuan',
+                            name: 'pertemuan'
+                        },
+                        {
+                            data: 'status',
+                            name: 'status'
+                        },
+                        {
+                            data: 'jumlah_siswa_diabsen',
+                            name: 'jumlah_siswa_diabsen',
+                            searchable: false,
+                            orderable: false
+                        }
+                    ],
                     language: {
                         url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
                     }

@@ -6,6 +6,7 @@ use App\Exports\MajorsExport;
 use App\Exports\TemplateExport;
 use App\Imports\MajorsImport;
 use App\Models\Major;
+use App\Support\ReferenceCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -34,6 +35,7 @@ class MajorController extends Controller
         ]);
 
         Major::create($validated);
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -65,6 +67,7 @@ class MajorController extends Controller
         ]);
 
         $major->update($validated);
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -86,6 +89,7 @@ class MajorController extends Controller
         }
 
         $major->delete();
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -100,6 +104,7 @@ class MajorController extends Controller
         ]);
 
         Excel::import(new MajorsImport(), $request->file('file'));
+        ReferenceCache::forgetAcademicReferences();
 
         return redirect()->route('majors.index')->with('success', 'Import data jurusan berhasil.');
     }

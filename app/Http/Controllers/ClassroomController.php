@@ -7,6 +7,7 @@ use App\Exports\TemplateExport;
 use App\Imports\ClassroomsImport;
 use App\Models\Classroom;
 use App\Models\Major;
+use App\Support\ReferenceCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -45,6 +46,7 @@ class ClassroomController extends Controller
         ]);
 
         Classroom::create($validated);
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -83,6 +85,7 @@ class ClassroomController extends Controller
         ]);
 
         $classroom->update($validated);
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -106,6 +109,7 @@ class ClassroomController extends Controller
         */
 
         $classroom->delete();
+        ReferenceCache::forgetAcademicReferences();
 
         return response()->json([
             'success' => true,
@@ -122,6 +126,7 @@ class ClassroomController extends Controller
         $importer = new ClassroomsImport();
 
         Excel::import($importer, $request->file('file'));
+        ReferenceCache::forgetAcademicReferences();
 
         return redirect()->route('classrooms.index')->with('success', $importer->getSuccessMessage());
     }

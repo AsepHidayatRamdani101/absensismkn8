@@ -7,9 +7,78 @@
 
         if ($('#tableStudents').length) {
             $('#tableStudents').DataTable({
-
+                processing: true,
+                serverSide: true,
                 responsive: true,
-
+                ajax: {
+                    url: "{{ route('students.datatable') }}",
+                    data: function(d) {
+                        d.major_id = $('#filterMajor').val();
+                        d.classroom_id = $('#filterClassroom').val();
+                    }
+                },
+                columns: [{
+                        data: 'checkbox',
+                        name: 'checkbox',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'no',
+                        name: 'no',
+                        orderable: true,
+                        searchable: false
+                    },
+                    {
+                        data: 'nisn',
+                        name: 'nisn'
+                    },
+                    {
+                        data: 'nama',
+                        name: 'nama'
+                    },
+                    {
+                        data: 'status',
+                        name: 'status',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'jk',
+                        name: 'jk'
+                    },
+                    {
+                        data: 'kelas',
+                        name: 'kelas',
+                        orderable: false
+                    },
+                    {
+                        data: 'jabatan',
+                        name: 'jabatan'
+                    },
+                    {
+                        data: 'no_hp',
+                        name: 'no_hp'
+                    },
+                    {
+                        data: 'qr',
+                        name: 'qr',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'aksi',
+                        name: 'aksi',
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                columnDefs: [{
+                    targets: [0, 4, 9, 10],
+                    render: function(data) {
+                        return data;
+                    }
+                }],
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
                 }
@@ -68,7 +137,7 @@
         // EDIT
         //------------------------------------
 
-        $('.btn-edit').click(function() {
+        $(document).on('click', '.btn-edit', function() {
 
             let id = $(this).data('id');
 
@@ -174,7 +243,7 @@
         // DELETE
         //------------------------------------
 
-        $('.btn-delete').click(function() {
+        $(document).on('click', '.btn-delete', function() {
 
             let id = $(this).data('id');
 

@@ -120,6 +120,19 @@
                         </button>
                         <a href="{{ route('reports.student-attendance') }}" class="btn btn-secondary btn-sm">Reset</a>
                     </div>
+
+                    <div class="form-group col-md-3">
+                        <label>Status</label>
+                        <select name="status" class="form-control form-control-sm">
+                            <option value="">Semua Status</option>
+                            @foreach (['Hadir', 'Izin', 'Sakit', 'Alpha', 'Alpa', 'Terlambat'] as $status)
+                                <option value="{{ $status }}"
+                                    {{ (string) ($filters['status'] ?? '') === (string) $status ? 'selected' : '' }}>
+                                    {{ $status }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
             </form>
 
@@ -147,22 +160,7 @@
                                 <th>Keterangan</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            @foreach ($rows as $item)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $item->teacherAttendance->tanggal ?? '-' }}</td>
-                                    <td>{{ $item->teacherAttendance->teacher->nama_lengkap ?? '-' }}</td>
-                                    <td>{{ $item->student->nama_lengkap ?? '-' }}</td>
-                                    <td>{{ $item->teacherAttendance->subject->nama_mapel ?? '-' }}</td>
-                                    <td>{{ $item->student->classroom->major->nama_jurusan ?? '-' }}</td>
-                                    <td>{{ $item->student->classroom->nama_kelas ?? '-' }}</td>
-                                    <td>{{ $item->status }}</td>
-                                    <td>{{ $item->jam_absen ?? '-' }}</td>
-                                    <td>{{ $item->keterangan ?? '-' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             @endif
@@ -179,7 +177,76 @@
         $(function() {
             if ($('#tableStudentReport').length) {
                 $('#tableStudentReport').DataTable({
+                    processing: true,
+                    serverSide: true,
                     responsive: true,
+                    ajax: {
+                        url: "{{ route('reports.student-attendance.datatable') }}",
+                        data: function(d) {
+                            d.period_type = "{{ $filters['period_type'] ?? '' }}";
+                            d.tanggal = "{{ $filters['tanggal'] ?? '' }}";
+                            d.minggu = "{{ $filters['minggu'] ?? '' }}";
+                            d.bulan = "{{ $filters['bulan'] ?? '' }}";
+                            d.tahun = "{{ $filters['tahun'] ?? '' }}";
+                            d.teacher_id = "{{ $filters['teacher_id'] ?? '' }}";
+                            d.student_id = "{{ $filters['student_id'] ?? '' }}";
+                            d.major_id = "{{ $filters['major_id'] ?? '' }}";
+                            d.classroom_id = "{{ $filters['classroom_id'] ?? '' }}";
+                            d.status = "{{ $filters['status'] ?? '' }}";
+                        }
+                    },
+                    columns: [{
+                            data: 'no',
+                            name: 'no',
+                            searchable: false,
+                            orderable: false
+                        },
+                        {
+                            data: 'tanggal',
+                            name: 'tanggal',
+                            orderable: false
+                        },
+                        {
+                            data: 'guru',
+                            name: 'guru',
+                            orderable: false
+                        },
+                        {
+                            data: 'siswa',
+                            name: 'siswa',
+                            orderable: false
+                        },
+                        {
+                            data: 'mapel',
+                            name: 'mapel',
+                            orderable: false
+                        },
+                        {
+                            data: 'jurusan',
+                            name: 'jurusan',
+                            orderable: false
+                        },
+                        {
+                            data: 'kelas',
+                            name: 'kelas',
+                            orderable: false
+                        },
+                        {
+                            data: 'status',
+                            name: 'status',
+                            orderable: false
+                        },
+                        {
+                            data: 'jam_absen',
+                            name: 'jam_absen',
+                            orderable: false
+                        },
+                        {
+                            data: 'keterangan',
+                            name: 'keterangan',
+                            orderable: false
+                        }
+                    ],
                     language: {
                         url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
                     }

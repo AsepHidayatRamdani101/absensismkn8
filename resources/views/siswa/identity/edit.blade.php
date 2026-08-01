@@ -97,6 +97,27 @@
                             class="btn btn-outline-primary btn-sm btn-block">
                             Buka Halaman Hasil Scan
                         </a>
+                        <div class="btn-group w-100 mt-2" role="group" aria-label="Format download QR siswa">
+                            <a href="{{ route('siswa.identity.qr.download', ['format' => 'png']) }}"
+                                class="btn btn-primary btn-sm">
+                                <i class="fas fa-download mr-1"></i>
+                                Download QR (PNG)
+                            </a>
+                            <button type="button" class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="sr-only">Pilih format lain</span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-right">
+                                <a class="dropdown-item"
+                                    href="{{ route('siswa.identity.qr.download', ['format' => 'png']) }}">
+                                    PNG (Disarankan)
+                                </a>
+                                <a class="dropdown-item"
+                                    href="{{ route('siswa.identity.qr.download', ['format' => 'jpg']) }}">
+                                    JPG
+                                </a>
+                            </div>
+                        </div>
                     @endif
                 </div>
             </div>

@@ -23,10 +23,14 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    private const PDF_EXPORT_MAX_ROWS = 3000;
+    private const EXCEL_EXPORT_MAX_ROWS = 20000;
+
     public function teacherAttendanceRecognition(Request $request)
     {
         $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
@@ -60,9 +64,9 @@ class ReportController extends Controller
             'foto_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_absensi_guru_siswa_kamera'])),
         ];
 
-        $teachers = Teacher::orderBy('nama_lengkap')->get();
-        $majors = Major::orderBy('nama_jurusan')->get();
-        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+        $teachers = $this->getReportTeachers();
+        $majors = $this->getReportMajors();
+        $classrooms = $this->getReportClassrooms();
 
         return view('admin.reports.teacher-attendance-recognition', [
             'rows' => $rows,
@@ -144,6 +148,10 @@ class ReportController extends Controller
     {
         $payload = $this->buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload($request, $type, $teacher);
 
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
         $pdf = Pdf::loadView('admin.reports.pdf.teacher-attendance-recognition-missing-teacher-sessions', $payload)
             ->setPaper('a4', 'landscape');
 
@@ -153,6 +161,10 @@ class ReportController extends Controller
     public function teacherAttendanceRecognitionMissingTeacherSessionsExcel(Request $request, string $type, Teacher $teacher)
     {
         $payload = $this->buildTeacherAttendanceRecognitionMissingTeacherSessionsPayload($request, $type, $teacher);
+
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
 
         return Excel::download(
             new TeacherAttendanceRecognitionMissingSessionsExport(
@@ -167,17 +179,13 @@ class ReportController extends Controller
 
     public function teacherAttendance(Request $request)
     {
-        $hasFilter = $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id'])
-            && array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id']));
+        $hasFilter = $this->hasTeacherAttendanceFilter($request);
 
-        $rows = $hasFilter ? $this->buildTeacherAttendanceQuery($request)->get() : collect();
-
-        $teachers = Teacher::orderBy('nama_lengkap')->get();
-        $majors = Major::orderBy('nama_jurusan')->get();
-        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+        $teachers = $this->getReportTeachers();
+        $majors = $this->getReportMajors();
+        $classrooms = $this->getReportClassrooms();
 
         return view('admin.reports.teacher-attendance', [
-            'rows' => $rows,
             'hasFilter' => (bool) $hasFilter,
             'teachers' => $teachers,
             'majors' => $majors,
@@ -187,20 +195,93 @@ class ReportController extends Controller
         ]);
     }
 
+    public function teacherAttendanceDatatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 10), 100), 10);
+
+        if (!$this->hasTeacherAttendanceFilter($request)) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $query = $this->buildTeacherAttendanceQuery($request);
+        $recordsTotal = (clone $query)->count();
+
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('teacher_attendances.status', 'like', "%{$searchValue}%")
+                    ->orWhere('teacher_attendances.pertemuan', 'like', "%{$searchValue}%")
+                    ->orWhereDate('teacher_attendances.tanggal', $searchValue)
+                    ->orWhereHas('teacher', function ($teacherQuery) use ($searchValue) {
+                        $teacherQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('subject', function ($subjectQuery) use ($searchValue) {
+                        $subjectQuery->where('nama_mapel', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 1);
+        $orderDirection = strtolower((string) data_get($request->input('order', []), '0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $columnOrderMap = [
+            1 => 'teacher_attendances.tanggal',
+            7 => 'teacher_attendances.pertemuan',
+            8 => 'teacher_attendances.status',
+        ];
+        $orderColumn = $columnOrderMap[$orderColumnIndex] ?? 'teacher_attendances.id';
+
+        $rows = $query
+            ->reorder()
+            ->orderBy($orderColumn, $orderDirection)
+            ->orderByDesc('teacher_attendances.id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $data = $rows->values()->map(function (TeacherAttendance $item, int $index) use ($start) {
+            return [
+                'no' => $start + $index + 1,
+                'tanggal' => (string) ($item->tanggal ?? '-'),
+                'guru' => (string) ($item->teacher->nama_lengkap ?? '-'),
+                'mapel' => (string) ($item->subject->nama_mapel ?? '-'),
+                'jurusan' => (string) ($item->classroom->major->nama_jurusan ?? '-'),
+                'kelas' => (string) ($item->classroom->nama_kelas ?? '-'),
+                'pertemuan' => (string) ($item->pertemuan ?? '-'),
+                'status' => (string) ($item->status ?? '-'),
+                'jumlah_siswa_diabsen' => (int) ($item->attendance_details_count ?? 0),
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
     public function studentAttendance(Request $request)
     {
-        $hasFilter = $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status'])
-            && array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status']));
+        $hasFilter = $this->hasStudentAttendanceFilter($request);
 
-        $rows = $hasFilter ? $this->buildStudentAttendanceQuery($request)->get() : collect();
-
-        $teachers = Teacher::orderBy('nama_lengkap')->get();
-        $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
-        $majors = Major::orderBy('nama_jurusan')->get();
-        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+        $teachers = $this->getReportTeachers();
+        $students = $this->getReportStudents();
+        $majors = $this->getReportMajors();
+        $classrooms = $this->getReportClassrooms();
 
         return view('admin.reports.student-attendance', [
-            'rows' => $rows,
             'hasFilter' => (bool) $hasFilter,
             'teachers' => $teachers,
             'students' => $students,
@@ -208,6 +289,75 @@ class ReportController extends Controller
             'classrooms' => $classrooms,
             'filters' => $request->all(),
             'periodLabel' => $this->buildPeriodLabel($request),
+        ]);
+    }
+
+    public function studentAttendanceDatatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 10), 100), 10);
+
+        if (!$this->hasStudentAttendanceFilter($request)) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $query = $this->buildStudentAttendanceQuery($request);
+        $recordsTotal = (clone $query)->count();
+
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('attendance_details.status', 'like', "%{$searchValue}%")
+                    ->orWhere('attendance_details.jam_absen', 'like', "%{$searchValue}%")
+                    ->orWhere('attendance_details.keterangan', 'like', "%{$searchValue}%")
+                    ->orWhereHas('student', function ($studentQuery) use ($searchValue) {
+                        $studentQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('teacherAttendance.teacher', function ($teacherQuery) use ($searchValue) {
+                        $teacherQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('teacherAttendance.subject', function ($subjectQuery) use ($searchValue) {
+                        $subjectQuery->where('nama_mapel', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('student.classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        $rows = $query
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $data = $rows->values()->map(function (AttendanceDetail $item, int $index) use ($start) {
+            return [
+                'no' => $start + $index + 1,
+                'tanggal' => (string) ($item->teacherAttendance->tanggal ?? '-'),
+                'guru' => (string) ($item->teacherAttendance->teacher->nama_lengkap ?? '-'),
+                'siswa' => (string) ($item->student->nama_lengkap ?? '-'),
+                'mapel' => (string) ($item->teacherAttendance->subject->nama_mapel ?? '-'),
+                'jurusan' => (string) ($item->student->classroom->major->nama_jurusan ?? '-'),
+                'kelas' => (string) ($item->student->classroom->nama_kelas ?? '-'),
+                'status' => (string) ($item->status ?? '-'),
+                'jam_absen' => (string) ($item->jam_absen ?? '-'),
+                'keterangan' => (string) ($item->keterangan ?? '-'),
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
         ]);
     }
 
@@ -244,6 +394,10 @@ class ReportController extends Controller
 
         $payload = $this->buildGuruWaliKelasRecapPayload($teacher, $request);
 
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
         $pdf = Pdf::loadView('guru.reports.pdf.wali-kelas-recap', $payload)
             ->setPaper('a4', 'landscape');
 
@@ -264,6 +418,10 @@ class ReportController extends Controller
         }
 
         $payload = $this->buildGuruWaliKelasRecapPayload($teacher, $request);
+
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
 
         return Excel::download(
             new GuruWaliKelasRecapExport($payload['rows'], $payload['totals'], $payload['periodLabel'], $teacher, $teacher->waliClassroom),
@@ -342,7 +500,7 @@ class ReportController extends Controller
         // Get all attendance details for the period
         $attendanceQuery = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->select('attendance_details.*', 'teacher_attendances.tanggal')
+            ->select('attendance_details.student_id', 'attendance_details.status', 'teacher_attendances.tanggal')
             ->whereIn('attendance_details.student_id', $students->pluck('id'));
 
         if ($startDate && $endDate) {
@@ -350,10 +508,11 @@ class ReportController extends Controller
         }
 
         $attendances = $attendanceQuery->get();
+        $attendancesByStudent = $attendances->groupBy('student_id');
 
         // Build rows with daily average calculation
-        $rows = $students->map(function (Student $student) use ($attendances) {
-            $studentAttendances = $attendances->where('student_id', $student->id);
+        $rows = $students->map(function (Student $student) use ($attendancesByStudent) {
+            $studentAttendances = $attendancesByStudent->get($student->id, collect());
 
             if ($studentAttendances->isEmpty()) {
                 return [
@@ -468,6 +627,10 @@ class ReportController extends Controller
 
         $payload = $this->buildGuruMapelRecapPayload($teacher, $request);
 
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
         $pdf = Pdf::loadView('guru.reports.pdf.mapel-recap', $payload)
             ->setPaper('a4', 'landscape');
 
@@ -488,6 +651,10 @@ class ReportController extends Controller
         }
 
         $payload = $this->buildGuruMapelRecapPayload($teacher, $request);
+
+        if ($response = $this->guardCollectionExportLimit($request, $payload['rows'], 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
 
         return Excel::download(
             new GuruMapelRecapExport($payload['rows'], $payload['totals'], $payload['periodLabel'], $teacher),
@@ -587,7 +754,13 @@ class ReportController extends Controller
 
     public function teacherAttendancePdf(Request $request)
     {
-        $rows = $this->buildTeacherAttendanceQuery($request)->get();
+        $query = $this->buildTeacherAttendanceQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.teacher-attendance', [
             'rows' => $rows,
@@ -600,7 +773,13 @@ class ReportController extends Controller
 
     public function teacherAttendanceExcel(Request $request)
     {
-        $rows = $this->buildTeacherAttendanceQuery($request)->get();
+        $query = $this->buildTeacherAttendanceQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         return Excel::download(
             new TeacherAttendanceReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
@@ -610,7 +789,13 @@ class ReportController extends Controller
 
     public function studentAttendancePdf(Request $request)
     {
-        $rows = $this->buildStudentAttendanceQuery($request)->get();
+        $query = $this->buildStudentAttendanceQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.student-attendance', [
             'rows' => $rows,
@@ -623,7 +808,13 @@ class ReportController extends Controller
 
     public function studentAttendanceExcel(Request $request)
     {
-        $rows = $this->buildStudentAttendanceQuery($request)->get();
+        $query = $this->buildStudentAttendanceQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         return Excel::download(
             new StudentAttendanceReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
@@ -633,14 +824,11 @@ class ReportController extends Controller
 
     public function teacherAgenda(Request $request)
     {
-        $rows = $this->buildTeacherAgendaQuery($request)->get();
-
-        $teachers = Teacher::orderBy('nama_lengkap')->get();
-        $majors = Major::orderBy('nama_jurusan')->get();
-        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+        $teachers = $this->getReportTeachers();
+        $majors = $this->getReportMajors();
+        $classrooms = $this->getReportClassrooms();
 
         return view('admin.reports.teacher-agenda', [
-            'rows' => $rows,
             'teachers' => $teachers,
             'majors' => $majors,
             'classrooms' => $classrooms,
@@ -649,9 +837,93 @@ class ReportController extends Controller
         ]);
     }
 
+    public function teacherAgendaDatatable(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = max((int) $request->input('start', 0), 0);
+        $length = max(min((int) $request->input('length', 10), 100), 10);
+
+        $query = $this->buildTeacherAgendaQuery($request);
+        $recordsTotal = (clone $query)->count();
+
+        $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('teacher_attendances.status', 'like', "%{$searchValue}%")
+                    ->orWhere('teacher_attendances.kehadiran_guru', 'like', "%{$searchValue}%")
+                    ->orWhere('teacher_attendances.materi_pembelajaran', 'like', "%{$searchValue}%")
+                    ->orWhere('teacher_attendances.tugas_deskripsi', 'like', "%{$searchValue}%")
+                    ->orWhereDate('teacher_attendances.tanggal', $searchValue)
+                    ->orWhereHas('teacher', function ($teacherQuery) use ($searchValue) {
+                        $teacherQuery->where('nama_lengkap', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('subject', function ($subjectQuery) use ($searchValue) {
+                        $subjectQuery->where('nama_mapel', 'like', "%{$searchValue}%");
+                    })
+                    ->orWhereHas('classroom', function ($classroomQuery) use ($searchValue) {
+                        $classroomQuery->where('nama_kelas', 'like', "%{$searchValue}%");
+                    });
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 1);
+        $orderDirection = strtolower((string) data_get($request->input('order', []), '0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $columnOrderMap = [
+            1 => 'teacher_attendances.tanggal',
+            7 => 'teacher_attendances.kehadiran_guru',
+            9 => 'teacher_attendances.status',
+        ];
+        $orderColumn = $columnOrderMap[$orderColumnIndex] ?? 'teacher_attendances.id';
+
+        $rows = $query
+            ->reorder()
+            ->orderBy($orderColumn, $orderDirection)
+            ->orderByDesc('teacher_attendances.id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $data = $rows->values()->map(function (TeacherAttendance $item, int $index) use ($start) {
+            $tugas = '-';
+
+            if (!empty($item->tugas_file_path)) {
+                $tugas = 'Ada File';
+            } elseif (!empty($item->tugas_deskripsi)) {
+                $tugas = \Illuminate\Support\Str::limit($item->tugas_deskripsi, 40);
+            }
+
+            return [
+                'no' => $start + $index + 1,
+                'tanggal' => (string) ($item->tanggal ?? '-'),
+                'guru' => (string) ($item->teacher->nama_lengkap ?? '-'),
+                'mapel' => (string) ($item->subject->nama_mapel ?? '-'),
+                'kelas' => (string) ($item->classroom->nama_kelas ?? '-'),
+                'materi' => (string) ($item->materi_pembelajaran ?? '-'),
+                'kehadiran_guru' => (string) ($item->kehadiran_guru ?? 'Hadir'),
+                'tugas' => $tugas,
+                'status' => (string) ($item->status ?? '-'),
+            ];
+        })->all();
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
     public function teacherAgendaPdf(Request $request)
     {
-        $rows = $this->buildTeacherAgendaQuery($request)->get();
+        $query = $this->buildTeacherAgendaQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.teacher-agenda', [
             'rows' => $rows,
@@ -664,7 +936,13 @@ class ReportController extends Controller
 
     public function teacherAgendaExcel(Request $request)
     {
-        $rows = $this->buildTeacherAgendaQuery($request)->get();
+        $query = $this->buildTeacherAgendaQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         return Excel::download(
             new TeacherAgendaReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
@@ -675,7 +953,7 @@ class ReportController extends Controller
     public function teacherLeave(Request $request)
     {
         $rows = $this->buildTeacherLeaveQuery($request)->get();
-        $teachers = Teacher::orderBy('nama_lengkap')->get();
+        $teachers = $this->getReportTeachers();
 
         return view('admin.reports.teacher-leave', [
             'rows' => $rows,
@@ -687,7 +965,13 @@ class ReportController extends Controller
 
     public function teacherLeavePdf(Request $request)
     {
-        $rows = $this->buildTeacherLeaveQuery($request)->get();
+        $query = $this->buildTeacherLeaveQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.teacher-leave', [
             'rows' => $rows,
@@ -700,7 +984,13 @@ class ReportController extends Controller
 
     public function teacherLeaveExcel(Request $request)
     {
-        $rows = $this->buildTeacherLeaveQuery($request)->get();
+        $query = $this->buildTeacherLeaveQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         return Excel::download(
             new TeacherLeaveReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
@@ -711,8 +1001,8 @@ class ReportController extends Controller
     public function studentLeave(Request $request)
     {
         $rows = $this->buildStudentLeaveQuery($request)->get();
-        $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
-        $classrooms = Classroom::with('major')->orderBy('nama_kelas')->get();
+        $students = $this->getReportStudents();
+        $classrooms = $this->getReportClassrooms();
 
         return view('admin.reports.student-leave', [
             'rows' => $rows,
@@ -725,7 +1015,13 @@ class ReportController extends Controller
 
     public function studentLeavePdf(Request $request)
     {
-        $rows = $this->buildStudentLeaveQuery($request)->get();
+        $query = $this->buildStudentLeaveQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'PDF', self::PDF_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.student-leave', [
             'rows' => $rows,
@@ -738,7 +1034,13 @@ class ReportController extends Controller
 
     public function studentLeaveExcel(Request $request)
     {
-        $rows = $this->buildStudentLeaveQuery($request)->get();
+        $query = $this->buildStudentLeaveQuery($request);
+
+        if ($response = $this->guardQueryExportLimit($request, $query, 'Excel', self::EXCEL_EXPORT_MAX_ROWS)) {
+            return $response;
+        }
+
+        $rows = $query->get();
 
         return Excel::download(
             new StudentLeaveReportExport($rows, $request->all(), $this->buildPeriodLabel($request)),
@@ -748,12 +1050,29 @@ class ReportController extends Controller
 
     private function buildTeacherAttendanceQuery(Request $request)
     {
-        $query = TeacherAttendance::with([
-            'teacher',
-            'subject',
-            'classroom.major',
-            'attendanceDetails',
-        ])->orderByDesc('tanggal')->orderByDesc('id');
+        $query = TeacherAttendance::query()
+            ->select([
+                'id',
+                'tanggal',
+                'teacher_id',
+                'subject_id',
+                'classroom_id',
+                'pertemuan',
+                'status',
+                'materi_pembelajaran',
+                'kehadiran_guru',
+                'tugas_file_path',
+                'tugas_deskripsi',
+            ])
+            ->with([
+                'teacher:id,nama_lengkap',
+                'subject:id,nama_mapel',
+                'classroom:id,nama_kelas,major_id',
+                'classroom.major:id,nama_jurusan',
+            ])
+            ->withCount('attendanceDetails')
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id');
 
         [$startDate, $endDate] = $this->resolveDateRange($request);
 
@@ -780,11 +1099,24 @@ class ReportController extends Controller
 
     private function buildTeacherAttendanceRecognitionQuery(Request $request)
     {
-        $query = TeacherAttendance::with([
-            'teacher',
-            'subject',
-            'classroom.major',
-        ])->withCount('attendanceDetails')
+        $query = TeacherAttendance::query()
+            ->select([
+                'id',
+                'tanggal',
+                'teacher_id',
+                'subject_id',
+                'classroom_id',
+                'status',
+                'kehadiran_guru',
+                'foto_guru_path',
+            ])
+            ->with([
+                'teacher:id,nama_lengkap',
+                'subject:id,nama_mapel',
+                'classroom:id,nama_kelas,major_id',
+                'classroom.major:id,nama_jurusan',
+            ])
+            ->withCount('attendanceDetails')
             ->orderByDesc('tanggal')
             ->orderByDesc('id');
 
@@ -852,7 +1184,9 @@ class ReportController extends Controller
             abort(404);
         }
 
-        $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
+        $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)
+            ->where('teacher_id', $teacher->id)
+            ->get();
 
         $rows = $baseRows->map(function (TeacherAttendance $item) {
             return [
@@ -863,7 +1197,6 @@ class ReportController extends Controller
 
         $sessionRows = $rows
             ->filter($typeConfig[$type]['predicate'])
-            ->filter(fn($row) => (int) ($row['item']->teacher_id ?? 0) === (int) $teacher->id)
             ->values()
             ->map(function ($row) {
                 return [
@@ -982,7 +1315,23 @@ class ReportController extends Controller
             });
         }
 
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
         return $query;
+    }
+
+    private function hasTeacherAttendanceFilter(Request $request): bool
+    {
+        return $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id'])
+            && (bool) array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id']));
+    }
+
+    private function hasStudentAttendanceFilter(Request $request): bool
+    {
+        return $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status'])
+            && (bool) array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status']));
     }
 
     private function resolveDateRange(Request $request): array
@@ -1040,5 +1389,81 @@ class ReportController extends Controller
         }
 
         return 'Semua Periode';
+    }
+
+    private function getReportTeachers(): Collection
+    {
+        return Cache::remember('reports:filters:teachers', now()->addMinutes(15), function () {
+            return Teacher::query()
+                ->select('id', 'nama_lengkap')
+                ->orderBy('nama_lengkap')
+                ->get();
+        });
+    }
+
+    private function getReportMajors(): Collection
+    {
+        return Cache::remember('reports:filters:majors', now()->addMinutes(15), function () {
+            return Major::query()
+                ->select('id', 'nama_jurusan')
+                ->orderBy('nama_jurusan')
+                ->get();
+        });
+    }
+
+    private function getReportClassrooms(): Collection
+    {
+        return Cache::remember('reports:filters:classrooms', now()->addMinutes(15), function () {
+            return Classroom::query()
+                ->select('id', 'nama_kelas', 'major_id')
+                ->with(['major:id,nama_jurusan'])
+                ->orderBy('nama_kelas')
+                ->get();
+        });
+    }
+
+    private function getReportStudents(): Collection
+    {
+        return Cache::remember('reports:filters:students', now()->addMinutes(15), function () {
+            return Student::query()
+                ->select('id', 'nama_lengkap', 'classroom_id')
+                ->with(['classroom:id,nama_kelas'])
+                ->orderBy('nama_lengkap')
+                ->get();
+        });
+    }
+
+    private function guardQueryExportLimit(Request $request, $query, string $format, int $maxRows)
+    {
+        $totalRows = (clone $query)->count();
+
+        if ($totalRows <= $maxRows) {
+            return null;
+        }
+
+        return redirect()->back()->withInput($request->query())->with(
+            'error',
+            sprintf(
+                'Export %s dibatasi maksimal %d baris per file. Silakan persempit filter periode/guru/kelas terlebih dahulu.',
+                $format,
+                $maxRows
+            )
+        );
+    }
+
+    private function guardCollectionExportLimit(Request $request, Collection $rows, string $format, int $maxRows)
+    {
+        if ($rows->count() <= $maxRows) {
+            return null;
+        }
+
+        return redirect()->back()->withInput($request->query())->with(
+            'error',
+            sprintf(
+                'Export %s dibatasi maksimal %d baris per file. Silakan persempit filter periode/guru/kelas terlebih dahulu.',
+                $format,
+                $maxRows
+            )
+        );
     }
 }
