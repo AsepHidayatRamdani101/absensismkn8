@@ -57,6 +57,13 @@
 
                     <p class="helper-text mb-4">Proses masuk akan memakan waktu kurang dari satu menit.</p>
 
+                    <div class="version-text version-text-top">
+                        <span class="version-label">Versi Aplikasi</span>
+                        <strong>v{{ config('app_version.version') }}</strong>
+                        <span class="version-separator">-</span>
+                        <span>{{ config('app_version.developer') }}</span>
+                    </div>
+
                     <form method="POST" action="{{ route('login') }}">
                         @csrf
 
@@ -96,10 +103,6 @@
                             </div>
                         @endif
                     </form>
-
-                    <div class="version-text">
-                        Version {{ config('app_version.version') }} - {{ config('app_version.developer') }}
-                    </div>
                 </div>
             </section>
         </div>

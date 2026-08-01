@@ -311,8 +311,27 @@ body.auth-body {
 .version-text {
     margin-top: 14px;
     text-align: center;
-    font-size: 0.92rem;
-    color: #9ca7b8;
+    font-size: 0.9rem;
+    color: #607089;
+}
+
+.version-text-top {
+    margin-top: 0;
+    margin-bottom: 14px;
+    text-align: left;
+    font-size: 0.88rem;
+}
+
+.version-text .version-label {
+    display: inline-block;
+    color: #2f74df;
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+.version-text .version-separator {
+    color: #94a3b8;
+    margin: 0 6px;
 }
 
 .form-line:-webkit-autofill,
