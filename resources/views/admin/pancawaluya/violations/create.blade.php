@@ -1,0 +1,40 @@
+@extends('adminlte::page')
+
+@section('title', 'Tambah Master Pelanggaran')
+@section('plugins.Select2', true)
+
+@section('content_header')
+    <h1>Tambah Master Pelanggaran</h1>
+@stop
+
+@section('content')
+    <div class="card card-primary">
+        <div class="card-header">
+            <h3 class="card-title">Form Master Pelanggaran</h3>
+        </div>
+        <form action="{{ route('pancawaluya.violations.store') }}" method="POST">
+            <div class="card-body">
+                @include('admin.pancawaluya.violations._form', [
+                    'violation' => null,
+                    'selectedMapping' => null,
+                ])
+            </div>
+            <div class="card-footer d-flex justify-content-between">
+                <a href="{{ route('pancawaluya.violations.index') }}" class="btn btn-secondary">Kembali</a>
+                <button type="submit" class="btn btn-primary">Simpan</button>
+            </div>
+        </form>
+    </div>
+@stop
+
+@section('js')
+    <script>
+        $('.select2').select2({
+            width: '100%'
+        });
+    </script>
+@stop
+
+@section('footer')
+    @include('components.app-footer')
+@stop
