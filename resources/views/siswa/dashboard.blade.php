@@ -321,6 +321,12 @@
                         </div>
                     </div>
                     <div class="col-md-4 text-md-right mt-3 mt-md-0">
+                        @if (!empty($student->qr_token))
+                            <div class="mb-2 d-inline-block" style="line-height: 0;">
+                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(120)->margin(1)->generate(route('students.qr.show', ['token' => $student->qr_token])) !!}
+                            </div>
+                        @endif
+                        <br>
                         <a href="{{ route('siswa.identity.edit') }}" class="btn btn-primary">
                             <i class="fas fa-id-card mr-1"></i>
                             Buka Identitas

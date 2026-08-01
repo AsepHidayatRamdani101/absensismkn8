@@ -23,6 +23,12 @@
                 <i class="fas fa-file-pdf"></i>
                 Export PDF Akun
             </a>
+            <a href="{{ $classroomFilter !== '' ? route('students.qr-cards.classroom', request()->query()) : '#' }}"
+                class="btn btn-dark mr-1 {{ $classroomFilter === '' ? 'disabled' : '' }}"
+                @if ($classroomFilter === '') aria-disabled="true" title="Pilih filter kelas terlebih dahulu" @endif>
+                <i class="fas fa-qrcode"></i>
+                Cetak QR Kelas
+            </a>
             <form id="formImportStudents" action="{{ route('students.import') }}" method="POST"
                 enctype="multipart/form-data" class="d-inline-block mr-1">
                 @csrf
@@ -134,6 +140,7 @@
                                 <th>Kelas</th>
                                 <th>Jabatan</th>
                                 <th>No HP</th>
+                                <th>QR</th>
                                 <th width="15%">Aksi</th>
                             </tr>
 
@@ -172,6 +179,20 @@
 
                                     <td>{{ $student->no_hp }}</td>
 
+                                    <td class="text-center">
+                                        @if (!empty($student->qr_token))
+                                            <div class="mb-1" style="display:inline-block; line-height: 0;">
+                                                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(70)->margin(1)->generate(route('students.qr.show', ['token' => $student->qr_token])) !!}
+                                            </div>
+                                            <a href="{{ route('students.qr.show', ['token' => $student->qr_token]) }}"
+                                                target="_blank" class="btn btn-info btn-xs d-block mt-1">
+                                                Lihat
+                                            </a>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+
                                     <td>
 
                                         <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $student->id }}">
@@ -185,6 +206,11 @@
                                             <i class="fas fa-trash"></i>
 
                                         </button>
+
+                                        <a href="{{ route('students.qr-card', $student) }}" target="_blank"
+                                            class="btn btn-dark btn-xs" title="Cetak Kartu QR">
+                                            <i class="fas fa-qrcode"></i>
+                                        </a>
 
                                     </td>
 

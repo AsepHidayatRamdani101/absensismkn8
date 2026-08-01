@@ -27,6 +27,9 @@ Route::get('/', function () {
     return redirect('/dashboard');
 });
 
+Route::get('/scan/siswa/{token}', [StudentController::class, 'showPublicByQr'])
+    ->name('students.qr.show');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 });
@@ -60,6 +63,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('students/template', [StudentController::class, 'template'])->name('students.template');
         Route::get('students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('students/export-accounts-pdf', [StudentController::class, 'exportAccountsPdf'])->name('students.export-accounts-pdf');
+        Route::get('students/qr-card/{student}', [StudentController::class, 'qrCard'])->name('students.qr-card');
+        Route::get('students/qr-cards/classroom', [StudentController::class, 'qrCardsByClassroom'])->name('students.qr-cards.classroom');
         Route::post('students/generate-accounts', [StudentController::class, 'generateAccounts'])->name('students.generate-accounts');
         Route::delete('students/destroy-multiple', [StudentController::class, 'destroyMultiple'])->name('students.destroy-multiple');
         Route::resource('students', StudentController::class)->except(['show', 'create']);

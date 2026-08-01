@@ -8,10 +8,12 @@ use App\Imports\StudentsImport;
 use App\Models\Student;
 use App\Models\Classroom;
 use App\Models\Major;
+use App\Models\SchoolSetting;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -40,6 +42,10 @@ class StudentController extends Controller
         $students = $hasFilter
             ? $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter)
             : collect();
+
+        if ($hasFilter && $students->isNotEmpty()) {
+            $this->ensureQrTokensForCollection($students);
+        }
 
         $majors = Major::orderBy('nama_jurusan')->get();
 
@@ -225,7 +231,69 @@ class StudentController extends Controller
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa untuk akun ini tidak ditemukan.');
         }
 
+        $student->ensureQrToken();
+
         return view('siswa.identity.edit', compact('student'));
+    }
+
+    public function showPublicByQr(string $token)
+    {
+        $student = Student::query()
+            ->with('classroom.major')
+            ->where('qr_token', $token)
+            ->firstOrFail();
+
+        $schoolSetting = SchoolSetting::query()->first();
+
+        return view('public.student-qr-profile', compact('student', 'schoolSetting'));
+    }
+
+    public function qrCard(Student $student)
+    {
+        $student->load('classroom.major');
+        $student->ensureQrToken();
+
+        $schoolSetting = SchoolSetting::query()->first();
+
+        return view('admin.students.qr-card', compact('student', 'schoolSetting'));
+    }
+
+    public function qrCardsByClassroom(Request $request)
+    {
+        $validated = $request->validate([
+            'classroom_id' => 'required|exists:classrooms,id',
+            'major_id' => 'nullable|exists:majors,id',
+        ]);
+
+        $classroom = Classroom::query()
+            ->with('major')
+            ->findOrFail((int) $validated['classroom_id']);
+
+        if (!empty($validated['major_id']) && (int) $validated['major_id'] !== (int) $classroom->major_id) {
+            return redirect()->route('students.index', $request->query())->with(
+                'error',
+                'Kelas tidak sesuai dengan filter jurusan yang dipilih.'
+            );
+        }
+
+        $students = Student::query()
+            ->with('classroom.major')
+            ->where('classroom_id', $classroom->id)
+            ->orderBy('nama_lengkap')
+            ->get();
+
+        if ($students->isEmpty()) {
+            return redirect()->route('students.index', $request->query())->with(
+                'error',
+                'Tidak ada data siswa pada kelas terpilih.'
+            );
+        }
+
+        $this->ensureQrTokensForCollection($students);
+
+        $schoolSetting = SchoolSetting::query()->first();
+
+        return view('admin.students.qr-cards-classroom', compact('students', 'classroom', 'schoolSetting'));
     }
 
     public function import(Request $request)
@@ -458,5 +526,12 @@ class StudentController extends Controller
         });
 
         return $students;
+    }
+
+    private function ensureQrTokensForCollection(Collection $students): void
+    {
+        $students
+            ->filter(fn(Student $student) => empty($student->qr_token))
+            ->each(fn(Student $student) => $student->ensureQrToken());
     }
 }

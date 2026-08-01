@@ -277,6 +277,10 @@ class DashboardController extends Controller
             ->orWhere('nis', $user->email)
             ->first();
 
+        if ($student) {
+            $student->ensureQrToken();
+        }
+
         $statusCountsMonth = [
             'Hadir' => 0,
             'Sakit' => 0,

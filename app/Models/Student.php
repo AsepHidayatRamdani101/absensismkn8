@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Student extends Model
 {
@@ -36,12 +37,46 @@ class Student extends Model
         'tinggi_badan',
         'berat_badan',
         'foto',
+        'qr_token',
     ];
 
     protected $casts = [
         'tinggi_badan' => 'decimal:2',
         'berat_badan' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $student): void {
+            if (!empty($student->qr_token)) {
+                return;
+            }
+
+            $student->qr_token = (string) Str::uuid();
+        });
+    }
+
+    public function ensureQrToken(): string
+    {
+        if (!empty($this->qr_token)) {
+            return (string) $this->qr_token;
+        }
+
+        do {
+            $token = (string) Str::uuid();
+        } while (self::query()->where('qr_token', $token)->exists());
+
+        // Persist only qr_token so transient attributes (e.g. username_akun, has_account)
+        // from list views never leak into SQL update statements.
+        self::query()
+            ->whereKey($this->getKey())
+            ->update(['qr_token' => $token]);
+
+        $this->setAttribute('qr_token', $token);
+        $this->syncOriginalAttribute('qr_token');
+
+        return $token;
+    }
 
     public function canSubmitTeacherAttendance(): bool
     {

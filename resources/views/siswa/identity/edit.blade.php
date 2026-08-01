@@ -86,6 +86,18 @@
                         <div class="progress-bar {{ $identityCompletion === 100 ? 'bg-success' : 'bg-warning' }}"
                             style="width: {{ $identityCompletion }}%"></div>
                     </div>
+
+                    @if (!empty($student->qr_token))
+                        <hr>
+                        <p class="mb-2"><strong>QR Identitas Siswa</strong></p>
+                        <div class="text-center mb-2" style="line-height: 0;">
+                            {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(180)->margin(1)->generate(route('students.qr.show', ['token' => $student->qr_token])) !!}
+                        </div>
+                        <a href="{{ route('students.qr.show', ['token' => $student->qr_token]) }}" target="_blank"
+                            class="btn btn-outline-primary btn-sm btn-block">
+                            Buka Halaman Hasil Scan
+                        </a>
+                    @endif
                 </div>
             </div>
         </div>
