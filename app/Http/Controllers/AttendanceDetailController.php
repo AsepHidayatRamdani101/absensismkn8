@@ -1172,8 +1172,13 @@ class AttendanceDetailController extends Controller
 
         $this->forgetGuruAttendanceSummaryCache($today->toDateString());
 
-        return redirect()->route('guru.attendance-details.index', ['classroom_id' => $classroomId])
-            ->with('success', 'Status absensi siswa berhasil disimpan.');
+        return redirect()->route('guru.attendance-details.index', [
+            'tanggal' => $today->toDateString(),
+            'classroom_id' => $classroomId,
+        ])
+            ->with('success', 'Status absensi siswa berhasil disimpan.')
+            ->with('offer_agenda_redirect', true)
+            ->with('agenda_redirect_url', route('guru.agenda.index'));
     }
 
     public function submitForOfficer(Request $request, Student $student)
@@ -1521,8 +1526,13 @@ class AttendanceDetailController extends Controller
 
         $this->forgetGuruAttendanceSummaryCache($today->toDateString());
 
-        return redirect()->route('guru.attendance-details.index', ['classroom_id' => $selectedClassroomId])
-            ->with('success', $message);
+        return redirect()->route('guru.attendance-details.index', [
+            'tanggal' => $today->toDateString(),
+            'classroom_id' => $selectedClassroomId,
+        ])
+            ->with('success', $message)
+            ->with('offer_agenda_redirect', true)
+            ->with('agenda_redirect_url', route('guru.agenda.index'));
     }
 
     public function submitBulkForOfficer(Request $request)

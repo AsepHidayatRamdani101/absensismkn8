@@ -46,6 +46,31 @@ class PancawaluyaPermissionSeeder extends Seeder
 
             'pancawaluya.mapping.manage',
             'pancawaluya.sp.generate',
+
+            'pancawaluya.transaction.reward.view',
+            'pancawaluya.transaction.reward.create',
+            'pancawaluya.transaction.reward.update',
+            'pancawaluya.transaction.reward.delete',
+            'pancawaluya.transaction.reward.restore',
+            'pancawaluya.transaction.reward.force-delete',
+            'pancawaluya.transaction.reward.approve',
+            'pancawaluya.transaction.reward.validate',
+            'pancawaluya.transaction.reward.export',
+            'pancawaluya.transaction.reward.import',
+
+            'pancawaluya.transaction.violation.view',
+            'pancawaluya.transaction.violation.create',
+            'pancawaluya.transaction.violation.update',
+            'pancawaluya.transaction.violation.delete',
+            'pancawaluya.transaction.violation.restore',
+            'pancawaluya.transaction.violation.force-delete',
+            'pancawaluya.transaction.violation.approve',
+            'pancawaluya.transaction.violation.validate',
+            'pancawaluya.transaction.violation.export',
+            'pancawaluya.transaction.violation.import',
+
+            'pancawaluya.transaction.history.view',
+            'pancawaluya.transaction.history.export',
         ];
 
         foreach ($permissions as $name) {
@@ -58,19 +83,64 @@ class PancawaluyaPermissionSeeder extends Seeder
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin->givePermissionTo($permissions);
 
-        $readPermissions = [
+        $masterReadPermissions = [
             'pancawaluya.reward-category.view',
             'pancawaluya.reward.view',
             'pancawaluya.violation-category.view',
             'pancawaluya.violation.view',
         ];
 
-        foreach (['guru', 'wali_kelas', 'bk', 'kesiswaan'] as $roleName) {
-            $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
-            $role->syncPermissions($readPermissions);
-        }
+        $guru = Role::firstOrCreate(['name' => 'guru', 'guard_name' => 'web']);
+        $guru->syncPermissions(array_merge($masterReadPermissions, [
+            'pancawaluya.transaction.reward.view',
+            'pancawaluya.transaction.reward.create',
+            'pancawaluya.transaction.reward.update',
+        ]));
+
+        $waliKelas = Role::firstOrCreate(['name' => 'wali_kelas', 'guard_name' => 'web']);
+        $waliKelas->syncPermissions(array_merge($masterReadPermissions, [
+            'pancawaluya.transaction.reward.view',
+            'pancawaluya.transaction.reward.create',
+            'pancawaluya.transaction.reward.update',
+            'pancawaluya.transaction.violation.view',
+            'pancawaluya.transaction.violation.create',
+            'pancawaluya.transaction.violation.update',
+            'pancawaluya.transaction.history.view',
+        ]));
+
+        $kesiswaan = Role::firstOrCreate(['name' => 'kesiswaan', 'guard_name' => 'web']);
+        $kesiswaan->syncPermissions(array_merge($masterReadPermissions, [
+            'pancawaluya.transaction.reward.view',
+            'pancawaluya.transaction.reward.create',
+            'pancawaluya.transaction.reward.update',
+            'pancawaluya.transaction.reward.delete',
+            'pancawaluya.transaction.reward.validate',
+            'pancawaluya.transaction.reward.export',
+            'pancawaluya.transaction.reward.import',
+            'pancawaluya.transaction.violation.view',
+            'pancawaluya.transaction.violation.create',
+            'pancawaluya.transaction.violation.update',
+            'pancawaluya.transaction.violation.delete',
+            'pancawaluya.transaction.violation.validate',
+            'pancawaluya.transaction.violation.export',
+            'pancawaluya.transaction.violation.import',
+            'pancawaluya.transaction.history.view',
+            'pancawaluya.transaction.history.export',
+        ]));
+
+        $bk = Role::firstOrCreate(['name' => 'bk', 'guard_name' => 'web']);
+        $bk->syncPermissions([
+            'pancawaluya.reward-category.view',
+            'pancawaluya.reward.view',
+            'pancawaluya.violation-category.view',
+            'pancawaluya.violation.view',
+            'pancawaluya.transaction.violation.view',
+            'pancawaluya.transaction.history.view',
+        ]);
 
         $student = Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
-        $student->syncPermissions([]);
+        $student->syncPermissions([
+            'pancawaluya.transaction.history.view',
+        ]);
     }
 }

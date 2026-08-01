@@ -73,6 +73,38 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'audit' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/audit.log'),
+            'level' => env('LOG_AUDIT_LEVEL', 'info'),
+            'days' => env('LOG_AUDIT_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_SECURITY_LEVEL', 'warning'),
+            'days' => env('LOG_SECURITY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => env('LOG_PERFORMANCE_LEVEL', 'info'),
+            'days' => env('LOG_PERFORMANCE_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'queue_ops' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/queue.log'),
+            'level' => env('LOG_QUEUE_LEVEL', 'info'),
+            'days' => env('LOG_QUEUE_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
@@ -89,7 +121,7 @@ return [
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
                 'port' => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://' . env('PAPERTRAIL_URL') . ':' . env('PAPERTRAIL_PORT'),
             ],
             'processors' => [PsrLogMessageProcessor::class],
         ],

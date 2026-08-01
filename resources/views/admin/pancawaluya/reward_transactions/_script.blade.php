@@ -1,0 +1,292 @@
+<script>
+    $(function() {
+        $('.select2').select2({
+            width: '100%'
+        });
+
+        const studentSelect = $('#studentSelect');
+        if (studentSelect.length) {
+            studentSelect.select2({
+                width: '100%',
+                ajax: {
+                    url: "{{ route('pancawaluya.reward-transactions.students.options') }}",
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || ''
+                        };
+                    },
+                    processResults: function(data) {
+                        return data;
+                    }
+                },
+                placeholder: 'Cari NIS/Nama/Kelas/Jurusan',
+                minimumInputLength: 1
+            });
+
+            @if (!empty($row?->student))
+                const selectedStudent = {
+                    id: "{{ $row->student->id }}",
+                    text: "{{ $row->student->nis }} - {{ $row->student->nama_lengkap }} ({{ $row->classroom?->nama_kelas ?? '-' }})",
+                    classroom_id: "{{ $row->classroom_id }}"
+                };
+                const option = new Option(selectedStudent.text, selectedStudent.id, true, true);
+                studentSelect.append(option).trigger('change');
+                $('#classroomIdHidden').val(selectedStudent.classroom_id);
+            @endif
+
+            studentSelect.on('select2:select', function(e) {
+                $('#classroomIdHidden').val(e.params.data.classroom_id || '');
+            });
+        }
+
+        const rewardItemSelect = $('#rewardItemSelect');
+        if (rewardItemSelect.length) {
+            rewardItemSelect.on('change', function() {
+                const itemId = $(this).val();
+                if (!itemId) {
+                    $('#pointPreview').val('');
+                    $('#weightPreview').val('');
+                    $('#dimensionPreview').html('-');
+                    return;
+                }
+
+                $.get("{{ route('pancawaluya.reward-transactions.reward-item-preview') }}", {
+                        reward_item_id: itemId
+                    })
+                    .done(function(resp) {
+                        $('#rewardCategorySelect').val(resp.category_id).trigger('change.select2');
+                        $('#pointPreview').val(resp.point);
+                        $('#weightPreview').val(resp.weight_total);
+
+                        const rows = (resp.dimensions || []).map(function(dimension) {
+                            return `<div class="d-flex justify-content-between border-bottom py-1">
+                                <span>${dimension.dimension_name}</span>
+                                <span>W: ${dimension.weight} | P: ${dimension.point} | WP: ${dimension.weighted_point}</span>
+                            </div>`;
+                        }).join('');
+
+                        $('#dimensionPreview').html(rows || '-');
+                    });
+            });
+
+            @if (old('reward_item_id', $row->reward_item_id ?? false))
+                rewardItemSelect.trigger('change');
+            @endif
+        }
+
+        const tableEl = $('#tableRewardTransactions');
+        if (!tableEl.length) {
+            return;
+        }
+
+        const table = tableEl.DataTable({
+            processing: true,
+            serverSide: true,
+            responsive: true,
+            ajax: {
+                url: "{{ route('pancawaluya.reward-transactions.datatable') }}",
+                data: function(data) {
+                    data.academic_year_id = $('#filterAcademicYear').val();
+                    data.semester = $('#filterSemester').val();
+                    data.classroom_id = $('#filterClassroom').val();
+                    data.category_id = $('#filterCategory').val();
+                    data.item_id = $('#filterItem').val();
+                    data.status = $('#filterStatus').val();
+                    data.only_trashed = $('#filterTrashed').is(':checked') ? 1 : 0;
+                }
+            },
+            order: [
+                [1, 'desc']
+            ],
+            columns: [{
+                    data: 'checkbox',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'no',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'date'
+                },
+                {
+                    data: 'student'
+                },
+                {
+                    data: 'class'
+                },
+                {
+                    data: 'category'
+                },
+                {
+                    data: 'item'
+                },
+                {
+                    data: 'point'
+                },
+                {
+                    data: 'dimensions'
+                },
+                {
+                    data: 'source'
+                },
+                {
+                    data: 'creator'
+                },
+                {
+                    data: 'status'
+                },
+                {
+                    data: 'actions',
+                    orderable: false,
+                    searchable: false
+                },
+            ],
+            columnDefs: [{
+                    targets: [0, 11, 12],
+                    className: 'text-center'
+                },
+                {
+                    targets: [0, 11, 12],
+                    render: function(data) {
+                        return data;
+                    }
+                },
+            ],
+        });
+
+        $('#filterAcademicYear, #filterSemester, #filterClassroom, #filterCategory, #filterItem, #filterStatus, #filterTrashed')
+            .on('change', function() {
+                table.ajax.reload();
+            });
+
+        function selectedIds() {
+            return $('.check-item:checked').map(function() {
+                return $(this).val();
+            }).get();
+        }
+
+        function updateBulkButtons() {
+            const total = selectedIds().length;
+            const trashed = $('#filterTrashed').is(':checked');
+            $('#btnDeleteSelected').toggleClass('d-none', total === 0 || trashed);
+            $('#btnRestoreSelected').toggleClass('d-none', total === 0 || !trashed);
+        }
+
+        $('#checkAll').on('change', function() {
+            $('.check-item').prop('checked', this.checked);
+            updateBulkButtons();
+        });
+
+        $(document).on('change', '.check-item', updateBulkButtons);
+
+        $(document).on('click', '.btn-delete', function() {
+            const id = $(this).data('id');
+            Swal.fire({
+                title: 'Hapus transaksi?',
+                icon: 'warning',
+                showCancelButton: true
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                $.post("{{ url('pancawaluya/reward-transactions') }}/" + id, {
+                    _token: '{{ csrf_token() }}',
+                    _method: 'DELETE'
+                }).done(function(resp) {
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                });
+            });
+        });
+
+        $(document).on('click', '.btn-restore', function() {
+            const id = $(this).data('id');
+            $.post("{{ url('pancawaluya/reward-transactions') }}/" + id + '/restore', {
+                _token: '{{ csrf_token() }}'
+            }).done(function(resp) {
+                Swal.fire('Berhasil', resp.message, 'success');
+                table.ajax.reload();
+            });
+        });
+
+        $(document).on('click', '.btn-force-delete', function() {
+            const id = $(this).data('id');
+            Swal.fire({
+                title: 'Hapus permanen?',
+                icon: 'warning',
+                showCancelButton: true
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                $.post("{{ url('pancawaluya/reward-transactions') }}/" + id +
+                '/force-delete', {
+                    _token: '{{ csrf_token() }}',
+                    _method: 'DELETE'
+                }).done(function(resp) {
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                });
+            });
+        });
+
+        $('#btnDeleteSelected').on('click', function() {
+            const ids = selectedIds();
+            if (!ids.length) return;
+            $.post("{{ route('pancawaluya.reward-transactions.bulk-delete') }}", {
+                    _token: '{{ csrf_token() }}',
+                    ids: ids
+                })
+                .done(function(resp) {
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                });
+        });
+
+        $('#btnRestoreSelected').on('click', function() {
+            const ids = selectedIds();
+            if (!ids.length) return;
+            $.post("{{ route('pancawaluya.reward-transactions.bulk-restore') }}", {
+                    _token: '{{ csrf_token() }}',
+                    ids: ids
+                })
+                .done(function(resp) {
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                });
+        });
+
+        $('.btn-import').on('click', function() {
+            const form = $(this).closest('form');
+            const fileInput = form.find('.input-import-file');
+            const previewInput = form.find('.input-import-preview');
+
+            fileInput.off('change.importMode').on('change.importMode', function() {
+                if (this.files.length === 0) return;
+                Swal.fire({
+                    title: 'Pilih mode import',
+                    text: 'Gunakan Preview untuk validasi sebelum commit data.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'Import Sekarang',
+                    denyButtonText: 'Preview Dulu',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        previewInput.val('0');
+                        form.submit();
+                    } else if (result.isDenied) {
+                        previewInput.val('1');
+                        form.submit();
+                    } else {
+                        fileInput.val('');
+                    }
+                });
+            });
+
+            fileInput.trigger('click');
+        });
+    });
+</script>

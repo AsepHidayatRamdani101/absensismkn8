@@ -86,31 +86,6 @@
         .table-clean td {
             vertical-align: middle;
         }
-
-        .app-info-card {
-            border-radius: 0.85rem;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 0.35rem 1rem rgba(33, 37, 41, 0.07);
-        }
-
-        .app-info-title {
-            font-size: 1.05rem;
-            font-weight: 700;
-            margin-bottom: 0.45rem;
-            color: #343a40;
-        }
-
-        .app-info-text {
-            margin-bottom: 0.25rem;
-            color: #495057;
-            line-height: 1.55;
-        }
-
-        .contact-wa-btn {
-            border-radius: 999px;
-            padding: 0.5rem 0.95rem;
-            font-weight: 600;
-        }
     </style>
 @stop
 
@@ -120,83 +95,31 @@
             <h1 class="mb-0">Dashboard Admin</h1>
             <p class="dashboard-subtitle">Ringkasan performa sistem absensi sekolah</p>
         </div>
+        <div class="d-flex flex-wrap align-items-center" style="gap:.5rem;">
+            <a href="{{ route('admin.dashboard.dss', ['mode' => $mode ?? 'ringkas']) }}"
+                class="btn btn-sm btn-outline-secondary">
+                Dashboard Pancawaluya
+            </a>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode tampilan dashboard admin">
+                <a href="{{ route('admin.dashboard', ['mode' => 'ringkas']) }}"
+                    class="btn {{ ($mode ?? 'ringkas') === 'ringkas' ? 'btn-primary' : 'btn-outline-primary' }}">
+                    Ringkas
+                </a>
+                <a href="{{ route('admin.dashboard', ['mode' => 'detail']) }}"
+                    class="btn {{ ($mode ?? 'ringkas') === 'detail' ? 'btn-primary' : 'btn-outline-primary' }}">
+                    Detail
+                </a>
+            </div>
+        </div>
     </div>
 @stop
 
 @section('content')
-    <div class="card app-info-card mb-3">
-        <div class="card-body py-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                <div class="pr-md-3 mb-3 mb-md-0">
-                    <h2 class="app-info-title">Tentang Aplikasi</h2>
-                    <p class="app-info-text">Aplikasi ini digunakan untuk manajemen absensi sekolah, mencakup absensi guru,
-                        absensi siswa oleh guru, absensi siswa berbasis IoT, serta absensi guru oleh siswa pengurus kelas
-                        (KM, Sekretaris, dan Bendahara) agar monitoring kehadiran lebih terintegrasi.</p>
-                    <p class="app-info-text mb-0"><strong>Deploy by:</strong> Asep Hidayat Ramdani, S.T.</p>
-                </div>
-                <div>
-                    <a href="https://wa.me/6282126574516?text=Halo%20Pak%20Asep%2C%20saya%20membutuhkan%20bantuan%20terkait%20aplikasi%20absensi%20sekolah."
-                        target="_blank" rel="noopener" class="btn btn-success contact-wa-btn">
-                        <i class="fab fa-whatsapp mr-1"></i>
-                        Hubungi 082126574516
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    @php
+        $isDetail = ($mode ?? 'ringkas') === 'detail';
+    @endphp
 
-    <p class="section-title">Master Data</p>
-    <div class="row">
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-info stat-card">
-                <div class="inner">
-                    <h3>{{ $totalStudents }}</h3>
-                    <p>Total Siswa</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-user-graduate"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-success stat-card">
-                <div class="inner">
-                    <h3>{{ $totalTeachers }}</h3>
-                    <p>Total Guru</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-chalkboard-teacher"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-warning stat-card">
-                <div class="inner">
-                    <h3>{{ $totalClassrooms }}</h3>
-                    <p>Total Kelas</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-school"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-danger stat-card">
-                <div class="inner">
-                    <h3>{{ $totalMajors }}</h3>
-                    <p>Total Jurusan</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <p class="section-title mt-2">Aktivitas Absensi Hari Ini</p>
+    <p class="section-title">Aktivitas Absensi Hari Ini</p>
     <div class="row">
         <div class="col-lg-3 col-6">
             <div class="small-box bg-primary stat-card">
@@ -242,6 +165,57 @@
                 </div>
                 <div class="icon">
                     <i class="fas fa-satellite-dish"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="section-title mt-2">Master Data</p>
+    <div class="row">
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-info stat-card">
+                <div class="inner">
+                    <h3>{{ $totalStudents }}</h3>
+                    <p>Total Siswa</p>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-success stat-card">
+                <div class="inner">
+                    <h3>{{ $totalTeachers }}</h3>
+                    <p>Total Guru</p>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-warning stat-card">
+                <div class="inner">
+                    <h3>{{ $totalClassrooms }}</h3>
+                    <p>Total Kelas</p>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-school"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-danger stat-card">
+                <div class="inner">
+                    <h3>{{ $totalMajors }}</h3>
+                    <p>Total Jurusan</p>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-graduation-cap"></i>
                 </div>
             </div>
         </div>
@@ -335,296 +309,100 @@
         </div>
     </div>
 
-    <p class="section-title mt-2">Visualisasi</p>
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card card-outline card-primary chart-card">
-                <div class="card-header">
-                    <h3 class="card-title">Tren 7 Hari Terakhir</h3>
-                </div>
-                <div class="card-body">
-                    <canvas id="attendanceTrendChart" height="120"></canvas>
+    @if ($isDetail)
+        <p class="section-title mt-2">Visualisasi</p>
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card card-outline card-primary chart-card">
+                    <div class="card-header">
+                        <h3 class="card-title">Tren 7 Hari Terakhir</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="attendanceTrendChart" height="120"></canvas>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-md-4">
-            <div class="card card-outline card-warning chart-card">
-                <div class="card-header">
-                    <h3 class="card-title">Status Absensi Siswa Hari Ini</h3>
-                </div>
-                <div class="card-body">
-                    <canvas id="studentStatusChart" height="220"></canvas>
+            <div class="col-md-4">
+                <div class="card card-outline card-warning chart-card">
+                    <div class="card-header">
+                        <h3 class="card-title">Status Absensi Siswa Hari Ini</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="studentStatusChart" height="220"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    @endif
 
-    <p class="section-title mt-2">Statistik Tambahan</p>
-    <div class="row">
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-light stat-card">
-                <div class="inner">
-                    <h3>{{ $totalSubjects }}</h3>
-                    <p>Total Mata Pelajaran</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-book"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-lightblue stat-card">
-                <div class="inner">
-                    <h3>{{ $todayStudentAttendanceByTeacher + $todayStudentAttendanceIoT }}</h3>
-                    <p>Total Aktivitas Absensi Siswa Hari Ini</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-gradient-info stat-card">
-                <div class="inner">
-                    <h3>{{ $studentClassOfficers }}</h3>
-                    <p>Total Siswa Pengurus Kelas</p>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-user-shield"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-gradient-indigo stat-card">
-                <div class="inner">
-                    <h3>{{ $todayOfficerAttendanceActions }}</h3>
-                    <p>Absensi Guru oleh Pengurus (Hari Ini)</p>
-                    <small>KM: {{ $ketuaKelasCount }}, Sek: {{ $sekretarisCount }}, Ben: {{ $bendaharaCount }}</small>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-clipboard-check"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-lg-3 col-6">
-            <div class="small-box bg-olive stat-card">
-                <div class="inner">
-                    <h3>{{ $activeUsers }}</h3>
-                    <p>Pengguna Aktif Saat Ini</p>
-                    <small>30 menit terakhir</small>
-                </div>
-                <div class="icon">
-                    <i class="fas fa-user-clock"></i>
-                </div>
-                <a href="{{ route('app-settings.index') }}" class="small-box-footer">
-                    Lihat Setting <i class="fas fa-arrow-circle-right"></i>
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <p class="section-title mt-2">Ranking Kehadiran Bulan Ini</p>
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card card-outline card-success table-card">
-                <div class="card-header">
-                    <h3 class="card-title">Guru Terbanyak Hadir (Bulan Ini)</h3>
-                </div>
-                <div class="card-body p-0 table-responsive">
-                    <table class="table table-sm table-hover table-clean mb-0">
-                        <thead>
-                            <tr>
-                                <th width="10%">No</th>
-                                <th>Nama Guru</th>
-                                <th width="20%" style="text-align: center">Hadir</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($topTeachersPresent as $row)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $row['nama_lengkap'] }}</td>
-                                    <td style="text-align: center">{{ $row['hadir'] }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="3" class="text-center">Belum ada data.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card card-outline card-danger table-card">
-                <div class="card-header">
-                    <h3 class="card-title">Guru Terbanyak Tidak Hadir (Bulan Ini)</h3>
-                </div>
-                <div class="card-body p-0 table-responsive">
-                    <table class="table table-sm table-hover table-clean mb-0">
-                        <thead>
-                            <tr>
-                                <th width="10%">No</th>
-                                <th>Nama Guru</th>
-                                <th width="30%" style="text-align: center">Tidak Hadir</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($topTeachersAbsent as $row)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $row['nama_lengkap'] }}</td>
-                                    <td style="text-align: center">{{ $row['tidak_hadir'] }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="3" class="text-center">Belum ada data.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card card-outline card-info table-card">
-                <div class="card-header">
-                    <h3 class="card-title">Siswa Terbanyak Hadir (Bulan Ini)</h3>
-                </div>
-                <div class="card-body p-0 table-responsive">
-                    <table class="table table-sm table-hover table-clean mb-0">
-                        <thead>
-                            <tr>
-                                <th width="10%">No</th>
-                                <th>Nama Siswa</th>
-                                <th width="20%" style="text-align: center">Hadir</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($topStudentsPresent as $row)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $row->nama_lengkap }}</td>
-                                    <td style="text-align: center">{{ $row->hadir }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="3" class="text-center">Belum ada data.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card card-outline card-warning table-card">
-                <div class="card-header">
-                    <h3 class="card-title">Siswa Terbanyak Tidak Hadir (Bulan Ini)</h3>
-                </div>
-                <div class="card-body p-0 table-responsive">
-                    <table class="table table-sm table-hover table-clean mb-0">
-                        <thead>
-                            <tr>
-                                <th width="10%">No</th>
-                                <th>Nama Siswa</th>
-                                <th width="30%" style="text-align: center">Tidak Hadir</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($topStudentsAbsent as $row)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $row->nama_lengkap }}</td>
-                                    <td style="text-align: center">{{ $row->tidak_hadir }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="3" class="text-center">Belum ada data.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
 @stop
 
 @section('js')
     <script>
         $(function() {
-            const trendCtx = document.getElementById('attendanceTrendChart').getContext('2d');
-            const statusCtx = document.getElementById('studentStatusChart').getContext('2d');
+            const trendCanvas = document.getElementById('attendanceTrendChart');
+            const statusCanvas = document.getElementById('studentStatusChart');
 
-            new Chart(trendCtx, {
-                type: 'line',
-                data: {
-                    labels: @json($dailyLabels),
-                    datasets: [{
-                            label: 'Absensi Guru',
-                            data: @json($dailyTeacherCounts),
-                            borderColor: '#007bff',
-                            backgroundColor: 'rgba(0, 123, 255, 0.15)',
-                            tension: 0.35,
-                            fill: true
-                        },
-                        {
-                            label: 'Siswa Hadir',
-                            data: @json($dailyStudentPresentCounts),
-                            borderColor: '#28a745',
-                            backgroundColor: 'rgba(40, 167, 69, 0.15)',
-                            tension: 0.35,
-                            fill: true
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0
+            if (trendCanvas) {
+                new Chart(trendCanvas.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: @json($dailyLabels ?? []),
+                        datasets: [{
+                                label: 'Absensi Guru',
+                                data: @json($dailyTeacherCounts ?? []),
+                                borderColor: '#007bff',
+                                backgroundColor: 'rgba(0, 123, 255, 0.15)',
+                                tension: 0.35,
+                                fill: true
+                            },
+                            {
+                                label: 'Siswa Hadir',
+                                data: @json($dailyStudentPresentCounts ?? []),
+                                borderColor: '#28a745',
+                                backgroundColor: 'rgba(40, 167, 69, 0.15)',
+                                tension: 0.35,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
                             }
                         }
                     }
-                }
-            });
+                });
+            }
 
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: @json($statusLabels),
-                    datasets: [{
-                        data: @json($statusData),
-                        backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#dc3545', '#6610f2']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+            if (statusCanvas) {
+                new Chart(statusCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: @json($statusLabels ?? []),
+                        datasets: [{
+                            data: @json($statusData ?? []),
+                            backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#dc3545', '#6610f2']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         });
     </script>
 @stop

@@ -449,6 +449,163 @@
 
     </div>
 
+    <div class="cache-card" id="wa-fonnte">
+        <div class="cache-card-header">
+            <span class="card-icon bg-success" style="color:#fff"><i class="fab fa-whatsapp"></i></span>
+            <h6>Konfigurasi WA Fonnte</h6>
+            <span class="card-path">Digunakan untuk pengingat otomatis guru yang belum mengisi absensi siswa dan
+                agenda.</span>
+        </div>
+        <div class="cache-card-body">
+            <div class="alert alert-info py-2 px-3 small mb-3">
+                <i class="fas fa-shield-alt mr-1"></i>
+                Batas keamanan aktif: fitur tes WA dibatasi maksimal 3 kali per menit per admin.
+            </div>
+
+            <form method="POST" action="{{ route('app-settings.fonnte.update') }}">
+                @csrf
+
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-semibold">Aktifkan Integrasi Fonnte</label>
+                        <input type="hidden" name="enabled" value="0">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="enabled" name="enabled"
+                                value="1"
+                                {{ old('enabled', $fonnte['enabled'] ? '1' : '0') === '1' ? 'checked' : '' }}>
+                            <label class="custom-control-label" for="enabled">Aktif</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-semibold">Aktifkan Pengingat Otomatis</label>
+                        <input type="hidden" name="reminder_enabled" value="0">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="reminder_enabled"
+                                name="reminder_enabled" value="1"
+                                {{ old('reminder_enabled', $fonnte['reminder_enabled'] ? '1' : '0') === '1' ? 'checked' : '' }}>
+                            <label class="custom-control-label" for="reminder_enabled">Aktif</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-md-4">
+                        <label for="reminder_time" class="font-weight-semibold">Jam Pengingat</label>
+                        <input type="time" class="form-control @error('reminder_time') is-invalid @enderror"
+                            id="reminder_time" name="reminder_time"
+                            value="{{ old('reminder_time', $fonnte['reminder_time']) }}" required>
+                        @error('reminder_time')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="token" class="font-weight-semibold">Token Fonnte</label>
+                        <input type="text" class="form-control @error('token') is-invalid @enderror" id="token"
+                            name="token" value="{{ old('token', $fonnte['token']) }}"
+                            placeholder="Masukkan token API Fonnte">
+                        @error('token')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="api_url" class="font-weight-semibold">API URL</label>
+                        <input type="url" class="form-control @error('api_url') is-invalid @enderror" id="api_url"
+                            name="api_url" value="{{ old('api_url', $fonnte['api_url']) }}" required>
+                        @error('api_url')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label for="default_country_code" class="font-weight-semibold">Kode Negara Default</label>
+                        <input type="text" class="form-control @error('default_country_code') is-invalid @enderror"
+                            id="default_country_code" name="default_country_code"
+                            value="{{ old('default_country_code', $fonnte['default_country_code']) }}" required>
+                        @error('default_country_code')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-8">
+                        <label for="school_name" class="font-weight-semibold">Nama Sekolah (di pesan)</label>
+                        <input type="text" class="form-control @error('school_name') is-invalid @enderror"
+                            id="school_name" name="school_name" value="{{ old('school_name', $fonnte['school_name']) }}"
+                            required>
+                        @error('school_name')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save mr-1"></i> Simpan Konfigurasi WA Fonnte
+                </button>
+            </form>
+
+            <hr>
+
+            <form method="POST" action="{{ route('app-settings.fonnte.test') }}">
+                @csrf
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-4">
+                        <label for="test_target" class="font-weight-semibold">Nomor Tujuan Tes</label>
+                        <input type="text" class="form-control @error('test_target') is-invalid @enderror"
+                            id="test_target" name="test_target" value="{{ old('test_target') }}"
+                            placeholder="Contoh: 08123456789" required>
+                        @error('test_target')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="test_message" class="font-weight-semibold">Pesan Tes (opsional)</label>
+                        <input type="text" class="form-control @error('test_message') is-invalid @enderror"
+                            id="test_message" name="test_message" value="{{ old('test_message') }}"
+                            placeholder="Kosongkan untuk pesan bawaan sistem">
+                        @error('test_message')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-2">
+                        <button type="submit" class="btn btn-outline-success btn-block">
+                            <i class="fas fa-paper-plane mr-1"></i> Tes Kirim
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block">Gunakan nomor aktif WhatsApp. Format bebas, sistem akan normalisasi
+                    ke kode negara default.</small>
+            </form>
+
+            <hr>
+
+            <form method="POST" action="{{ route('app-settings.fonnte.test-guru-sample') }}"
+                onsubmit="return confirm('Kirim pesan tes ke maksimal 3 guru pertama yang memiliki no_hp?')">
+                @csrf
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-10">
+                        <label for="sample_test_message" class="font-weight-semibold">Pesan Tes ke Sampel Guru
+                            (opsional)</label>
+                        <input type="text" class="form-control @error('sample_test_message') is-invalid @enderror"
+                            id="sample_test_message" name="sample_test_message" value="{{ old('sample_test_message') }}"
+                            placeholder="Kosongkan untuk pesan bawaan sistem">
+                        @error('sample_test_message')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-2">
+                        <button type="submit" class="btn btn-outline-primary btn-block">
+                            <i class="fas fa-bullhorn mr-1"></i> Tes 3 Guru
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block">Mode aman: hanya mengirim ke maksimal 3 guru pertama yang punya
+                    nomor HP.</small>
+            </form>
+        </div>
+    </div>
+
     {{-- Tips Optimasi --}}
     <div class="tips-card">
         <h6><i class="fas fa-lightbulb mr-2"></i>Tips Optimasi</h6>

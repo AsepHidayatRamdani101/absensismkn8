@@ -11,11 +11,11 @@ use App\Http\Controllers\Api\ReportApiController;
 
 Route::prefix('v1')->group(function () {
 
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:api-auth');
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:api-default'])->group(function () {
 
-        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/logout', [AuthController::class, 'logout'])->middleware('audit');
         Route::get('/profile', [AuthController::class, 'profile']);
 
         //-----------------------------------
@@ -29,35 +29,47 @@ Route::prefix('v1')->group(function () {
         // ATTENDANCE
         //-----------------------------------
 
-        Route::post('/attendance/manual',
-            [AttendanceApiController::class, 'manual']);
+        Route::post(
+            '/attendance/manual',
+            [AttendanceApiController::class, 'manual']
+        )->middleware('audit');
 
-        Route::get('/attendance/history',
-            [AttendanceApiController::class, 'history']);
+        Route::get(
+            '/attendance/history',
+            [AttendanceApiController::class, 'history']
+        );
 
         //-----------------------------------
         // REPORT
         //-----------------------------------
 
-        Route::get('/reports/daily',
-            [ReportApiController::class, 'daily']);
+        Route::get(
+            '/reports/daily',
+            [ReportApiController::class, 'daily']
+        );
 
-        Route::get('/reports/monthly',
-            [ReportApiController::class, 'monthly']);
+        Route::get(
+            '/reports/monthly',
+            [ReportApiController::class, 'monthly']
+        );
 
-        Route::get('/reports/student/{student}',
-            [ReportApiController::class, 'student']);
+        Route::get(
+            '/reports/student/{student}',
+            [ReportApiController::class, 'student']
+        );
 
         //-----------------------------------
         // DEVICE
         //-----------------------------------
 
-        Route::post('/device/rfid',
-            [DeviceApiController::class, 'rfid']);
+        Route::post(
+            '/device/rfid',
+            [DeviceApiController::class, 'rfid']
+        )->middleware('audit');
 
-        Route::post('/device/face',
-            [DeviceApiController::class, 'face']);
-
+        Route::post(
+            '/device/face',
+            [DeviceApiController::class, 'face']
+        )->middleware('audit');
     });
-
 });

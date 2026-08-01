@@ -12,12 +12,11 @@ use App\Models\Schedule;
 use App\Models\SchoolSetting;
 use App\Models\Student;
 use App\Models\StudentLeaveRequest;
-use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherSubject;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -51,20 +50,18 @@ class DashboardController extends Controller
         abort(403);
     }
 
-    public function admin()
+    public function admin(Request $request)
     {
+        $mode = $this->resolveDisplayMode($request);
         $today = Carbon::today();
         $weekStart = Carbon::today()->startOfWeek();
         $weekEnd = Carbon::today()->endOfWeek();
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
 
-        $activeUsers = DB::table('sessions')
-            ->where('last_activity', '>=', now()->subMinutes(30)->timestamp)
-            ->count();
-
-        $cacheKey = 'dashboard:admin:metrics:' . now()->format('YmdHi');
+        $cacheKey = 'dashboard:admin:metrics:' . $mode . ':' . now()->format('YmdHi');
         $metrics = Cache::remember($cacheKey, now()->addMinutes(2), function () use (
+            $mode,
             $today,
             $weekStart,
             $weekEnd,
@@ -75,27 +72,13 @@ class DashboardController extends Controller
             $totalTeachers = Teacher::count();
             $totalClassrooms = Classroom::count();
             $totalMajors = Major::count();
-            $totalSubjects = Subject::count();
             $totalDevices = AttendanceDevice::count();
-            $studentClassOfficers = Student::query()
-                ->whereIn('jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
-                ->count();
-
-            $ketuaKelasCount = Student::query()->where('jabatan_kelas', Student::JABATAN_KETUA_KELAS)->count();
-            $sekretarisCount = Student::query()->where('jabatan_kelas', Student::JABATAN_SEKRETARIS)->count();
-            $bendaharaCount = Student::query()->where('jabatan_kelas', Student::JABATAN_BENDAHARA)->count();
 
             $todayTeacherAttendances = TeacherAttendance::whereDate('tanggal', $today)->count();
             $todayStudentAttendanceByTeacher = AttendanceDetail::whereHas('teacherAttendance', function ($query) use ($today) {
                 $query->whereDate('tanggal', $today);
             })->count();
             $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
-            $todayOfficerAttendanceActions = AttendanceDetail::query()
-                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                ->join('students', 'students.id', '=', 'attendance_details.student_id')
-                ->whereDate('teacher_attendances.tanggal', $today)
-                ->whereIn('students.jabatan_kelas', Student::ALLOWED_JABATAN_FOR_TEACHER_ATTENDANCE)
-                ->count();
 
             $teacherPresentToday = TeacherAttendance::whereDate('tanggal', $today)
                 ->distinct('teacher_id')
@@ -166,120 +149,69 @@ class DashboardController extends Controller
                 ? round(($studentPresentThisMonth / $totalStudents) * 100, 2)
                 : 0;
 
-            $dailyChartRows = TeacherAttendance::query()
-                ->leftJoin('attendance_details', 'attendance_details.teacher_attendance_id', '=', 'teacher_attendances.id')
-                ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal')
-                ->selectRaw('COUNT(DISTINCT teacher_attendances.id) as total_absensi_guru')
-                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as total_siswa_hadir")
-                ->whereDate('teacher_attendances.tanggal', '>=', Carbon::today()->subDays(6))
-                ->groupBy('tanggal')
-                ->orderBy('tanggal')
-                ->get();
-
-            $dailyLabels = $dailyChartRows->pluck('tanggal')->map(function ($date) {
-                return Carbon::parse($date)->format('d M');
-            })->values();
-
-            $dailyTeacherCounts = $dailyChartRows->pluck('total_absensi_guru')->map(fn($v) => (int) $v)->values();
-            $dailyStudentPresentCounts = $dailyChartRows->pluck('total_siswa_hadir')->map(fn($v) => (int) $v)->values();
-
-            $studentStatusToday = AttendanceDetail::query()
-                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                ->select('attendance_details.status', DB::raw('COUNT(*) as total'))
-                ->whereDate('teacher_attendances.tanggal', $today)
-                ->groupBy('attendance_details.status')
-                ->pluck('total', 'attendance_details.status');
-
-            $statusLabels = ['Hadir', 'Izin', 'Sakit', 'Alpha', 'Terlambat'];
-            $statusData = collect($statusLabels)->map(function ($status) use ($studentStatusToday) {
-                return (int) ($studentStatusToday[$status] ?? 0);
-            })->values();
-
-            $teacherScheduleSummaryMonth = $this->buildTeacherScheduleSummary(
-                $monthStart->copy(),
-                $monthEnd->copy()
-            );
-
-            $topTeachersPresent = $teacherScheduleSummaryMonth
-                ->sortByDesc('hadir')
-                ->take(5)
-                ->values();
-
-            $topTeachersAbsent = $teacherScheduleSummaryMonth
-                ->sortByDesc('tidak_hadir')
-                ->take(5)
-                ->values();
-
-            $topStudentsPresent = AttendanceDetail::query()
-                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                ->join('students', 'students.id', '=', 'attendance_details.student_id')
-                ->select('students.id', 'students.nama_lengkap')
-                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
-                ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
-                ->whereBetween('teacher_attendances.tanggal', [
-                    $monthStart->toDateString(),
-                    $monthEnd->toDateString(),
-                ])
-                ->groupBy('students.id', 'students.nama_lengkap')
-                ->orderByDesc('hadir')
-                ->limit(5)
-                ->get();
-
-            $topStudentsAbsent = AttendanceDetail::query()
-                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                ->join('students', 'students.id', '=', 'attendance_details.student_id')
-                ->select('students.id', 'students.nama_lengkap')
-                ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as hadir")
-                ->selectRaw("SUM(CASE WHEN attendance_details.status != 'Hadir' THEN 1 ELSE 0 END) as tidak_hadir")
-                ->whereBetween('teacher_attendances.tanggal', [
-                    $monthStart->toDateString(),
-                    $monthEnd->toDateString(),
-                ])
-                ->groupBy('students.id', 'students.nama_lengkap')
-                ->orderByDesc('tidak_hadir')
-                ->limit(5)
-                ->get();
-
-            return compact(
+            $metrics = compact(
                 'totalStudents',
                 'totalTeachers',
                 'totalClassrooms',
                 'totalMajors',
-                'totalSubjects',
                 'totalDevices',
-                'studentClassOfficers',
-                'ketuaKelasCount',
-                'sekretarisCount',
-                'bendaharaCount',
                 'todayTeacherAttendances',
                 'todayStudentAttendanceByTeacher',
                 'todayStudentAttendanceIoT',
-                'todayOfficerAttendanceActions',
                 'teacherPresencePercent',
                 'studentPresencePercent',
                 'teacherPresencePercentWeek',
                 'teacherPresencePercentMonth',
                 'studentPresencePercentWeek',
-                'studentPresencePercentMonth',
-                'dailyLabels',
-                'dailyTeacherCounts',
-                'dailyStudentPresentCounts',
-                'statusLabels',
-                'statusData',
-                'topTeachersPresent',
-                'topTeachersAbsent',
-                'topStudentsPresent',
-                'topStudentsAbsent'
+                'studentPresencePercentMonth'
             );
+
+            if ($mode === 'detail') {
+                $dailyChartRows = TeacherAttendance::query()
+                    ->leftJoin('attendance_details', 'attendance_details.teacher_attendance_id', '=', 'teacher_attendances.id')
+                    ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal')
+                    ->selectRaw('COUNT(DISTINCT teacher_attendances.id) as total_absensi_guru')
+                    ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as total_siswa_hadir")
+                    ->whereDate('teacher_attendances.tanggal', '>=', Carbon::today()->subDays(6))
+                    ->groupBy('tanggal')
+                    ->orderBy('tanggal')
+                    ->get();
+
+                $dailyLabels = $dailyChartRows->pluck('tanggal')->map(function ($date) {
+                    return Carbon::parse($date)->format('d M');
+                })->values();
+
+                $dailyTeacherCounts = $dailyChartRows->pluck('total_absensi_guru')->map(fn($v) => (int) $v)->values();
+                $dailyStudentPresentCounts = $dailyChartRows->pluck('total_siswa_hadir')->map(fn($v) => (int) $v)->values();
+
+                $studentStatusToday = AttendanceDetail::query()
+                    ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                    ->select('attendance_details.status', DB::raw('COUNT(*) as total'))
+                    ->whereDate('teacher_attendances.tanggal', $today)
+                    ->groupBy('attendance_details.status')
+                    ->pluck('total', 'attendance_details.status');
+
+                $statusLabels = ['Hadir', 'Izin', 'Sakit', 'Alpha', 'Terlambat'];
+                $statusData = collect($statusLabels)->map(function ($status) use ($studentStatusToday) {
+                    return (int) ($studentStatusToday[$status] ?? 0);
+                })->values();
+
+                $metrics['dailyLabels'] = $dailyLabels;
+                $metrics['dailyTeacherCounts'] = $dailyTeacherCounts;
+                $metrics['dailyStudentPresentCounts'] = $dailyStudentPresentCounts;
+                $metrics['statusLabels'] = $statusLabels;
+                $metrics['statusData'] = $statusData;
+            }
+
+            return $metrics;
         });
 
-        return view('admin.dashboard', array_merge($metrics, [
-            'activeUsers' => $activeUsers,
-        ]));
+        return view('admin.dashboard', array_merge($metrics, ['mode' => $mode]));
     }
 
-    public function siswa()
+    public function siswa(Request $request)
     {
+        $mode = $this->resolveDisplayMode($request);
         $user = Auth::user();
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
@@ -385,12 +317,14 @@ class DashboardController extends Controller
             'totalRecordsAll',
             'attendanceDaysMonth',
             'latestAttendance',
-            'schoolSetting'
+            'schoolSetting',
+            'mode'
         ));
     }
 
-    public function guru()
+    public function guru(Request $request)
     {
+        $mode = $this->resolveDisplayMode($request);
         $user = Auth::user();
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
@@ -550,12 +484,14 @@ class DashboardController extends Controller
             'todayAttendanceCount',
             'pendingStudentLeaveRequests',
             'isWaliKelas',
-            'schoolSetting'
+            'schoolSetting',
+            'mode'
         ));
     }
 
-    public function kurikulum()
+    public function kurikulum(Request $request)
     {
+        $mode = $this->resolveDisplayMode($request);
         $pendingGuruLeaveRequests = class_exists(\App\Models\TeacherLeaveRequest::class)
             ? (int) \App\Models\TeacherLeaveRequest::query()->where('status_pengajuan', 'Menunggu')->count()
             : 0;
@@ -576,8 +512,14 @@ class DashboardController extends Controller
             'pendingGuruLeaveRequests',
             'pendingOfficerAttendancePermits',
             'pendingStudentLeaveRequests',
-            'totalTeacherAttendancesToday'
+            'totalTeacherAttendancesToday',
+            'mode'
         ));
+    }
+
+    private function resolveDisplayMode(Request $request): string
+    {
+        return $request->query('mode') === 'detail' ? 'detail' : 'ringkas';
     }
 
     private function percentage(int $value, int $total): float
@@ -621,66 +563,5 @@ class DashboardController extends Controller
         }
 
         return $expected;
-    }
-
-    private function buildTeacherScheduleSummary(Carbon $startDate, Carbon $endDate): Collection
-    {
-        $dayMap = [
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-        ];
-
-        $schedulePerDay = Schedule::query()
-            ->join('teacher_subjects', 'teacher_subjects.id', '=', 'schedules.teacher_subject_id')
-            ->select('teacher_subjects.teacher_id', 'schedules.hari', DB::raw('COUNT(*) as total_jadwal'))
-            ->groupBy('teacher_subjects.teacher_id', 'schedules.hari')
-            ->get()
-            ->groupBy('teacher_id')
-            ->map(function ($rows) {
-                return collect($rows)->pluck('total_jadwal', 'hari');
-            });
-
-        $expectedPerTeacher = [];
-
-        $cursor = $startDate->copy();
-        while ($cursor->lte($endDate)) {
-            $dayName = $dayMap[$cursor->dayOfWeekIso] ?? null;
-
-            if ($dayName !== null) {
-                foreach ($schedulePerDay as $teacherId => $dayCounts) {
-                    $expectedPerTeacher[$teacherId] = ($expectedPerTeacher[$teacherId] ?? 0) + (int) ($dayCounts[$dayName] ?? 0);
-                }
-            }
-
-            $cursor->addDay();
-        }
-
-        $actualPerTeacher = TeacherAttendance::query()
-            ->select('teacher_id', DB::raw('COUNT(*) as total_hadir'))
-            ->whereBetween('tanggal', [$startDate->toDateString(), $endDate->toDateString()])
-            ->groupBy('teacher_id')
-            ->pluck('total_hadir', 'teacher_id');
-
-        return Teacher::query()
-            ->select('id', 'nama_lengkap')
-            ->orderBy('nama_lengkap')
-            ->get()
-            ->map(function ($teacher) use ($expectedPerTeacher, $actualPerTeacher) {
-                $expected = (int) ($expectedPerTeacher[$teacher->id] ?? 0);
-                $hadir = (int) ($actualPerTeacher[$teacher->id] ?? 0);
-                $tidakHadir = max($expected - $hadir, 0);
-
-                return [
-                    'nama_lengkap' => $teacher->nama_lengkap,
-                    'hadir' => $hadir,
-                    'tidak_hadir' => $tidakHadir,
-                    'target_mengajar' => $expected,
-                ];
-            });
     }
 }

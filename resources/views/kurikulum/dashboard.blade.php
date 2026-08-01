@@ -8,10 +8,30 @@
             <h1 class="mb-1">Dashboard Kurikulum</h1>
             <p class="text-muted mb-0">Akses cepat untuk absensi, setting jadwal, approval, dan laporan.</p>
         </div>
+        <div class="d-flex flex-wrap align-items-center" style="gap:.5rem;">
+            <a href="{{ route('kurikulum.dashboard.dss', ['mode' => $mode ?? 'ringkas']) }}"
+                class="btn btn-sm btn-outline-secondary">
+                Dashboard Pancawaluya
+            </a>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode tampilan dashboard kurikulum">
+                <a href="{{ route('kurikulum.dashboard', ['mode' => 'ringkas']) }}"
+                    class="btn {{ ($mode ?? 'ringkas') === 'ringkas' ? 'btn-primary' : 'btn-outline-primary' }}">
+                    Ringkas
+                </a>
+                <a href="{{ route('kurikulum.dashboard', ['mode' => 'detail']) }}"
+                    class="btn {{ ($mode ?? 'ringkas') === 'detail' ? 'btn-primary' : 'btn-outline-primary' }}">
+                    Detail
+                </a>
+            </div>
+        </div>
     </div>
 @stop
 
 @section('content')
+    @php
+        $isDetail = ($mode ?? 'ringkas') === 'detail';
+    @endphp
+
     <div class="row">
         <div class="col-md-4 mb-3">
             <div class="small-box bg-info">
@@ -63,25 +83,29 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4 mb-3 mb-md-0">
-                    <a href="{{ route('reports.teacher-attendance') }}" class="btn btn-outline-primary btn-block">Laporan
-                        Guru</a>
-                </div>
-                <div class="col-md-4 mb-3 mb-md-0">
-                    <a href="{{ route('reports.student-attendance') }}" class="btn btn-outline-primary btn-block">Laporan
-                        Siswa</a>
-                </div>
-                <div class="col-md-4">
-                    <a href="{{ route('reports.teacher-agenda') }}" class="btn btn-outline-primary btn-block">Laporan
-                        Agenda
-                        Guru</a>
+    @if ($isDetail)
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <a href="{{ route('reports.teacher-attendance') }}"
+                            class="btn btn-outline-primary btn-block">Laporan
+                            Guru</a>
+                    </div>
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <a href="{{ route('reports.student-attendance') }}"
+                            class="btn btn-outline-primary btn-block">Laporan
+                            Siswa</a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ route('reports.teacher-agenda') }}" class="btn btn-outline-primary btn-block">Laporan
+                            Agenda
+                            Guru</a>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    @endif
 @stop
 
 @section('footer')

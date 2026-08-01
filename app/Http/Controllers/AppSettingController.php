@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class AppSettingController extends Controller
 {
@@ -33,14 +36,168 @@ class AppSettingController extends Controller
 
         $refBytes = self::REF_BYTES;
 
+        $fonnte = [
+            'enabled' => (bool) config('services.fonnte.enabled', false),
+            'token' => (string) config('services.fonnte.token', ''),
+            'api_url' => (string) config('services.fonnte.api_url', 'https://api.fonnte.com/send'),
+            'default_country_code' => (string) config('services.fonnte.default_country_code', '62'),
+            'reminder_enabled' => (bool) config('services.fonnte.reminder_enabled', false),
+            'reminder_time' => (string) config('services.fonnte.reminder_time', '14:00'),
+            'school_name' => (string) config('services.fonnte.school_name', 'SMKN 8 GARUT'),
+        ];
+
         return view('admin.app_settings.index', compact(
             'cache',
             'views',
             'session',
             'configCache',
             'routeCache',
-            'refBytes'
+            'refBytes',
+            'fonnte'
         ));
+    }
+
+    public function updateFonnte(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled' => 'nullable|boolean',
+            'token' => 'nullable|string|max:255',
+            'api_url' => 'required|url|max:255',
+            'default_country_code' => 'required|regex:/^\d{1,4}$/',
+            'reminder_enabled' => 'nullable|boolean',
+            'reminder_time' => 'required|date_format:H:i',
+            'school_name' => 'required|string|max:120',
+        ]);
+
+        $updates = [
+            'FONNTE_ENABLED' => $request->boolean('enabled') ? 'true' : 'false',
+            'FONNTE_TOKEN' => (string) ($validated['token'] ?? ''),
+            'FONNTE_API_URL' => (string) $validated['api_url'],
+            'FONNTE_DEFAULT_COUNTRY_CODE' => (string) $validated['default_country_code'],
+            'FONNTE_REMINDER_ENABLED' => $request->boolean('reminder_enabled') ? 'true' : 'false',
+            'FONNTE_REMINDER_TIME' => (string) $validated['reminder_time'],
+            'FONNTE_SCHOOL_NAME' => (string) $validated['school_name'],
+        ];
+
+        foreach ($updates as $key => $value) {
+            $this->upsertEnvValue($key, $value);
+        }
+
+        Artisan::call('config:clear');
+
+        return redirect()->route('app-settings.index')->with('success', 'Konfigurasi WA Fonnte berhasil disimpan.');
+    }
+
+    public function sendFonnteTest(Request $request)
+    {
+        $validated = $request->validate([
+            'test_target' => 'required|string|max:30',
+            'test_message' => 'nullable|string|max:1000',
+        ]);
+
+        $config = $this->fonnteConfig();
+        $enabled = $config['enabled'];
+        $token = $config['token'];
+        $apiUrl = $config['api_url'];
+        $countryCode = $config['country_code'];
+        $schoolName = (string) config('services.fonnte.school_name', 'SMKN 8 GARUT');
+
+        if (!$enabled) {
+            return redirect()->route('app-settings.index')->with('error', 'Integrasi WA Fonnte belum diaktifkan.');
+        }
+
+        if ($token === '') {
+            return redirect()->route('app-settings.index')->with('error', 'Token Fonnte kosong. Mohon isi token terlebih dahulu.');
+        }
+
+        $target = $this->normalizePhone($validated['test_target'], $countryCode);
+        if ($target === null) {
+            return redirect()->route('app-settings.index')->with('error', 'Nomor tujuan tidak valid.');
+        }
+
+        $message = trim((string) ($validated['test_message'] ?? ''));
+        if ($message === '') {
+            $message = "Tes koneksi WA Fonnte berhasil dari sistem {$schoolName}.";
+        }
+
+        if (!$this->sendFonnteMessage($token, $apiUrl, $countryCode, $target, $message)) {
+            return redirect()->route('app-settings.index')
+                ->with('error', 'Tes kirim gagal. Periksa token/API URL Fonnte Anda.');
+        }
+
+        return redirect()->route('app-settings.index')->with('success', 'Tes kirim WA berhasil ke nomor tujuan.');
+    }
+
+    public function sendFonnteTestToTeacherSamples(Request $request)
+    {
+        $validated = $request->validate([
+            'sample_test_message' => 'nullable|string|max:1000',
+        ]);
+
+        $config = $this->fonnteConfig();
+        $enabled = $config['enabled'];
+        $token = $config['token'];
+        $apiUrl = $config['api_url'];
+        $countryCode = $config['country_code'];
+        $schoolName = (string) config('services.fonnte.school_name', 'SMKN 8 GARUT');
+        $batchDelayMs = max(0, min(5000, (int) config('services.fonnte.test_batch_delay_ms', 1200)));
+
+        if (!$enabled) {
+            return redirect()->route('app-settings.index')->with('error', 'Integrasi WA Fonnte belum diaktifkan.');
+        }
+
+        if ($token === '') {
+            return redirect()->route('app-settings.index')->with('error', 'Token Fonnte kosong. Mohon isi token terlebih dahulu.');
+        }
+
+        $teachers = Teacher::query()
+            ->whereNotNull('no_hp')
+            ->whereRaw("TRIM(no_hp) != ''")
+            ->orderBy('id')
+            ->limit(3)
+            ->get(['id', 'nama_lengkap', 'no_hp']);
+
+        if ($teachers->isEmpty()) {
+            return redirect()->route('app-settings.index')->with('error', 'Tidak ada data guru dengan nomor HP untuk dites.');
+        }
+
+        $templateMessage = trim((string) ($validated['sample_test_message'] ?? ''));
+        $sent = 0;
+        $failed = 0;
+
+        $totalTeachers = $teachers->count();
+
+        foreach ($teachers as $index => $teacher) {
+            $target = $this->normalizePhone((string) $teacher->no_hp, $countryCode);
+
+            if ($target === null) {
+                $failed++;
+                continue;
+            }
+
+            $message = $templateMessage !== ''
+                ? $templateMessage
+                : "Tes broadcast WA Fonnte dari sistem {$schoolName} untuk {$teacher->nama_lengkap}.";
+
+            if ($this->sendFonnteMessage($token, $apiUrl, $countryCode, $target, $message)) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+
+            if ($batchDelayMs > 0 && $index < ($totalTeachers - 1)) {
+                usleep($batchDelayMs * 1000);
+            }
+        }
+
+        if ($sent === 0) {
+            return redirect()->route('app-settings.index')->with('error', 'Tes kirim ke sampel guru gagal.');
+        }
+
+        return redirect()->route('app-settings.index')->with(
+            'success',
+            "Tes kirim sampel guru selesai. Berhasil: {$sent}, Gagal: {$failed}."
+        );
     }
 
     public function clearCache()
@@ -155,5 +312,99 @@ class AppSettingController extends Controller
             return number_format($bytes / 1024, 2) . ' KB';
         }
         return $bytes . ' B';
+    }
+
+    private function upsertEnvValue(string $key, string $value): void
+    {
+        $envPath = base_path('.env');
+        $content = File::exists($envPath) ? File::get($envPath) : '';
+
+        $escapedValue = $this->escapeEnvValue($value);
+        $pattern = "/^{$key}=.*$/m";
+
+        if (preg_match($pattern, $content) === 1) {
+            $content = preg_replace($pattern, "{$key}={$escapedValue}", $content) ?? $content;
+        } else {
+            $content .= (str_ends_with($content, PHP_EOL) || $content === '' ? '' : PHP_EOL) . "{$key}={$escapedValue}" . PHP_EOL;
+        }
+
+        File::put($envPath, $content);
+    }
+
+    private function escapeEnvValue(string $value): string
+    {
+        $needsQuotes = $value === ''
+            || str_contains($value, ' ')
+            || str_contains($value, '#')
+            || str_contains($value, '"')
+            || str_contains($value, "'");
+
+        if ($needsQuotes) {
+            return '"' . addcslashes($value, '"') . '"';
+        }
+
+        return $value;
+    }
+
+    private function normalizePhone(string $rawPhone, string $defaultCountryCode): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $rawPhone);
+
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return $defaultCountryCode . substr($digits, 1);
+        }
+
+        if (str_starts_with($digits, $defaultCountryCode) || str_starts_with($digits, '62')) {
+            return $digits;
+        }
+
+        return $defaultCountryCode . $digits;
+    }
+
+    private function sendFonnteMessage(string $token, string $apiUrl, string $countryCode, string $target, string $message): bool
+    {
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders(['Authorization' => $token])
+                ->asForm()
+                ->post($apiUrl, [
+                    'target' => $target,
+                    'message' => $message,
+                    'countryCode' => $countryCode,
+                ]);
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            Log::channel('security')->warning('Gagal kirim pesan WA Fonnte', [
+                'target' => $target,
+                'status' => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return false;
+        } catch (\Throwable $e) {
+            Log::channel('security')->error('Error kirim pesan WA Fonnte', [
+                'target' => $target,
+                'message' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function fonnteConfig(): array
+    {
+        return [
+            'enabled' => (bool) config('services.fonnte.enabled', false),
+            'token' => (string) config('services.fonnte.token', ''),
+            'api_url' => (string) config('services.fonnte.api_url', 'https://api.fonnte.com/send'),
+            'country_code' => (string) config('services.fonnte.default_country_code', '62'),
+        ];
     }
 }

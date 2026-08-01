@@ -438,6 +438,7 @@
 @stop
 
 @section('js')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         (function() {
             const dateElement = document.getElementById('guruRealtimeDate');
@@ -657,4 +658,24 @@
             updateBulkActionBar();
         });
     </script>
+
+    @if (session('success') && session('offer_agenda_redirect'))
+        <script>
+            $(function() {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Absensi berhasil disimpan',
+                    text: @json(session('success')),
+                    showCancelButton: true,
+                    confirmButtonText: 'Lanjutkan isi agenda',
+                    cancelButtonText: 'Tetap di halaman ini',
+                    reverseButtons: true,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = @json(session('agenda_redirect_url', route('guru.agenda.index')));
+                    }
+                });
+            });
+        </script>
+    @endif
 @stop

@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'guru' => \App\Http\Middleware\GuruMiddleware::class,
             'kurikulum' => \App\Http\Middleware\KurikulumMiddleware::class,
             'siswa' => \App\Http\Middleware\SiswaMiddleware::class,
+            'audit' => \App\Http\Middleware\AuditTrailMiddleware::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         ]);

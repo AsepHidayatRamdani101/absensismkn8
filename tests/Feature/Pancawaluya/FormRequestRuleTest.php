@@ -4,6 +4,8 @@ namespace Tests\Feature\Pancawaluya;
 
 use App\Http\Requests\Pancawaluya\StoreRewardCategoryRequest;
 use App\Http\Requests\Pancawaluya\StoreRewardItemRequest;
+use App\Http\Requests\Pancawaluya\StoreRewardTransactionRequest;
+use App\Http\Requests\Pancawaluya\StoreViolationTransactionRequest;
 use App\Http\Requests\Pancawaluya\StoreViolationCategoryRequest;
 use App\Http\Requests\Pancawaluya\StoreViolationItemRequest;
 use PHPUnit\Framework\Attributes\Test;
@@ -47,5 +49,29 @@ class FormRequestRuleTest extends TestCase
 
         $this->assertArrayHasKey('character_dimension_id', $rules);
         $this->assertArrayHasKey('weight', $rules);
+    }
+
+    #[Test]
+    public function reward_transaction_request_contains_operational_fields(): void
+    {
+        $rules = (new StoreRewardTransactionRequest())->rules();
+
+        $this->assertArrayHasKey('academic_year_id', $rules);
+        $this->assertArrayHasKey('student_id', $rules);
+        $this->assertArrayHasKey('reward_item_id', $rules);
+        $this->assertArrayHasKey('classroom_id', $rules);
+        $this->assertArrayHasKey('attachment', $rules);
+    }
+
+    #[Test]
+    public function violation_transaction_request_contains_operational_fields(): void
+    {
+        $rules = (new StoreViolationTransactionRequest())->rules();
+
+        $this->assertArrayHasKey('academic_year_id', $rules);
+        $this->assertArrayHasKey('student_id', $rules);
+        $this->assertArrayHasKey('violation_item_id', $rules);
+        $this->assertArrayHasKey('classroom_id', $rules);
+        $this->assertArrayHasKey('evidence_photo', $rules);
     }
 }

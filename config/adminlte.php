@@ -299,21 +299,39 @@ return [
 
     'menu' => [
         [
-            'text' => 'Dashboard',
+            'text' => 'Dasbor',
             'route' => 'dashboard',
             'icon' => 'fas fa-fw fa-home',
             'can' => 'admin',
         ],
         [
-            'text' => 'Dashboard',
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'admin.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'admin',
+        ],
+        [
+            'text' => 'Dasbor',
             'route' => 'guru.dashboard',
             'icon' => 'fas fa-fw fa-home',
             'can' => 'guru',
         ],
         [
-            'text' => 'Dashboard',
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'guru.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'guru',
+        ],
+        [
+            'text' => 'Dasbor',
             'route' => 'siswa.dashboard',
             'icon' => 'fas fa-fw fa-home',
+            'can' => 'siswa',
+        ],
+        [
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'siswa.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
             'can' => 'siswa',
         ],
         [
@@ -323,13 +341,37 @@ return [
             'can' => 'siswa',
         ],
         [
-            'text' => 'Dashboard',
+            'text' => 'Dasbor',
             'route' => 'kurikulum.dashboard',
             'icon' => 'fas fa-fw fa-home',
             'can' => 'kurikulum',
         ],
         [
-            'text' => 'Setting Sekolah',
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'kurikulum.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'kurikulum',
+        ],
+        [
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'wali-kelas.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'wali_kelas',
+        ],
+        [
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'bk.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'bk',
+        ],
+        [
+            'text' => 'Dasbor Pancawaluya',
+            'route' => 'kesiswaan.dashboard.dss',
+            'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'kesiswaan',
+        ],
+        [
+            'text' => 'Pengaturan Sekolah',
             'icon' => 'fas fa-cog',
             'can' => 'admin',
             'submenu' => [
@@ -341,7 +383,7 @@ return [
 
 
                 [
-                    'text' => 'Profile Sekolah',
+                    'text' => 'Profil Sekolah',
                     'route' => 'school-settings.index',
                     'icon' => 'fas fa-school',
                 ],
@@ -351,10 +393,15 @@ return [
                     'route' => 'app-settings.index',
                     'icon' => 'fas fa-tools',
                 ],
+                [
+                    'text' => 'Konfigurasi WA Fonnte',
+                    'route' => 'app-settings.index',
+                    'icon' => 'fab fa-whatsapp',
+                ],
             ],
         ],
         [
-            'text' => 'Master Data',
+            'text' => 'Data Master',
             'icon' => 'fas fa-database',
             'can' => 'admin',
             'submenu' => [
@@ -410,25 +457,25 @@ return [
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Oleh Guru',
+                    'text' => 'Absensi Guru',
                     'route' => 'teacher-attendances.index',
                     'icon' => 'fas fa-chalkboard-teacher',
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Siswa Oleh Guru',
+                    'text' => 'Absensi Siswa',
                     'route' => 'attendance-details.index',
                     'icon' => 'fas fa-user-check',
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Absensi Guru (Kombinasi)',
+                    'text' => 'Absensi Guru Full',
                     'route' => 'reports.teacher-attendance-recognition',
                     'icon' => 'fas fa-check-double',
                     'can' => 'admin',
                 ],
                 [
-                    'text' => 'Log Device',
+                    'text' => 'Log Perangkat',
                     'url' => '#',
                     'icon' => 'fas fa-history',
                     'can' => 'admin',
@@ -442,24 +489,42 @@ return [
             'can' => 'admin',
             'submenu' => [
                 [
-                    'text' => 'Master Reward Category',
+                    'text' => 'Kategori Penghargaan',
                     'route' => 'pancawaluya.reward-categories.index',
                     'icon' => 'fas fa-tags',
                 ],
                 [
-                    'text' => 'Master Reward',
+                    'text' => ' Penghargaan',
                     'route' => 'pancawaluya.rewards.index',
                     'icon' => 'fas fa-gift',
                 ],
                 [
-                    'text' => 'Master Violation Category',
+                    'text' => 'Kategori Pelanggaran',
                     'route' => 'pancawaluya.violation-categories.index',
                     'icon' => 'fas fa-list-alt',
                 ],
                 [
-                    'text' => 'Master Violation',
+                    'text' => ' Pelanggaran',
                     'route' => 'pancawaluya.violations.index',
                     'icon' => 'fas fa-exclamation-triangle',
+                ],
+                [
+                    'text' => 'Input Penghargaan',
+                    'route' => 'pancawaluya.reward-transactions.index',
+                    'icon' => 'fas fa-award',
+                    'can' => 'pancawaluya.menu.reward-transaction',
+                ],
+                [
+                    'text' => 'Input Pelanggaran',
+                    'route' => 'pancawaluya.violation-transactions.index',
+                    'icon' => 'fas fa-exclamation-circle',
+                    'can' => 'pancawaluya.menu.violation-transaction',
+                ],
+                [
+                    'text' => 'Riwayat Pancawaluya',
+                    'route' => 'pancawaluya.transaction-histories.index',
+                    'icon' => 'fas fa-stream',
+                    'can' => 'pancawaluya.menu.transaction-history',
                 ],
             ],
         ],
@@ -553,19 +618,19 @@ return [
                             'icon' => 'fas fa-user-check',
                         ],
                         [
-                            'text' => 'Approve Pengajuan Izin Guru',
+                            'text' => 'Persetujuan Pengajuan Izin Guru',
                             'route' => 'kurikulum.teacher-leave-requests.index',
                             'icon' => 'fas fa-file-signature',
                         ],
                         [
-                            'text' => 'Approve Izin Absen Kelas',
+                            'text' => 'Persetujuan Izin Absen Kelas',
                             'route' => 'kurikulum.officer-attendance-permits.index',
                             'icon' => 'fas fa-user-check',
                         ],
                     ],
                 ],
                 [
-                    'text' => 'Setting Jadwal',
+                    'text' => 'Pengaturan Jadwal',
                     'icon' => 'fas fa-cog',
                     'submenu' => [
                         [
@@ -619,7 +684,7 @@ return [
             ],
         ],
         [
-            'text' => 'Setting Jadwal',
+            'text' => 'Pengaturan Jadwal',
             'icon' => 'fas fa-cog',
             'can' => 'admin',
             'submenu' => [
