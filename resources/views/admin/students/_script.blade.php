@@ -5,16 +5,17 @@
         // DATATABLE
         //------------------------------------
 
-        $('#tableStudents').DataTable({
+        if ($('#tableStudents').length) {
+            $('#tableStudents').DataTable({
 
-            responsive: true,
+                responsive: true,
 
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
-            }
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+                }
 
-        });
-
+            });
+        }
 
         //------------------------------------
         // CREATE

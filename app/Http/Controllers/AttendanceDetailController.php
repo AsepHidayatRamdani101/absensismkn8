@@ -222,13 +222,16 @@ class AttendanceDetailController extends Controller
             7 => 'Minggu',
         ];
 
-        $today = Carbon::today();
+        // Use provided tanggal or default to today; only load data when filter is explicitly submitted
+        $tanggalInput = $request->query('tanggal', '');
+        $hasFilter    = $tanggalInput !== '';
+        $today        = $hasFilter ? Carbon::parse($tanggalInput) : Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
 
         $todaySchedules = collect();
 
-        if ($todayDayName !== null && !$isWeekendHoliday) {
+        if ($hasFilter && $todayDayName !== null && !$isWeekendHoliday) {
             $todaySchedules = Schedule::query()
                 ->with(['teacherSubject.classroom', 'teacherSubject.subject'])
                 ->where('hari', $todayDayName)
@@ -255,56 +258,60 @@ class AttendanceDetailController extends Controller
             $selectedClassroomId = 0;
         }
 
-        $studentsQuery = Student::query()
-            ->with('classroom')
-            ->whereIn('classroom_id', $allowedClassroomIds)
-            ->orderBy('nama_lengkap');
-
-        if ($selectedClassroomId !== 0) {
-            $studentsQuery->where('classroom_id', $selectedClassroomId);
-        }
-
-        $students = $studentsQuery->get();
-
-        $primaryScheduleByClass = [];
-        foreach ($todaySchedules as $schedule) {
-            $classroomId = (int) ($schedule->teacherSubject->classroom_id ?? 0);
-
-            if ($classroomId === 0) {
-                continue;
-            }
-
-            if (!isset($primaryScheduleByClass[$classroomId])) {
-                $primaryScheduleByClass[$classroomId] = $schedule;
-                continue;
-            }
-
-            if ($schedule->jam_mulai < $primaryScheduleByClass[$classroomId]->jam_mulai) {
-                $primaryScheduleByClass[$classroomId] = $schedule;
-            }
-        }
-
-        $scheduleIds = collect($primaryScheduleByClass)->pluck('id')->values();
-
-        $teacherAttendances = TeacherAttendance::query()
-            ->whereDate('tanggal', $today->toDateString())
-            ->whereIn('schedule_id', $scheduleIds)
-            ->get()
-            ->keyBy('schedule_id');
-
-        $attendanceDetailRows = AttendanceDetail::query()
-            ->whereIn('teacher_attendance_id', $teacherAttendances->pluck('id'))
-            ->whereIn('student_id', $students->pluck('id'))
-            ->get();
-
+        $students = collect();
         $statusByStudentId = [];
-        foreach ($attendanceDetailRows as $row) {
-            $statusByStudentId[$row->student_id] = $row->status;
+
+        if ($hasFilter) {
+            $studentsQuery = Student::query()
+                ->with('classroom')
+                ->whereIn('classroom_id', $allowedClassroomIds)
+                ->orderBy('nama_lengkap');
+
+            if ($selectedClassroomId !== 0) {
+                $studentsQuery->where('classroom_id', $selectedClassroomId);
+            }
+
+            $students = $studentsQuery->get();
+
+            $primaryScheduleByClass = [];
+            foreach ($todaySchedules as $schedule) {
+                $classroomId = (int) ($schedule->teacherSubject->classroom_id ?? 0);
+
+                if ($classroomId === 0) {
+                    continue;
+                }
+
+                if (!isset($primaryScheduleByClass[$classroomId])) {
+                    $primaryScheduleByClass[$classroomId] = $schedule;
+                    continue;
+                }
+
+                if ($schedule->jam_mulai < $primaryScheduleByClass[$classroomId]->jam_mulai) {
+                    $primaryScheduleByClass[$classroomId] = $schedule;
+                }
+            }
+
+            $scheduleIds = collect($primaryScheduleByClass)->pluck('id')->values();
+
+            $teacherAttendances = TeacherAttendance::query()
+                ->whereDate('tanggal', $today->toDateString())
+                ->whereIn('schedule_id', $scheduleIds)
+                ->get()
+                ->keyBy('schedule_id');
+
+            $attendanceDetailRows = AttendanceDetail::query()
+                ->whereIn('teacher_attendance_id', $teacherAttendances->pluck('id'))
+                ->whereIn('student_id', $students->pluck('id'))
+                ->get();
+
+            foreach ($attendanceDetailRows as $row) {
+                $statusByStudentId[$row->student_id] = $row->status;
+            }
         }
 
-        // Get ALL schedules today (all teachers) for the teacher attendance summary cards
+        // Get ALL schedules for the selected date (for teacher attendance summary cards)
         $allTodaySchedules = collect();
-        if ($todayDayName !== null && !$isWeekendHoliday) {
+        if ($hasFilter && $todayDayName !== null && !$isWeekendHoliday) {
             $allTodaySchedules = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
                 ->where('hari', $todayDayName)
@@ -336,7 +343,6 @@ class AttendanceDetailController extends Controller
                 $schedules = $items->pluck('schedule');
                 $teacher = $items[0]['teacher'];
 
-                // Check if any of this teacher's schedules have attendance submitted
                 $hasAttendance = false;
                 $attendanceSchedule = null;
 
@@ -367,6 +373,8 @@ class AttendanceDetailController extends Controller
             'isWeekendHoliday' => $isWeekendHoliday,
             'classOptions' => $classOptions,
             'selectedClassroomId' => $selectedClassroomId,
+            'tanggalFilter' => $today->toDateString(),
+            'hasFilter' => $hasFilter,
             'students' => $students,
             'statusByStudentId' => $statusByStudentId,
             'teachersWithAttendance' => $teachersWithAttendance,
@@ -561,7 +569,7 @@ class AttendanceDetailController extends Controller
         ]);
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $today = Carbon::today();
         $dayMap = [
@@ -594,105 +602,93 @@ class AttendanceDetailController extends Controller
             ->keyBy('schedule_id');
 
         $teachersFromSchedules = $allTodaySchedules
-            ->map(function ($schedule) {
-                $schedTeacher = $schedule->teacherSubject->teacher;
-                return [
-                    'schedule' => $schedule,
-                    'teacher' => $schedTeacher,
-                    'teacher_id' => $schedTeacher?->id,
-                ];
-            })
+            ->map(fn($s) => ['schedule' => $s, 'teacher' => $s->teacherSubject->teacher, 'teacher_id' => $s->teacherSubject->teacher?->id])
             ->groupBy('teacher_id')
             ->map(function ($items) use ($todayTeacherAttendances) {
-                $schedules = $items->pluck('schedule');
                 $teacher = $items[0]['teacher'];
-                $hasAttendance = false;
-                foreach ($schedules as $schedule) {
-                    if ($todayTeacherAttendances->has($schedule->id)) {
-                        $hasAttendance = true;
-                        break;
-                    }
-                }
-                return [
-                    'teacher' => $teacher,
-                    'has_attendance' => $hasAttendance,
-                ];
+                $hasAttendance = $items->pluck('schedule')->some(fn($s) => $todayTeacherAttendances->has($s->id));
+                return ['teacher' => $teacher, 'has_attendance' => $hasAttendance];
             })
             ->values();
 
-        $teachersWithAttendance = $teachersFromSchedules->filter(fn($i) => $i['has_attendance'])->values();
+        $teachersWithAttendance    = $teachersFromSchedules->filter(fn($i) => $i['has_attendance'])->values();
         $teachersWithoutAttendance = $teachersFromSchedules->filter(fn($i) => !$i['has_attendance'])->values();
 
-        $attendanceDetails = AttendanceDetail::with([
-            'teacherAttendance.teacher',
-            'teacherAttendance.classroom',
-            'teacherAttendance.subject',
-            'teacherAttendance.academicYear',
-            'student.classroom',
-        ])->latest()->get();
-
-        $teacherAttendances = TeacherAttendance::with([
-            'teacher',
-            'classroom',
-            'subject',
-            'academicYear',
-        ])->orderByDesc('tanggal')->orderByDesc('id')->get();
-
-        $students = Student::with('classroom')
-            ->orderBy('nama_lengkap')
-            ->get();
-
+        // Filter options always loaded from all records
         $filterTahunAjarans = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
             ->join('academic_years', 'academic_years.id', '=', 'teacher_attendances.academic_year_id')
-            ->select('academic_years.tahun_ajaran')
-            ->distinct()
-            ->orderByDesc('academic_years.tahun_ajaran')
-            ->pluck('academic_years.tahun_ajaran');
-
-        $filterTangggals = AttendanceDetail::query()
-            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-            ->select('teacher_attendances.tanggal')
-            ->distinct()
-            ->orderBy('teacher_attendances.tanggal')
-            ->pluck('teacher_attendances.tanggal');
+            ->select('academic_years.tahun_ajaran')->distinct()
+            ->orderByDesc('academic_years.tahun_ajaran')->pluck('academic_years.tahun_ajaran');
 
         $filterGurus = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
             ->join('teachers', 'teachers.id', '=', 'teacher_attendances.teacher_id')
-            ->select('teachers.nama_lengkap')
-            ->distinct()
-            ->orderBy('teachers.nama_lengkap')
-            ->pluck('teachers.nama_lengkap');
+            ->select('teachers.nama_lengkap')->distinct()
+            ->orderBy('teachers.nama_lengkap')->pluck('teachers.nama_lengkap');
 
         $filterMapels = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
             ->join('subjects', 'subjects.id', '=', 'teacher_attendances.subject_id')
-            ->select('subjects.nama_mapel')
-            ->distinct()
-            ->orderBy('subjects.nama_mapel')
-            ->pluck('subjects.nama_mapel');
+            ->select('subjects.nama_mapel')->distinct()
+            ->orderBy('subjects.nama_mapel')->pluck('subjects.nama_mapel');
 
         $filterKelas = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
             ->join('classrooms', 'classrooms.id', '=', 'teacher_attendances.classroom_id')
-            ->select('classrooms.nama_kelas')
-            ->distinct()
-            ->orderBy('classrooms.nama_kelas')
-            ->pluck('classrooms.nama_kelas');
+            ->select('classrooms.nama_kelas')->distinct()
+            ->orderBy('classrooms.nama_kelas')->pluck('classrooms.nama_kelas');
 
         $filterStatuses = AttendanceDetail::query()
-            ->select('status')
-            ->distinct()
-            ->orderBy('status')
-            ->pluck('status');
+            ->select('status')->distinct()->orderBy('status')->pluck('status');
+
+        $filters    = $request->only(['tahun_ajaran', 'tanggal', 'guru', 'mapel', 'kelas', 'status']);
+        $hasFilter  = (bool) array_filter($filters);
+
+        $attendanceDetails = collect();
+        if ($hasFilter) {
+            $query = AttendanceDetail::with([
+                'teacherAttendance.teacher',
+                'teacherAttendance.classroom',
+                'teacherAttendance.subject',
+                'teacherAttendance.academicYear',
+                'student.classroom',
+            ])->latest();
+
+            if ($request->filled('tahun_ajaran')) {
+                $query->whereHas('teacherAttendance.academicYear', fn($q) => $q->where('tahun_ajaran', $request->tahun_ajaran));
+            }
+            if ($request->filled('tanggal')) {
+                $query->whereHas('teacherAttendance', fn($q) => $q->whereDate('tanggal', $request->tanggal));
+            }
+            if ($request->filled('guru')) {
+                $query->whereHas('teacherAttendance.teacher', fn($q) => $q->where('nama_lengkap', $request->guru));
+            }
+            if ($request->filled('mapel')) {
+                $query->whereHas('teacherAttendance.subject', fn($q) => $q->where('nama_mapel', $request->mapel));
+            }
+            if ($request->filled('kelas')) {
+                $query->whereHas('teacherAttendance.classroom', fn($q) => $q->where('nama_kelas', $request->kelas));
+            }
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $attendanceDetails = $query->get();
+        }
+
+        $teacherAttendances = \App\Models\TeacherAttendance::with(['teacher', 'classroom', 'subject', 'academicYear'])
+            ->orderByDesc('tanggal')->orderByDesc('id')->get();
+
+        $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
 
         return view('admin.attendance_details.index', compact(
             'attendanceDetails',
+            'hasFilter',
+            'filters',
             'teacherAttendances',
             'students',
             'filterTahunAjarans',
-            'filterTangggals',
             'filterGurus',
             'filterMapels',
             'filterKelas',

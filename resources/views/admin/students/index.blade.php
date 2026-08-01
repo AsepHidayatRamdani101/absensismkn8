@@ -114,80 +114,87 @@
             </form>
 
             <div class="table-responsive">
-                <table id="tableStudents" class="table table-bordered table-striped">
+                @if (!$hasFilter)
+                    <div class="alert alert-info">
+                        <i class="fas fa-filter mr-1"></i>
+                        Terapkan filter jurusan atau kelas terlebih dahulu untuk menampilkan data siswa.
+                    </div>
+                @else
+                    <table id="tableStudents" class="table table-bordered table-striped">
 
-                    <thead>
+                        <thead>
 
-                        <tr>
-                            <th width="3%"><input type="checkbox" id="checkAllStudents"></th>
-                            <th width="5%">No</th>
-                            <th>NISN</th>
-                            <th>Nama</th>
-                            <th>Status</th>
-                            <th>JK</th>
-                            <th>Kelas</th>
-                            <th>Jabatan</th>
-                            <th>No HP</th>
-                            <th width="15%">Aksi</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                        @foreach ($students as $student)
                             <tr>
-
-                                <td><input type="checkbox" class="check-student" value="{{ $student->id }}"></td>
-
-                                <td>{{ $loop->iteration }}</td>
-
-                                <td>{{ $student->nisn }}</td>
-
-                                <td>{{ $student->nama_lengkap }}</td>
-
-                                <td>
-                                    @if ($student->has_account)
-                                        <span class="badge badge-success">Sudah</span>
-                                    @else
-                                        <span class="badge badge-secondary">Belum</span>
-                                    @endif
-                                </td>
-
-                                <td>{{ $student->jenis_kelamin }}</td>
-
-                                <td>
-
-                                    {{ $student->classroom->nama_kelas }}
-
-                                </td>
-
-                                <td>{{ $student->jabatan_kelas_label }}</td>
-
-                                <td>{{ $student->no_hp }}</td>
-
-                                <td>
-
-                                    <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $student->id }}">
-
-                                        <i class="fas fa-edit"></i>
-
-                                    </button>
-
-                                    <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $student->id }}">
-
-                                        <i class="fas fa-trash"></i>
-
-                                    </button>
-
-                                </td>
-
+                                <th width="3%"><input type="checkbox" id="checkAllStudents"></th>
+                                <th width="5%">No</th>
+                                <th>NISN</th>
+                                <th>Nama</th>
+                                <th>Status</th>
+                                <th>JK</th>
+                                <th>Kelas</th>
+                                <th>Jabatan</th>
+                                <th>No HP</th>
+                                <th width="15%">Aksi</th>
                             </tr>
-                        @endforeach
 
-                    </tbody>
+                        </thead>
 
-                </table>
+                        <tbody>
+
+                            @foreach ($students as $student)
+                                <tr>
+
+                                    <td><input type="checkbox" class="check-student" value="{{ $student->id }}"></td>
+
+                                    <td>{{ $loop->iteration }}</td>
+
+                                    <td>{{ $student->nisn }}</td>
+
+                                    <td>{{ $student->nama_lengkap }}</td>
+
+                                    <td>
+                                        @if ($student->has_account)
+                                            <span class="badge badge-success">Sudah</span>
+                                        @else
+                                            <span class="badge badge-secondary">Belum</span>
+                                        @endif
+                                    </td>
+
+                                    <td>{{ $student->jenis_kelamin }}</td>
+
+                                    <td>
+
+                                        {{ $student->classroom->nama_kelas }}
+
+                                    </td>
+
+                                    <td>{{ $student->jabatan_kelas_label }}</td>
+
+                                    <td>{{ $student->no_hp }}</td>
+
+                                    <td>
+
+                                        <button class="btn btn-warning btn-xs btn-edit" data-id="{{ $student->id }}">
+
+                                            <i class="fas fa-edit"></i>
+
+                                        </button>
+
+                                        <button class="btn btn-danger btn-xs btn-delete" data-id="{{ $student->id }}">
+
+                                            <i class="fas fa-trash"></i>
+
+                                        </button>
+
+                                    </td>
+
+                                </tr>
+                            @endforeach
+
+                        </tbody>
+
+                    </table>
+                @endif
             </div>
 
         </div>

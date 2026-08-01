@@ -345,6 +345,12 @@ return [
                     'route' => 'school-settings.index',
                     'icon' => 'fas fa-school',
                 ],
+
+                [
+                    'text' => 'Pengaturan Sistem',
+                    'route' => 'app-settings.index',
+                    'icon' => 'fas fa-tools',
+                ],
             ],
         ],
         [

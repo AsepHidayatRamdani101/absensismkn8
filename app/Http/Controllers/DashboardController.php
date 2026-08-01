@@ -58,6 +58,10 @@ class DashboardController extends Controller
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
 
+        $activeUsers = DB::table('sessions')
+            ->where('last_activity', '>=', now()->subMinutes(30)->timestamp)
+            ->count();
+
         $totalStudents = Student::count();
         $totalTeachers = Teacher::count();
         $totalClassrooms = Classroom::count();
@@ -256,7 +260,8 @@ class DashboardController extends Controller
             'topTeachersPresent',
             'topTeachersAbsent',
             'topStudentsPresent',
-            'topStudentsAbsent'
+            'topStudentsAbsent',
+            'activeUsers'
         ));
     }
 

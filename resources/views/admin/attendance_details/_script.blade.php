@@ -5,65 +5,15 @@
         // DATATABLE
         //----------------------------------
 
-        let tableAttendanceDetails = $('#tableAttendanceDetails').DataTable({
-            responsive: true,
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
-            }
-        });
-
-        $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-            if (settings.nTable.id !== 'tableAttendanceDetails') {
-                return true;
-            }
-
-            let tahunAjaranFilter = $('#filterTahunAjaran').val();
-            let tanggalFilter = $('#filterTanggal').val();
-            let guruFilter = $('#filterGuru').val();
-            let mapelFilter = $('#filterMapel').val();
-            let kelasFilter = $('#filterKelas').val();
-            let statusFilter = $('#filterStatus').val();
-
-            let rowNode = tableAttendanceDetails.row(dataIndex).node();
-
-            if (!rowNode) {
-                return true;
-            }
-
-            let rowTahunAjaran = $(rowNode).data('tahun-ajaran') ? String($(rowNode).data(
-                'tahun-ajaran')) : '';
-            let rowTanggal = $(rowNode).data('tanggal') ? String($(rowNode).data('tanggal')) : '';
-            let rowGuru = $(rowNode).data('guru') ? String($(rowNode).data('guru')) : '';
-            let rowMapel = $(rowNode).data('mapel') ? String($(rowNode).data('mapel')) : '';
-            let rowKelas = $(rowNode).data('kelas') ? String($(rowNode).data('kelas')) : '';
-            let rowStatus = $(rowNode).data('status') ? String($(rowNode).data('status')) : '';
-
-            if (tahunAjaranFilter && rowTahunAjaran !== tahunAjaranFilter) {
-                return false;
-            }
-
-            if (tanggalFilter && rowTanggal !== tanggalFilter) {
-                return false;
-            }
-
-            if (guruFilter && rowGuru !== guruFilter) {
-                return false;
-            }
-
-            if (mapelFilter && rowMapel !== mapelFilter) {
-                return false;
-            }
-
-            if (kelasFilter && rowKelas !== kelasFilter) {
-                return false;
-            }
-
-            if (statusFilter && rowStatus !== statusFilter) {
-                return false;
-            }
-
-            return true;
-        });
+        let tableAttendanceDetails = null;
+        if ($('#tableAttendanceDetails').length) {
+            tableAttendanceDetails = $('#tableAttendanceDetails').DataTable({
+                responsive: true,
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+                }
+            });
+        }
 
         function updateAttendanceDetailsBulkBtn() {
             let count = $('.check-attendance-detail:checked').length;
@@ -120,13 +70,6 @@
         });
 
         updateAttendanceDetailsBulkBtn();
-
-        $('#filterTahunAjaran, #filterTanggal, #filterGuru, #filterMapel, #filterKelas, #filterStatus').on(
-            'change',
-            function() {
-                tableAttendanceDetails.draw();
-            }
-        );
 
         function filterStudentOptions(sessionSelector, studentSelector, selectedStudentId = null) {
             let classroomId = $(sessionSelector).find('option:selected').data('classroom-id');

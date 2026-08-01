@@ -112,38 +112,45 @@
 
             <p class="text-muted mb-2"><strong>Periode:</strong> {{ $periodLabel }}</p>
 
-            <div class="table-responsive">
-                <table id="tableTeacherReport" class="table table-bordered table-striped">
-                    <thead>
-                        <tr>
-                            <th width="5%">No</th>
-                            <th>Tanggal</th>
-                            <th>Guru</th>
-                            <th>Mapel</th>
-                            <th>Jurusan</th>
-                            <th>Kelas</th>
-                            <th>Pertemuan</th>
-                            <th>Status</th>
-                            <th>Jumlah Siswa Diabsen</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($rows as $item)
+            @if (!$hasFilter)
+                <div class="alert alert-info">
+                    <i class="fas fa-filter mr-1"></i>
+                    Terapkan filter terlebih dahulu untuk menampilkan data laporan absensi guru.
+                </div>
+            @else
+                <div class="table-responsive">
+                    <table id="tableTeacherReport" class="table table-bordered table-striped">
+                        <thead>
                             <tr>
-                                <td>{{ $loop->iteration }}</td>
-                                <td>{{ $item->tanggal }}</td>
-                                <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
-                                <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
-                                <td>{{ $item->classroom->major->nama_jurusan ?? '-' }}</td>
-                                <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
-                                <td>{{ $item->pertemuan }}</td>
-                                <td>{{ $item->status }}</td>
-                                <td>{{ $item->attendanceDetails->count() }}</td>
+                                <th width="5%">No</th>
+                                <th>Tanggal</th>
+                                <th>Guru</th>
+                                <th>Mapel</th>
+                                <th>Jurusan</th>
+                                <th>Kelas</th>
+                                <th>Pertemuan</th>
+                                <th>Status</th>
+                                <th>Jumlah Siswa Diabsen</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            @foreach ($rows as $item)
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+                                    <td>{{ $item->tanggal }}</td>
+                                    <td>{{ $item->teacher->nama_lengkap ?? '-' }}</td>
+                                    <td>{{ $item->subject->nama_mapel ?? '-' }}</td>
+                                    <td>{{ $item->classroom->major->nama_jurusan ?? '-' }}</td>
+                                    <td>{{ $item->classroom->nama_kelas ?? '-' }}</td>
+                                    <td>{{ $item->pertemuan }}</td>
+                                    <td>{{ $item->status }}</td>
+                                    <td>{{ $item->attendanceDetails->count() }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
         </div>
     </div>
 @stop
@@ -155,12 +162,14 @@
 @section('js')
     <script>
         $(function() {
-            $('#tableTeacherReport').DataTable({
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
-                }
-            });
+            if ($('#tableTeacherReport').length) {
+                $('#tableTeacherReport').DataTable({
+                    responsive: true,
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+                    }
+                });
+            }
 
             function togglePeriodField() {
                 let periodType = $('#period_type').val();

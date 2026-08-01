@@ -282,11 +282,15 @@
             <div class="card-body">
                 <form method="GET" action="{{ route('guru.attendance-details.index') }}">
                     <div class="row align-items-end">
-                        <div class="col-md-8 col-lg-6">
-                            <label for="classroom_id" class="mb-1">Filter Kelas (sesuai jadwal hari ini)</label>
-                            <select name="classroom_id" id="classroom_id" class="form-control"
-                                onchange="this.form.submit()">
-                                <option value="0">Semua Kelas Hari Ini</option>
+                        <div class="col-md-4 mb-2 mb-md-0">
+                            <label for="tanggal" class="mb-1">Tanggal</label>
+                            <input type="date" name="tanggal" id="tanggal" class="form-control"
+                                value="{{ $hasFilter ? $tanggalFilter : '' }}" max="{{ now()->toDateString() }}">
+                        </div>
+                        <div class="col-md-4 mb-2 mb-md-0">
+                            <label for="classroom_id" class="mb-1">Filter Kelas (sesuai jadwal)</label>
+                            <select name="classroom_id" id="classroom_id" class="form-control">
+                                <option value="0">Semua Kelas</option>
                                 @foreach ($classOptions as $classroom)
                                     <option value="{{ $classroom->id }}" @selected($selectedClassroomId === (int) $classroom->id)>
                                         {{ $classroom->nama_kelas }} ({{ $classroom->kode_kelas }})
@@ -294,190 +298,206 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary filter-submit-btn">
+                                <i class="fas fa-filter mr-1"></i> Terapkan
+                            </button>
+                            <a href="{{ route('guru.attendance-details.index') }}"
+                                class="btn btn-outline-secondary ml-1">Reset</a>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-body p-0">
-                <form id="bulkAttendanceForm" method="POST" action="{{ route('guru.attendance-details.bulk-submit') }}"
-                    class="d-none">
-                    @csrf
-                    <input type="hidden" name="classroom_id" value="{{ $selectedClassroomId }}">
-                    <input type="hidden" name="bulk_status" id="bulk_status" value="">
-                </form>
+        @if (!$hasFilter)
+            <div class="alert alert-info">
+                <i class="fas fa-filter mr-1"></i>
+                Pilih tanggal dan terapkan filter untuk menampilkan data absensi siswa.
+            </div>
+        @endif
 
-                <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap"
-                    id="bulkActionBar" style="gap:.5rem; display: none;">
-                    <small class="text-muted">
-                        <span id="selectedCountLabel">0</span> siswa dipilih. Pilih aksi massal:
-                        Hadir / Sakit / Izin / Alpa / Terlambat.
-                    </small>
-                    <div class="d-flex flex-wrap bulk-status-grid" style="gap: .4rem;">
-                        <button type="button" class="btn btn-success btn-xs btn-bulk-status" data-status="Hadir"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                            Hadir
-                        </button>
-                        <button type="button" class="btn btn-warning btn-xs" disabled
-                            title="Nonaktif, gunakan approval izin/sakit wali kelas">
-                            Sakit
-                        </button>
-                        <button type="button" class="btn btn-info btn-xs" disabled
-                            title="Nonaktif, gunakan approval izin/sakit wali kelas">
-                            Izin
-                        </button>
-                        <button type="button" class="btn btn-danger btn-xs btn-bulk-status" data-status="Alpa"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                            Alpa
-                        </button>
-                        <button type="button" class="btn btn-warning btn-xs btn-bulk-status" data-status="Terlambat"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                            Terlambat
-                        </button>
+        @if ($hasFilter)
+            <div class="card">
+                <div class="card-body p-0">
+                    <form id="bulkAttendanceForm" method="POST"
+                        action="{{ route('guru.attendance-details.bulk-submit') }}" class="d-none">
+                        @csrf
+                        <input type="hidden" name="classroom_id" value="{{ $selectedClassroomId }}">
+                        <input type="hidden" name="bulk_status" id="bulk_status" value="">
+                    </form>
+
+                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap"
+                        id="bulkActionBar" style="gap:.5rem; display: none;">
+                        <small class="text-muted">
+                            <span id="selectedCountLabel">0</span> siswa dipilih. Pilih aksi massal:
+                            Hadir / Sakit / Izin / Alpa / Terlambat.
+                        </small>
+                        <div class="d-flex flex-wrap bulk-status-grid" style="gap: .4rem;">
+                            <button type="button" class="btn btn-success btn-xs btn-bulk-status" data-status="Hadir"
+                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                Hadir
+                            </button>
+                            <button type="button" class="btn btn-warning btn-xs" disabled
+                                title="Nonaktif, gunakan approval izin/sakit wali kelas">
+                                Sakit
+                            </button>
+                            <button type="button" class="btn btn-info btn-xs" disabled
+                                title="Nonaktif, gunakan approval izin/sakit wali kelas">
+                                Izin
+                            </button>
+                            <button type="button" class="btn btn-danger btn-xs btn-bulk-status" data-status="Alpa"
+                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                Alpa
+                            </button>
+                            <button type="button" class="btn btn-warning btn-xs btn-bulk-status" data-status="Terlambat"
+                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                Terlambat
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <div class="px-3 pt-2 mobile-only">
-                    <small class="text-muted">Mode mobile aktif: pilih beberapa siswa lalu gunakan aksi massal di bagian
-                        bawah.</small>
-                </div>
-
-                <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap"
-                    id="selectionQuickTools" style="gap:.5rem;">
-                    <small class="text-muted mb-0">Pemilihan cepat siswa</small>
-                    <div class="d-flex flex-wrap quick-tools-grid" style="gap: .4rem;">
-                        <button type="button" id="btnSelectVisibleRows" class="btn btn-outline-primary btn-xs"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                            Pilih Semua Terlihat
-                        </button>
-                        <button type="button" id="btnClearSelectedRows" class="btn btn-outline-secondary btn-xs"
-                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                            Bersihkan Pilihan
-                        </button>
+                    <div class="px-3 pt-2 mobile-only">
+                        <small class="text-muted">Mode mobile aktif: pilih beberapa siswa lalu gunakan aksi massal di bagian
+                            bawah.</small>
                     </div>
-                </div>
 
-                <div class="table-responsive p-3 pt-2">
-                    <table id="tableGuruAttendanceDetails" class="table table-bordered table-striped mb-0">
-                        <thead>
-                            <tr>
-                                <th class="col-check">
-                                    <input type="checkbox" id="check_all_students"
-                                        @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
-                                </th>
-                                <th width="5%">No</th>
-                                <th>Nama Siswa</th>
-                                <th width="20%">Kelas</th>
-                                <th width="18%">Status Saat Ini</th>
-                                <th width="30%">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($students as $student)
-                                @php
-                                    $rawStatus = $statusByStudentId[$student->id] ?? null;
-                                    $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus ?? 'Belum Absen';
-                                @endphp
+                    <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap"
+                        id="selectionQuickTools" style="gap:.5rem;">
+                        <small class="text-muted mb-0">Pemilihan cepat siswa</small>
+                        <div class="d-flex flex-wrap quick-tools-grid" style="gap: .4rem;">
+                            <button type="button" id="btnSelectVisibleRows" class="btn btn-outline-primary btn-xs"
+                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                Pilih Semua Terlihat
+                            </button>
+                            <button type="button" id="btnClearSelectedRows" class="btn btn-outline-secondary btn-xs"
+                                @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                Bersihkan Pilihan
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive p-3 pt-2">
+                        <table id="tableGuruAttendanceDetails" class="table table-bordered table-striped mb-0">
+                            <thead>
                                 <tr>
-                                    <td class="col-check">
-                                        <input type="checkbox" class="check-student" name="student_ids[]"
-                                            value="{{ $student->id }}" form="bulkAttendanceForm"
-                                            @if ($isWeekendHoliday) disabled @endif>
-                                    </td>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $student->nama_lengkap }}</td>
-                                    <td>{{ $student->classroom->nama_kelas ?? '-' }}</td>
-                                    <td>
-                                        @if ($displayStatus === 'Hadir')
-                                            <span class="badge badge-success status-badge">Hadir</span>
-                                        @elseif ($displayStatus === 'Sakit')
-                                            <span class="badge badge-warning status-badge">Sakit</span>
-                                        @elseif ($displayStatus === 'Izin')
-                                            <span class="badge badge-info status-badge">Izin</span>
-                                        @elseif ($displayStatus === 'Alpa')
-                                            <span class="badge badge-danger status-badge">Alpa</span>
-                                        @elseif ($displayStatus === 'Terlambat')
-                                            <span class="badge badge-warning status-badge">Terlambat</span>
-                                        @else
-                                            <span class="badge badge-secondary status-badge">Belum Absen</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <div class="attendance-actions">
-                                            <form method="POST"
-                                                action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                class="d-inline">
-                                                @csrf
-                                                <input type="hidden" name="classroom_id"
-                                                    value="{{ $student->classroom_id }}">
-                                                <input type="hidden" name="status" value="Hadir">
-                                                <button type="submit" class="btn btn-success btn-xs"
-                                                    @if ($isWeekendHoliday) disabled @endif>Hadir</button>
-                                            </form>
-
-                                            <form method="POST"
-                                                action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                class="d-inline">
-                                                @csrf
-                                                <input type="hidden" name="classroom_id"
-                                                    value="{{ $student->classroom_id }}">
-                                                <input type="hidden" name="status" value="Sakit">
-                                                <button type="button" class="btn btn-warning btn-xs" disabled
-                                                    title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>
-                                            </form>
-
-                                            <form method="POST"
-                                                action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                class="d-inline">
-                                                @csrf
-                                                <input type="hidden" name="classroom_id"
-                                                    value="{{ $student->classroom_id }}">
-                                                <input type="hidden" name="status" value="Izin">
-                                                <button type="button" class="btn btn-info btn-xs" disabled
-                                                    title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>
-                                            </form>
-
-                                            <form method="POST"
-                                                action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                class="d-inline">
-                                                @csrf
-                                                <input type="hidden" name="classroom_id"
-                                                    value="{{ $student->classroom_id }}">
-                                                <input type="hidden" name="status" value="Alpa">
-                                                <button type="submit" class="btn btn-danger btn-xs"
-                                                    @if ($isWeekendHoliday) disabled @endif>Alpa</button>
-                                            </form>
-
-                                            <form method="POST"
-                                                action="{{ route('guru.attendance-details.submit', $student->id) }}"
-                                                class="d-inline">
-                                                @csrf
-                                                <input type="hidden" name="classroom_id"
-                                                    value="{{ $student->classroom_id }}">
-                                                <input type="hidden" name="status" value="Terlambat">
-                                                <button type="submit" class="btn btn-warning btn-xs"
-                                                    @if ($isWeekendHoliday) disabled @endif>Terlambat</button>
-                                            </form>
-                                        </div>
-                                    </td>
+                                    <th class="col-check">
+                                        <input type="checkbox" id="check_all_students"
+                                            @if ($isWeekendHoliday || $students->isEmpty()) disabled @endif>
+                                    </th>
+                                    <th width="5%">No</th>
+                                    <th>Nama Siswa</th>
+                                    <th width="20%">Kelas</th>
+                                    <th width="18%">Status Saat Ini</th>
+                                    <th width="30%">Aksi</th>
                                 </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="text-center py-3">
-                                        @if ($isWeekendHoliday)
-                                            Hari {{ $todayDayName }} libur otomatis.
-                                        @else
-                                            Tidak ada data siswa dari kelas yang memiliki jadwal Anda hari ini.
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @forelse ($students as $student)
+                                    @php
+                                        $rawStatus = $statusByStudentId[$student->id] ?? null;
+                                        $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus ?? 'Belum Absen';
+                                    @endphp
+                                    <tr>
+                                        <td class="col-check">
+                                            <input type="checkbox" class="check-student" name="student_ids[]"
+                                                value="{{ $student->id }}" form="bulkAttendanceForm"
+                                                @if ($isWeekendHoliday) disabled @endif>
+                                        </td>
+                                        <td>{{ $loop->iteration }}</td>
+                                        <td>{{ $student->nama_lengkap }}</td>
+                                        <td>{{ $student->classroom->nama_kelas ?? '-' }}</td>
+                                        <td>
+                                            @if ($displayStatus === 'Hadir')
+                                                <span class="badge badge-success status-badge">Hadir</span>
+                                            @elseif ($displayStatus === 'Sakit')
+                                                <span class="badge badge-warning status-badge">Sakit</span>
+                                            @elseif ($displayStatus === 'Izin')
+                                                <span class="badge badge-info status-badge">Izin</span>
+                                            @elseif ($displayStatus === 'Alpa')
+                                                <span class="badge badge-danger status-badge">Alpa</span>
+                                            @elseif ($displayStatus === 'Terlambat')
+                                                <span class="badge badge-warning status-badge">Terlambat</span>
+                                            @else
+                                                <span class="badge badge-secondary status-badge">Belum Absen</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="attendance-actions">
+                                                <form method="POST"
+                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="classroom_id"
+                                                        value="{{ $student->classroom_id }}">
+                                                    <input type="hidden" name="status" value="Hadir">
+                                                    <button type="submit" class="btn btn-success btn-xs"
+                                                        @if ($isWeekendHoliday) disabled @endif>Hadir</button>
+                                                </form>
+
+                                                <form method="POST"
+                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="classroom_id"
+                                                        value="{{ $student->classroom_id }}">
+                                                    <input type="hidden" name="status" value="Sakit">
+                                                    <button type="button" class="btn btn-warning btn-xs" disabled
+                                                        title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>
+                                                </form>
+
+                                                <form method="POST"
+                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="classroom_id"
+                                                        value="{{ $student->classroom_id }}">
+                                                    <input type="hidden" name="status" value="Izin">
+                                                    <button type="button" class="btn btn-info btn-xs" disabled
+                                                        title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>
+                                                </form>
+
+                                                <form method="POST"
+                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="classroom_id"
+                                                        value="{{ $student->classroom_id }}">
+                                                    <input type="hidden" name="status" value="Alpa">
+                                                    <button type="submit" class="btn btn-danger btn-xs"
+                                                        @if ($isWeekendHoliday) disabled @endif>Alpa</button>
+                                                </form>
+
+                                                <form method="POST"
+                                                    action="{{ route('guru.attendance-details.submit', $student->id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="classroom_id"
+                                                        value="{{ $student->classroom_id }}">
+                                                    <input type="hidden" name="status" value="Terlambat">
+                                                    <button type="submit" class="btn btn-warning btn-xs"
+                                                        @if ($isWeekendHoliday) disabled @endif>Terlambat</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="text-center py-3">
+                                            @if ($isWeekendHoliday)
+                                                Hari {{ $todayDayName }} libur otomatis.
+                                            @else
+                                                Tidak ada data siswa dari kelas yang memiliki jadwal Anda pada tanggal ini.
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
+        @endif
     </div>
 @stop
 

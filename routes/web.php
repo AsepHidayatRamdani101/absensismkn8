@@ -20,6 +20,7 @@ use App\Http\Controllers\OfficerAttendancePermitController;
 use App\Http\Controllers\TeacherAttendanceController;
 use App\Http\Controllers\TeacherLeaveRequestController;
 use App\Http\Controllers\TeacherSubjectController;
+use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\TeacherController;
 
 Route::get('/', function () {
@@ -36,6 +37,14 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('school-settings', [SchoolSettingController::class, 'index'])->name('school-settings.index');
         Route::put('school-settings', [SchoolSettingController::class, 'update'])->name('school-settings.update');
+
+        Route::get('app-settings', [AppSettingController::class, 'index'])->name('app-settings.index');
+        Route::post('app-settings/clear-all', [AppSettingController::class, 'clearAll'])->name('app-settings.clear-all');
+        Route::post('app-settings/clear-cache', [AppSettingController::class, 'clearCache'])->name('app-settings.clear-cache');
+        Route::post('app-settings/clear-view', [AppSettingController::class, 'clearView'])->name('app-settings.clear-view');
+        Route::post('app-settings/clear-config', [AppSettingController::class, 'clearConfig'])->name('app-settings.clear-config');
+        Route::post('app-settings/clear-route', [AppSettingController::class, 'clearRoute'])->name('app-settings.clear-route');
+        Route::post('app-settings/clear-session', [AppSettingController::class, 'clearSession'])->name('app-settings.clear-session');
 
         Route::resource('majors', MajorController::class)->except(['create', 'show']);
         Route::post('majors/import', [MajorController::class, 'import'])->name('majors.import');

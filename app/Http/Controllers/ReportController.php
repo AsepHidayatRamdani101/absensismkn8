@@ -167,7 +167,10 @@ class ReportController extends Controller
 
     public function teacherAttendance(Request $request)
     {
-        $rows = $this->buildTeacherAttendanceQuery($request)->get();
+        $hasFilter = $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id'])
+            && array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'major_id', 'classroom_id']));
+
+        $rows = $hasFilter ? $this->buildTeacherAttendanceQuery($request)->get() : collect();
 
         $teachers = Teacher::orderBy('nama_lengkap')->get();
         $majors = Major::orderBy('nama_jurusan')->get();
@@ -175,6 +178,7 @@ class ReportController extends Controller
 
         return view('admin.reports.teacher-attendance', [
             'rows' => $rows,
+            'hasFilter' => (bool) $hasFilter,
             'teachers' => $teachers,
             'majors' => $majors,
             'classrooms' => $classrooms,
@@ -185,7 +189,10 @@ class ReportController extends Controller
 
     public function studentAttendance(Request $request)
     {
-        $rows = $this->buildStudentAttendanceQuery($request)->get();
+        $hasFilter = $request->hasAny(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status'])
+            && array_filter($request->only(['period_type', 'tanggal', 'minggu', 'bulan', 'tahun', 'teacher_id', 'student_id', 'major_id', 'classroom_id', 'status']));
+
+        $rows = $hasFilter ? $this->buildStudentAttendanceQuery($request)->get() : collect();
 
         $teachers = Teacher::orderBy('nama_lengkap')->get();
         $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
@@ -194,6 +201,7 @@ class ReportController extends Controller
 
         return view('admin.reports.student-attendance', [
             'rows' => $rows,
+            'hasFilter' => (bool) $hasFilter,
             'teachers' => $teachers,
             'students' => $students,
             'majors' => $majors,

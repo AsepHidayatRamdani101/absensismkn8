@@ -35,8 +35,11 @@ class StudentController extends Controller
     {
         $majorFilter     = (string) $request->input('major_id', '');
         $classroomFilter = (string) $request->input('classroom_id', '');
+        $hasFilter       = $majorFilter !== '' || $classroomFilter !== '';
 
-        $students = $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter);
+        $students = $hasFilter
+            ? $this->buildStudentsWithAccountStatus($majorFilter, $classroomFilter)
+            : collect();
 
         $majors = Major::orderBy('nama_jurusan')->get();
 
@@ -52,7 +55,8 @@ class StudentController extends Controller
                 'classrooms',
                 'majors',
                 'majorFilter',
-                'classroomFilter'
+                'classroomFilter',
+                'hasFilter'
             )
         );
     }

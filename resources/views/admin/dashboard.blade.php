@@ -412,6 +412,24 @@
         </div>
     </div>
 
+    <div class="row">
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-olive stat-card">
+                <div class="inner">
+                    <h3>{{ $activeUsers }}</h3>
+                    <p>Pengguna Aktif Saat Ini</p>
+                    <small>30 menit terakhir</small>
+                </div>
+                <div class="icon">
+                    <i class="fas fa-user-clock"></i>
+                </div>
+                <a href="{{ route('app-settings.index') }}" class="small-box-footer">
+                    Lihat Setting <i class="fas fa-arrow-circle-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <p class="section-title mt-2">Ranking Kehadiran Bulan Ini</p>
     <div class="row">
         <div class="col-md-6">
