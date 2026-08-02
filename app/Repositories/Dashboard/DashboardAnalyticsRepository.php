@@ -94,6 +94,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
         $spCounts = $hasStudentWarningLetters
             ? StudentWarningLetter::query()
+            ->where('status', 'active')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->when($filters['academic_year_id'] !== '', fn(Builder $q) => $q->where('academic_year_id', (int) $filters['academic_year_id']))
             ->when($filters['semester'] !== '', fn(Builder $q) => $q->where('semester', $filters['semester']))
@@ -180,6 +181,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
         $spDistribution = $this->tableExists('student_warning_letters')
             ? StudentWarningLetter::query()
+            ->where('status', 'active')
             ->when(!empty($this->scopedStudentIds($filters, $scope)), fn(Builder $q) => $q->whereIn('student_id', $this->scopedStudentIds($filters, $scope)))
             ->selectRaw('sp_level, COUNT(*) as total')
             ->groupBy('sp_level')
@@ -358,6 +360,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
         if ($this->tableExists('student_warning_letters')) {
             $nearSp = StudentWarningLetter::query()
                 ->with('student:id,nama_lengkap')
+                ->where('status', 'active')
                 ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
                 ->whereIn('sp_level', ['SP1', 'SP2'])
                 ->orderByDesc('violation_weighted_total')
@@ -883,6 +886,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
         $base = StudentWarningLetter::query()
+            ->where('status', 'active')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->when($filters['academic_year_id'] !== '', fn(Builder $q) => $q->where('academic_year_id', (int) $filters['academic_year_id']))
             ->when($filters['semester'] !== '', fn(Builder $q) => $q->where('semester', $filters['semester']));
@@ -1319,6 +1323,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
         $spRows = $this->tableExists('student_warning_letters')
             ? StudentWarningLetter::query()
+            ->where('status', 'active')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->selectRaw('student_id, MAX(sp_level) as sp_level')
             ->groupBy('student_id')
