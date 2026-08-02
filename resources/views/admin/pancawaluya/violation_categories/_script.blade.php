@@ -235,5 +235,97 @@
                 Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan', 'error');
             });
         });
+
+        // ---- Modal Create ----
+        $('#modalCreate').on('show.bs.modal', function() {
+            $('#formCreate')[0].reset();
+            $('#createErrors').addClass('d-none').html('');
+        });
+
+        $('#formCreate').on('submit', function(e) {
+            e.preventDefault();
+            const btn = $(this).find('[type=submit]').prop('disabled', true);
+            $('#createErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ route('pancawaluya.violation-categories.store') }}",
+                type: 'POST',
+                data: $(this).serialize(),
+                success: function(resp) {
+                    $('#modalCreate').modal('hide');
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                },
+                error: function(xhr) {
+                    const errors = xhr.responseJSON?.errors;
+                    if (errors) {
+                        const list = Object.values(errors).flat().map(m => `<li>${m}</li>`)
+                            .join('');
+                        $('#createErrors').removeClass('d-none').html('<ul class="mb-0">' +
+                            list + '</ul>');
+                    } else {
+                        Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan',
+                            'error');
+                    }
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                }
+            });
+        });
+
+        // ---- Modal Edit ----
+        $(document).on('click', '.btn-edit', function() {
+            const id = $(this).data('id');
+            $('#editErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ url('pancawaluya/violation-categories') }}/" + id + "/edit",
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(data) {
+                    $('#editId').val(data.id);
+                    $('#editCode').val(data.code);
+                    $('#editName').val(data.name);
+                    $('#editDescription').val(data.description || '');
+                    $('#editIsActive').val(data.is_active ? '1' : '0');
+                    $('#modalEdit').modal('show');
+                },
+                error: function() {
+                    Swal.fire('Gagal', 'Gagal memuat data.', 'error');
+                }
+            });
+        });
+
+        $('#formEdit').on('submit', function(e) {
+            e.preventDefault();
+            const id = $('#editId').val();
+            const btn = $(this).find('[type=submit]').prop('disabled', true);
+            $('#editErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ url('pancawaluya/violation-categories') }}/" + id,
+                type: 'POST',
+                data: $(this).serialize(),
+                success: function(resp) {
+                    $('#modalEdit').modal('hide');
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                },
+                error: function(xhr) {
+                    const errors = xhr.responseJSON?.errors;
+                    if (errors) {
+                        const list = Object.values(errors).flat().map(m => `<li>${m}</li>`)
+                            .join('');
+                        $('#editErrors').removeClass('d-none').html('<ul class="mb-0">' +
+                            list + '</ul>');
+                    } else {
+                        Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan',
+                            'error');
+                    }
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                }
+            });
+        });
     });
 </script>

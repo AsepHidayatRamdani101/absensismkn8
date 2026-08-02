@@ -96,12 +96,31 @@ class RewardController extends Controller
     {
         $this->service->create($request->validated(), $request);
 
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Master reward berhasil ditambahkan.']);
+        }
+
         return redirect()->route('pancawaluya.rewards.index')->with('success', 'Master reward berhasil ditambahkan.');
     }
 
     public function edit(RewardItem $reward)
     {
         $reward->load('mappings');
+
+        if (request()->ajax()) {
+            $mapping = $reward->mappings->first();
+            return response()->json([
+                'id' => $reward->id,
+                'code' => $reward->code,
+                'name' => $reward->name,
+                'reward_category_id' => $reward->reward_category_id,
+                'point' => $reward->point,
+                'description' => $reward->description,
+                'is_active' => $reward->is_active,
+                'character_dimension_id' => $mapping?->character_dimension_id,
+                'weight' => $mapping?->weight,
+            ]);
+        }
 
         return view('admin.pancawaluya.rewards.edit', [
             'reward' => $reward,
@@ -114,6 +133,10 @@ class RewardController extends Controller
     public function update(UpdateRewardItemRequest $request, RewardItem $reward)
     {
         $this->service->update($reward, $request->validated(), $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Master reward berhasil diperbarui.']);
+        }
 
         return redirect()->route('pancawaluya.rewards.index')->with('success', 'Master reward berhasil diperbarui.');
     }
@@ -249,7 +272,7 @@ class RewardController extends Controller
                 . '<button class="btn btn-danger btn-xs btn-force-delete" data-id="' . $row->id . '"><i class="fas fa-times"></i></button>';
         }
 
-        return '<a href="' . route('pancawaluya.rewards.edit', $row) . '" class="btn btn-warning btn-xs"><i class="fas fa-edit"></i></a> '
+        return '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $row->id . '"><i class="fas fa-edit"></i></button> '
             . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $row->id . '"><i class="fas fa-trash"></i></button>';
     }
 }

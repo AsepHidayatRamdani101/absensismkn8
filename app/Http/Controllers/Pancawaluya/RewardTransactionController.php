@@ -98,17 +98,45 @@ class RewardTransactionController extends Controller
     {
         $this->service->create($request->validated(), $request);
 
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Transaksi reward berhasil dibuat.']);
+        }
+
         return redirect()->route('pancawaluya.reward-transactions.index')->with('success', 'Transaksi reward berhasil dibuat.');
     }
 
     public function edit(RewardTransaction $reward_transaction)
     {
+        if (request()->ajax()) {
+            $row = $reward_transaction->load('student', 'classroom');
+            return response()->json([
+                'id' => $row->id,
+                'academic_year_id' => $row->academic_year_id,
+                'semester' => $row->semester,
+                'transaction_date' => optional($row->transaction_date)->toDateString(),
+                'student_id' => $row->student_id,
+                'student_text' => $row->student
+                    ? ($row->student->nis . ' - ' . $row->student->nama_lengkap . ' (' . ($row->classroom?->nama_kelas ?? '-') . ')')
+                    : null,
+                'classroom_id' => $row->classroom_id,
+                'reward_category_id' => $row->reward_category_id,
+                'reward_item_id' => $row->reward_item_id,
+                'source' => $row->source,
+                'status' => $row->status,
+                'description' => $row->description,
+            ]);
+        }
+
         return view('admin.pancawaluya.reward_transactions.edit', $this->formData() + ['row' => $reward_transaction]);
     }
 
     public function update(UpdateRewardTransactionRequest $request, RewardTransaction $reward_transaction)
     {
         $this->service->update($reward_transaction, $request->validated(), $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Transaksi reward berhasil diperbarui.']);
+        }
 
         return redirect()->route('pancawaluya.reward-transactions.index')->with('success', 'Transaksi reward berhasil diperbarui.');
     }
@@ -304,7 +332,7 @@ class RewardTransactionController extends Controller
                 . '<button class="btn btn-danger btn-xs btn-force-delete" data-id="' . $row->id . '"><i class="fas fa-times"></i></button>';
         }
 
-        return '<a href="' . route('pancawaluya.reward-transactions.edit', $row) . '" class="btn btn-warning btn-xs"><i class="fas fa-edit"></i></a> '
+        return '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $row->id . '"><i class="fas fa-edit"></i></button> '
             . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $row->id . '"><i class="fas fa-trash"></i></button>';
     }
 }

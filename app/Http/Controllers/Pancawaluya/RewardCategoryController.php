@@ -15,6 +15,7 @@ use App\Services\Pancawaluya\RewardCategoryService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
@@ -33,6 +34,16 @@ class RewardCategoryController extends Controller
     public function datatable(Request $request)
     {
         $draw = (int) $request->input('draw', 1);
+
+        if (!Schema::hasTable('reward_categories')) {
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
         $start = max((int) $request->input('start', 0), 0);
         $length = max(min((int) $request->input('length', 10), 100), 10);
         $page = (int) floor($start / $length) + 1;
@@ -81,11 +92,19 @@ class RewardCategoryController extends Controller
     {
         $this->service->create($request->validated(), $request);
 
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Kategori reward berhasil ditambahkan.']);
+        }
+
         return redirect()->route('pancawaluya.reward-categories.index')->with('success', 'Kategori reward berhasil ditambahkan.');
     }
 
     public function edit(RewardCategory $rewardCategory)
     {
+        if (request()->ajax()) {
+            return response()->json($rewardCategory->only(['id', 'code', 'name', 'description', 'is_active']));
+        }
+
         return view('admin.pancawaluya.reward_categories.edit', [
             'rewardCategory' => $rewardCategory,
         ]);
@@ -94,6 +113,10 @@ class RewardCategoryController extends Controller
     public function update(UpdateRewardCategoryRequest $request, RewardCategory $rewardCategory)
     {
         $this->service->update($rewardCategory, $request->validated(), $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Kategori reward berhasil diperbarui.']);
+        }
 
         return redirect()->route('pancawaluya.reward-categories.index')->with('success', 'Kategori reward berhasil diperbarui.');
     }
@@ -238,7 +261,7 @@ class RewardCategoryController extends Controller
                 . '<button class="btn btn-danger btn-xs btn-force-delete" data-id="' . $row->id . '"><i class="fas fa-times"></i></button>';
         }
 
-        return '<a href="' . route('pancawaluya.reward-categories.edit', $row) . '" class="btn btn-warning btn-xs"><i class="fas fa-edit"></i></a> '
+        return '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $row->id . '"><i class="fas fa-edit"></i></button> '
             . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $row->id . '"><i class="fas fa-trash"></i></button>';
     }
 }

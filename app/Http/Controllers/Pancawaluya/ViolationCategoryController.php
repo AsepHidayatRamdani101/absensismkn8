@@ -81,11 +81,19 @@ class ViolationCategoryController extends Controller
     {
         $this->service->create($request->validated(), $request);
 
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Kategori pelanggaran berhasil ditambahkan.']);
+        }
+
         return redirect()->route('pancawaluya.violation-categories.index')->with('success', 'Kategori pelanggaran berhasil ditambahkan.');
     }
 
     public function edit(ViolationCategory $violationCategory)
     {
+        if (request()->ajax()) {
+            return response()->json($violationCategory->only(['id', 'code', 'name', 'description', 'is_active']));
+        }
+
         return view('admin.pancawaluya.violation_categories.edit', [
             'violationCategory' => $violationCategory,
         ]);
@@ -94,6 +102,10 @@ class ViolationCategoryController extends Controller
     public function update(UpdateViolationCategoryRequest $request, ViolationCategory $violationCategory)
     {
         $this->service->update($violationCategory, $request->validated(), $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Kategori pelanggaran berhasil diperbarui.']);
+        }
 
         return redirect()->route('pancawaluya.violation-categories.index')->with('success', 'Kategori pelanggaran berhasil diperbarui.');
     }
@@ -238,7 +250,7 @@ class ViolationCategoryController extends Controller
                 . '<button class="btn btn-danger btn-xs btn-force-delete" data-id="' . $row->id . '"><i class="fas fa-times"></i></button>';
         }
 
-        return '<a href="' . route('pancawaluya.violation-categories.edit', $row) . '" class="btn btn-warning btn-xs"><i class="fas fa-edit"></i></a> '
+        return '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $row->id . '"><i class="fas fa-edit"></i></button> '
             . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $row->id . '"><i class="fas fa-trash"></i></button>';
     }
 }

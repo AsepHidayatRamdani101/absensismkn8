@@ -25,8 +25,10 @@
                 <input type="hidden" name="preview" value="0" class="input-import-preview">
                 <button type="button" class="btn btn-warning btn-import"><i class="fas fa-file-import"></i> Import</button>
             </form>
-            <a href="{{ route('pancawaluya.reward-transactions.create') }}" class="btn btn-primary"><i
+            <a href="{{ route('pancawaluya.reward-transactions.create') }}" class="btn btn-primary d-none"><i
                     class="fas fa-plus"></i> Tambah</a>
+            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalCreate"><i
+                    class="fas fa-plus"></i> Tambah</button>
         </div>
     </div>
 @stop
@@ -132,6 +134,9 @@
             </div>
         </div>
     </div>
+
+    @include('admin.pancawaluya.reward_transactions.modal-create')
+    @include('admin.pancawaluya.reward_transactions.modal-edit')
 @stop
 
 @section('js')

@@ -21,9 +21,17 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterface
 {
+    /**
+     * Cache table existence checks within a request.
+     *
+     * @var array<string, bool>
+     */
+    private array $tableExistsCache = [];
+
     public function buildScope(User $user): array
     {
         $teacher = Teacher::query()
@@ -72,26 +80,42 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
     public function kpi(array $filters, array $scope): array
     {
         $studentIds = $this->scopedStudentIds($filters, $scope);
+        $hasRewardTransactions = $this->tableExists('reward_transactions');
+        $hasViolationTransactions = $this->tableExists('violation_transactions');
+        $hasStudentWarningLetters = $this->tableExists('student_warning_letters');
+        $hasCharacterStatistics = $this->tableExists('student_character_statistics');
 
-        $rewardCount = $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)->count();
-        $violationCount = $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)->count();
+        $rewardCount = $hasRewardTransactions
+            ? $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)->count()
+            : 0;
+        $violationCount = $hasViolationTransactions
+            ? $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)->count()
+            : 0;
 
-        $spCounts = StudentWarningLetter::query()
+        $spCounts = $hasStudentWarningLetters
+            ? StudentWarningLetter::query()
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->when($filters['academic_year_id'] !== '', fn(Builder $q) => $q->where('academic_year_id', (int) $filters['academic_year_id']))
             ->when($filters['semester'] !== '', fn(Builder $q) => $q->where('semester', $filters['semester']))
             ->selectRaw('sp_level, COUNT(*) as total')
             ->groupBy('sp_level')
-            ->pluck('total', 'sp_level');
+            ->pluck('total', 'sp_level')
+            : collect();
 
-        $characterAverage = StudentCharacterStatistic::query()
-            ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
-            ->when($filters['academic_year_id'] !== '', fn(Builder $q) => $q->where('academic_year_id', (int) $filters['academic_year_id']))
-            ->when($filters['semester'] !== '', fn(Builder $q) => $q->where('semester', $filters['semester']))
-            ->avg('character_score_total') ?? 0;
+        $characterAverage = $hasCharacterStatistics
+            ? (StudentCharacterStatistic::query()
+                ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
+                ->when($filters['academic_year_id'] !== '', fn(Builder $q) => $q->where('academic_year_id', (int) $filters['academic_year_id']))
+                ->when($filters['semester'] !== '', fn(Builder $q) => $q->where('semester', $filters['semester']))
+                ->avg('character_score_total') ?? 0)
+            : 0;
 
-        $pendingValidation = $this->applyTransactionFilters(RewardTransaction::query()->where('status', 'pending'), $filters, $scope)->count()
-            + $this->applyTransactionFilters(ViolationTransaction::query()->where('status', 'pending'), $filters, $scope)->count();
+        $pendingValidation = ($hasRewardTransactions
+            ? $this->applyTransactionFilters(RewardTransaction::query()->where('status', 'pending'), $filters, $scope)->count()
+            : 0)
+            + ($hasViolationTransactions
+                ? $this->applyTransactionFilters(ViolationTransaction::query()->where('status', 'pending'), $filters, $scope)->count()
+                : 0);
 
         return [
             'total_students' => count($studentIds),
@@ -118,25 +142,31 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             $cursor->addMonth();
         }
 
-        $rewardRows = $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
+        $rewardRows = $this->tableExists('reward_transactions')
+            ? $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
             ->whereBetween('transaction_date', [$from->toDateString(), $to->toDateString()])
             ->selectRaw('DATE_FORMAT(transaction_date, "%Y-%m") as ym, COUNT(*) as total')
             ->groupBy('ym')
-            ->pluck('total', 'ym');
+            ->pluck('total', 'ym')
+            : collect();
 
-        $violationRows = $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)
+        $violationRows = $this->tableExists('violation_transactions')
+            ? $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)
             ->whereBetween('transaction_date', [$from->toDateString(), $to->toDateString()])
             ->selectRaw('DATE_FORMAT(transaction_date, "%Y-%m") as ym, COUNT(*) as total')
             ->groupBy('ym')
-            ->pluck('total', 'ym');
+            ->pluck('total', 'ym')
+            : collect();
 
-        $characterRows = StudentCharacterStatistic::query()
+        $characterRows = $this->tableExists('student_character_statistics')
+            ? StudentCharacterStatistic::query()
             ->when(!empty($this->scopedStudentIds($filters, $scope)), fn(Builder $q) => $q->whereIn('student_id', $this->scopedStudentIds($filters, $scope)))
             ->selectRaw('DATE_FORMAT(last_calculated_at, "%Y-%m") as ym, AVG(character_score_total) as avg_score')
             ->whereNotNull('last_calculated_at')
             ->whereBetween('last_calculated_at', [$from->toDateString(), $to->toDateString()])
             ->groupBy('ym')
-            ->pluck('avg_score', 'ym');
+            ->pluck('avg_score', 'ym')
+            : collect();
 
         $rewardTrend = [];
         $violationTrend = [];
@@ -148,11 +178,13 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             $characterGrowth[] = round((float) ($characterRows[$ym] ?? 0), 2);
         }
 
-        $spDistribution = StudentWarningLetter::query()
+        $spDistribution = $this->tableExists('student_warning_letters')
+            ? StudentWarningLetter::query()
             ->when(!empty($this->scopedStudentIds($filters, $scope)), fn(Builder $q) => $q->whereIn('student_id', $this->scopedStudentIds($filters, $scope)))
             ->selectRaw('sp_level, COUNT(*) as total')
             ->groupBy('sp_level')
-            ->pluck('total', 'sp_level');
+            ->pluck('total', 'sp_level')
+            : collect();
 
         return [
             'labels' => $labels,
@@ -169,6 +201,24 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function radar(array $filters, array $scope): array
     {
+        if (!$this->tableExists('character_dimensions') || !$this->tableExists('student_character_scores')) {
+            return [
+                'labels' => [],
+                'current' => [],
+                'previous' => [],
+                'school_average' => [],
+                'class_average' => [],
+                'department_average' => [],
+                'comparisons' => [
+                    'student_vs_class' => [],
+                    'student_vs_department' => [],
+                    'student_vs_school' => [],
+                    'class_vs_school' => [],
+                    'department_vs_school' => [],
+                ],
+            ];
+        }
+
         $dimensions = CharacterDimension::query()
             ->where('is_active', true)
             ->orderBy('name')
@@ -244,6 +294,15 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
         $studentIds = $this->scopedStudentIds($filters, $scope);
         $topLimit = $this->topLimit($filters);
 
+        if (!$this->tableExists('student_character_statistics')) {
+            return [
+                'best_students' => [],
+                'highest_violations' => [],
+                'highest_rewards' => [],
+                'most_active_teachers' => $this->buildMostActiveTeachers($filters, $scope, $topLimit),
+            ];
+        }
+
         $bestStudents = StudentCharacterStatistic::query()
             ->with('student:id,nama_lengkap,nis,classroom_id')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
@@ -295,42 +354,49 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
     {
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
-        $nearSp = StudentWarningLetter::query()
-            ->with('student:id,nama_lengkap')
-            ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
-            ->whereIn('sp_level', ['SP1', 'SP2'])
-            ->orderByDesc('violation_weighted_total')
-            ->limit(10)
-            ->get()
-            ->map(fn(StudentWarningLetter $sp) => [
-                'student' => (string) ($sp->student?->nama_lengkap ?? '-'),
-                'sp_level' => (string) $sp->sp_level,
-                'weighted' => round((float) $sp->violation_weighted_total, 2),
-            ])->values()->all();
+        $nearSp = [];
+        if ($this->tableExists('student_warning_letters')) {
+            $nearSp = StudentWarningLetter::query()
+                ->with('student:id,nama_lengkap')
+                ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
+                ->whereIn('sp_level', ['SP1', 'SP2'])
+                ->orderByDesc('violation_weighted_total')
+                ->limit(10)
+                ->get()
+                ->map(fn(StudentWarningLetter $sp) => [
+                    'student' => (string) ($sp->student?->nama_lengkap ?? '-'),
+                    'sp_level' => (string) $sp->sp_level,
+                    'weighted' => round((float) $sp->violation_weighted_total, 2),
+                ])->values()->all();
+        }
 
-        $lowCharacter = StudentCharacterStatistic::query()
-            ->with('student:id,nama_lengkap')
-            ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
-            ->where('character_score_total', '<', 60)
-            ->orderBy('character_score_total')
-            ->limit(10)
-            ->get()
-            ->map(fn(StudentCharacterStatistic $row) => [
-                'student' => (string) ($row->student?->nama_lengkap ?? '-'),
-                'score' => round((float) $row->character_score_total, 2),
-            ])->values()->all();
+        $lowCharacter = [];
+        $withoutReward = [];
+        if ($this->tableExists('student_character_statistics')) {
+            $lowCharacter = StudentCharacterStatistic::query()
+                ->with('student:id,nama_lengkap')
+                ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
+                ->where('character_score_total', '<', 60)
+                ->orderBy('character_score_total')
+                ->limit(10)
+                ->get()
+                ->map(fn(StudentCharacterStatistic $row) => [
+                    'student' => (string) ($row->student?->nama_lengkap ?? '-'),
+                    'score' => round((float) $row->character_score_total, 2),
+                ])->values()->all();
 
-        $withoutReward = StudentCharacterStatistic::query()
-            ->with('student:id,nama_lengkap')
-            ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
-            ->where('reward_count', 0)
-            ->orderByDesc('violation_count')
-            ->limit(10)
-            ->get()
-            ->map(fn(StudentCharacterStatistic $row) => [
-                'student' => (string) ($row->student?->nama_lengkap ?? '-'),
-                'violation_count' => (int) $row->violation_count,
-            ])->values()->all();
+            $withoutReward = StudentCharacterStatistic::query()
+                ->with('student:id,nama_lengkap')
+                ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
+                ->where('reward_count', 0)
+                ->orderByDesc('violation_count')
+                ->limit(10)
+                ->get()
+                ->map(fn(StudentCharacterStatistic $row) => [
+                    'student' => (string) ($row->student?->nama_lengkap ?? '-'),
+                    'violation_count' => (int) $row->violation_count,
+                ])->values()->all();
+        }
 
         return [
             'near_sp' => $nearSp,
@@ -374,6 +440,10 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function recentActivities(array $filters, array $scope, int $limit = 20): array
     {
+        if (!$this->tableExists('pancawaluya_transaction_histories')) {
+            return [];
+        }
+
         $rows = $this->applyHistoryFilters(PancawaluyaTransactionHistory::query()->with(['student:id,nama_lengkap', 'actor:id,name']), $filters, $scope)
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
@@ -395,6 +465,14 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function recentActivitiesDatatable(array $filters, array $scope, int $start, int $length, string $search = ''): array
     {
+        if (!$this->tableExists('pancawaluya_transaction_histories')) {
+            return [
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ];
+        }
+
         $query = $this->applyHistoryFilters(
             PancawaluyaTransactionHistory::query()->with(['student:id,nama_lengkap', 'actor:id,name']),
             $filters,
@@ -489,6 +567,33 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function characterAnalytics(array $filters, array $scope): array
     {
+        if (!$this->tableExists('student_character_statistics') || !$this->tableExists('student_character_scores') || !$this->tableExists('character_dimensions')) {
+            return [
+                'distribution' => [
+                    'sangat_baik' => 0,
+                    'baik' => 0,
+                    'cukup' => 0,
+                    'perlu_pendampingan' => 0,
+                ],
+                'growth' => 0.0,
+                'decline_count' => 0,
+                'trend' => [
+                    'labels' => [],
+                    'reward_trend' => [],
+                    'violation_trend' => [],
+                    'character_growth' => [],
+                    'sp_distribution' => ['SP1' => 0, 'SP2' => 0, 'SP3' => 0],
+                ],
+                'achievement_rate' => 0,
+                'comparison' => [],
+                'progress' => [],
+                'top_dimension' => ['name' => '-', 'score' => 0],
+                'lowest_dimension' => ['name' => '-', 'score' => 0],
+                'heatmap' => [],
+                'insight' => 'Data dimensi karakter belum cukup untuk menghasilkan insight.',
+            ];
+        }
+
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
         $query = StudentCharacterStatistic::query()
@@ -564,6 +669,24 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function rewardAnalytics(array $filters, array $scope): array
     {
+        if (!$this->tableExists('reward_transactions')) {
+            return [
+                'trend' => [],
+                'category_distribution' => [],
+                'monthly_reward' => [],
+                'teacher_contribution' => [],
+                'department_reward' => [],
+                'class_reward' => [],
+                'most_rewarded_students' => [],
+                'most_active_teachers' => [],
+                'most_effective_category' => [
+                    'kategori' => '-',
+                    'total' => 0,
+                ],
+                'growth_percentage' => 0.0,
+            ];
+        }
+
         $base = $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope);
 
         $monthly = (clone $base)
@@ -572,43 +695,53 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->orderBy('periode')
             ->get();
 
-        $teacherContribution = (clone $base)
+        $teacherContribution = $this->tableExists('teachers')
+            ? (clone $base)
             ->join('teachers', 'teachers.id', '=', 'reward_transactions.teacher_id')
             ->selectRaw('teachers.nama_lengkap as guru, COUNT(*) as total')
             ->groupBy('teachers.nama_lengkap')
             ->orderByDesc('total')
             ->limit($this->topLimit($filters))
-            ->get();
+            ->get()
+            : collect();
 
-        $category = (clone $base)
+        $category = $this->tableExists('reward_categories')
+            ? (clone $base)
             ->join('reward_categories', 'reward_categories.id', '=', 'reward_transactions.reward_category_id')
             ->selectRaw('reward_categories.name as kategori, COUNT(*) as total')
             ->groupBy('reward_categories.name')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $classReward = (clone $base)
+        $classReward = $this->tableExists('classrooms')
+            ? (clone $base)
             ->join('classrooms', 'classrooms.id', '=', 'reward_transactions.classroom_id')
             ->selectRaw('classrooms.nama_kelas as kelas, COUNT(*) as total')
             ->groupBy('classrooms.nama_kelas')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $departmentReward = (clone $base)
+        $departmentReward = $this->tableExists('classrooms') && $this->tableExists('majors')
+            ? (clone $base)
             ->join('classrooms', 'classrooms.id', '=', 'reward_transactions.classroom_id')
             ->join('majors', 'majors.id', '=', 'classrooms.major_id')
             ->selectRaw('majors.nama_jurusan as jurusan, COUNT(*) as total')
             ->groupBy('majors.nama_jurusan')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $mostRewardedStudents = (clone $base)
+        $mostRewardedStudents = $this->tableExists('students')
+            ? (clone $base)
             ->join('students', 'students.id', '=', 'reward_transactions.student_id')
             ->selectRaw('students.nama_lengkap as siswa, COUNT(*) as total')
             ->groupBy('students.nama_lengkap')
             ->orderByDesc('total')
             ->limit($this->topLimit($filters))
-            ->get();
+            ->get()
+            : collect();
 
         $firstMonth = (int) ($monthly->first()->total ?? 0);
         $lastMonth = (int) ($monthly->last()->total ?? 0);
@@ -632,6 +765,25 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function violationAnalytics(array $filters, array $scope): array
     {
+        if (!$this->tableExists('violation_transactions')) {
+            return [
+                'trend' => [],
+                'category' => [],
+                'frequency' => [],
+                'repeat_violations' => [],
+                'department' => [],
+                'teacher' => [],
+                'by_month' => [],
+                'by_class' => [],
+                'top_violations' => [],
+                'risk_indicators' => [
+                    'tinggi' => 0,
+                    'sedang' => 0,
+                    'rendah' => 0,
+                ],
+            ];
+        }
+
         $base = $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope);
 
         $monthly = (clone $base)
@@ -640,44 +792,54 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->orderBy('periode')
             ->get();
 
-        $category = (clone $base)
+        $category = $this->tableExists('violation_categories')
+            ? (clone $base)
             ->join('violation_categories', 'violation_categories.id', '=', 'violation_transactions.violation_category_id')
             ->selectRaw('violation_categories.name as kategori, COUNT(*) as total')
             ->groupBy('violation_categories.name')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $repeat = (clone $base)
+        $repeat = $this->tableExists('students')
+            ? (clone $base)
             ->join('students', 'students.id', '=', 'violation_transactions.student_id')
             ->selectRaw('students.nama_lengkap as siswa, COUNT(*) as total')
             ->groupBy('students.nama_lengkap')
             ->havingRaw('COUNT(*) > 1')
             ->orderByDesc('total')
             ->limit($this->topLimit($filters))
-            ->get();
+            ->get()
+            : collect();
 
-        $department = (clone $base)
+        $department = $this->tableExists('classrooms') && $this->tableExists('majors')
+            ? (clone $base)
             ->join('classrooms', 'classrooms.id', '=', 'violation_transactions.classroom_id')
             ->join('majors', 'majors.id', '=', 'classrooms.major_id')
             ->selectRaw('majors.nama_jurusan as jurusan, COUNT(*) as total')
             ->groupBy('majors.nama_jurusan')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $teacher = (clone $base)
+        $teacher = $this->tableExists('teachers')
+            ? (clone $base)
             ->join('teachers', 'teachers.id', '=', 'violation_transactions.teacher_id')
             ->selectRaw('teachers.nama_lengkap as guru, COUNT(*) as total')
             ->groupBy('teachers.nama_lengkap')
             ->orderByDesc('total')
             ->limit($this->topLimit($filters))
-            ->get();
+            ->get()
+            : collect();
 
-        $class = (clone $base)
+        $class = $this->tableExists('classrooms')
+            ? (clone $base)
             ->join('classrooms', 'classrooms.id', '=', 'violation_transactions.classroom_id')
             ->selectRaw('classrooms.nama_kelas as kelas, COUNT(*) as total')
             ->groupBy('classrooms.nama_kelas')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
         $riskIndicator = [
             'tinggi' => $repeat->filter(fn($row) => (int) $row->total >= 5)->count(),
@@ -701,6 +863,23 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function spAnalytics(array $filters, array $scope): array
     {
+        if (!$this->tableExists('student_warning_letters')) {
+            return [
+                'sp1_distribution' => 0,
+                'sp2_distribution' => 0,
+                'sp3_distribution' => 0,
+                'sp_trend' => [],
+                'students_near_sp' => [],
+                'sp_growth_percentage' => 0.0,
+                'department_comparison' => [],
+                'class_comparison' => [],
+                'early_warning' => [
+                    'count' => 0,
+                    'message' => 'Data SP belum tersedia pada sistem ini.',
+                ],
+            ];
+        }
+
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
         $base = StudentWarningLetter::query()
@@ -722,22 +901,26 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
         $nearSp = $this->alerts($filters, $scope)['near_sp'];
 
-        $departmentComparison = (clone $base)
+        $departmentComparison = $this->tableExists('students') && $this->tableExists('classrooms') && $this->tableExists('majors')
+            ? (clone $base)
             ->join('students', 'students.id', '=', 'student_warning_letters.student_id')
             ->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
             ->join('majors', 'majors.id', '=', 'classrooms.major_id')
             ->selectRaw('majors.nama_jurusan as jurusan, COUNT(*) as total')
             ->groupBy('majors.nama_jurusan')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
-        $classComparison = (clone $base)
+        $classComparison = $this->tableExists('students') && $this->tableExists('classrooms')
+            ? (clone $base)
             ->join('students', 'students.id', '=', 'student_warning_letters.student_id')
             ->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
             ->selectRaw('classrooms.nama_kelas as kelas, COUNT(*) as total')
             ->groupBy('classrooms.nama_kelas')
             ->orderByDesc('total')
-            ->get();
+            ->get()
+            : collect();
 
         $spTrendFirst = (int) ($trend->first()->total ?? 0);
         $spTrendLast = (int) ($trend->last()->total ?? 0);
@@ -764,16 +947,21 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
     {
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
-        $classVsClass = StudentCharacterStatistic::query()
+        $hasCharacterStats = $this->tableExists('student_character_statistics');
+
+        $classVsClass = ($hasCharacterStats && $this->tableExists('students') && $this->tableExists('classrooms'))
+            ? StudentCharacterStatistic::query()
             ->join('students', 'students.id', '=', 'student_character_statistics.student_id')
             ->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_character_statistics.student_id', $studentIds))
             ->selectRaw('classrooms.nama_kelas as label, AVG(student_character_statistics.character_score_total) as nilai')
             ->groupBy('classrooms.nama_kelas')
             ->orderByDesc('nilai')
-            ->get();
+            ->get()
+            : collect();
 
-        $departmentVsDepartment = StudentCharacterStatistic::query()
+        $departmentVsDepartment = ($hasCharacterStats && $this->tableExists('students') && $this->tableExists('classrooms') && $this->tableExists('majors'))
+            ? StudentCharacterStatistic::query()
             ->join('students', 'students.id', '=', 'student_character_statistics.student_id')
             ->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
             ->join('majors', 'majors.id', '=', 'classrooms.major_id')
@@ -781,35 +969,46 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->selectRaw('majors.nama_jurusan as label, AVG(student_character_statistics.character_score_total) as nilai')
             ->groupBy('majors.nama_jurusan')
             ->orderByDesc('nilai')
-            ->get();
+            ->get()
+            : collect();
 
         $teacherVsTeacher = $this->buildMostActiveTeachers($filters, $scope, $this->topLimit($filters));
 
-        $semesterVsSemester = StudentCharacterStatistic::query()
+        $semesterVsSemester = $hasCharacterStats
+            ? StudentCharacterStatistic::query()
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->selectRaw('semester as label, AVG(character_score_total) as nilai')
             ->groupBy('semester')
             ->orderBy('semester')
-            ->get();
+            ->get()
+            : collect();
 
-        $yearVsYear = StudentCharacterStatistic::query()
+        $yearVsYear = ($hasCharacterStats && $this->tableExists('academic_years'))
+            ? StudentCharacterStatistic::query()
             ->join('academic_years', 'academic_years.id', '=', 'student_character_statistics.academic_year_id')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_character_statistics.student_id', $studentIds))
             ->selectRaw('academic_years.tahun_ajaran as label, AVG(student_character_statistics.character_score_total) as nilai')
             ->groupBy('academic_years.tahun_ajaran')
             ->orderBy('academic_years.tahun_ajaran')
-            ->get();
+            ->get()
+            : collect();
 
-        $maleVsFemale = StudentCharacterStatistic::query()
+        $maleVsFemale = ($hasCharacterStats && $this->tableExists('students'))
+            ? StudentCharacterStatistic::query()
             ->join('students', 'students.id', '=', 'student_character_statistics.student_id')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_character_statistics.student_id', $studentIds))
             ->selectRaw('students.jenis_kelamin as label, AVG(student_character_statistics.character_score_total) as nilai')
             ->groupBy('students.jenis_kelamin')
-            ->get();
+            ->get()
+            : collect();
 
         $rewardVsViolation = [
-            'reward' => $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)->count(),
-            'violation' => $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)->count(),
+            'reward' => $this->tableExists('reward_transactions')
+                ? $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)->count()
+                : 0,
+            'violation' => $this->tableExists('violation_transactions')
+                ? $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)->count()
+                : 0,
         ];
 
         $metrics = $this->collectStudentMetricRows($filters, $scope);
@@ -975,6 +1174,37 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     private function sourceOptions(array $filters, array $scope): array
     {
+        $hasRewardTransactions = $this->tableExists('reward_transactions');
+        $hasViolationTransactions = $this->tableExists('violation_transactions');
+
+        if (!$hasRewardTransactions && !$hasViolationTransactions) {
+            return [];
+        }
+
+        if (!$hasRewardTransactions) {
+            return $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)
+                ->whereNotNull('source')
+                ->distinct()
+                ->limit(20)
+                ->pluck('source')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        if (!$hasViolationTransactions) {
+            return $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
+                ->whereNotNull('source')
+                ->distinct()
+                ->limit(20)
+                ->pluck('source')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
+
         $rewardSources = $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
             ->whereNotNull('source')
             ->distinct()
@@ -1062,6 +1292,10 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
     {
         $studentIds = $this->scopedStudentIds($filters, $scope);
 
+        if (!$this->tableExists('student_character_statistics')) {
+            return collect();
+        }
+
         $stats = StudentCharacterStatistic::query()
             ->with('student:id,nama_lengkap')
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
@@ -1083,12 +1317,14 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->get()
             ->keyBy('student_id');
 
-        $spRows = StudentWarningLetter::query()
+        $spRows = $this->tableExists('student_warning_letters')
+            ? StudentWarningLetter::query()
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->selectRaw('student_id, MAX(sp_level) as sp_level')
             ->groupBy('student_id')
             ->get()
-            ->keyBy('student_id');
+            ->keyBy('student_id')
+            : collect();
 
         return $stats->map(function (StudentCharacterStatistic $row) use ($attendanceRows, $spRows): array {
             $attendance = $attendanceRows->get($row->student_id);
@@ -1237,10 +1473,12 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
         $scores = [];
 
-        $rewardRows = RewardTransaction::query()
+        $rewardRows = $this->tableExists('reward_transactions')
+            ? RewardTransaction::query()
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->whereBetween('transaction_date', [$from->toDateString(), $to->toDateString()])
-            ->get(['dimension_payload']);
+            ->get(['dimension_payload'])
+            : collect();
 
         foreach ($rewardRows as $row) {
             foreach ((array) $row->dimension_payload as $payload) {
@@ -1249,10 +1487,12 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             }
         }
 
-        $violationRows = ViolationTransaction::query()
+        $violationRows = $this->tableExists('violation_transactions')
+            ? ViolationTransaction::query()
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds))
             ->whereBetween('transaction_date', [$from->toDateString(), $to->toDateString()])
-            ->get(['dimension_payload']);
+            ->get(['dimension_payload'])
+            : collect();
 
         foreach ($violationRows as $row) {
             foreach ((array) $row->dimension_payload as $payload) {
@@ -1266,15 +1506,19 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     private function buildMostActiveTeachers(array $filters, array $scope, int $topLimit = 10): array
     {
-        $reward = $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
+        $reward = $this->tableExists('reward_transactions')
+            ? $this->applyTransactionFilters(RewardTransaction::query(), $filters, $scope)
             ->select('created_by', DB::raw('COUNT(*) as total'))
             ->groupBy('created_by')
-            ->get();
+            ->get()
+            : collect();
 
-        $violation = $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)
+        $violation = $this->tableExists('violation_transactions')
+            ? $this->applyTransactionFilters(ViolationTransaction::query(), $filters, $scope)
             ->select('created_by', DB::raw('COUNT(*) as total'))
             ->groupBy('created_by')
-            ->get();
+            ->get()
+            : collect();
 
         $merged = collect();
 
@@ -1336,5 +1580,14 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->when($filters['date_from'] !== '', fn(Builder $q) => $q->whereDate('transaction_date', '>=', $filters['date_from']))
             ->when($filters['date_to'] !== '', fn(Builder $q) => $q->whereDate('transaction_date', '<=', $filters['date_to']))
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('student_id', $studentIds));
+    }
+
+    private function tableExists(string $table): bool
+    {
+        if (array_key_exists($table, $this->tableExistsCache)) {
+            return $this->tableExistsCache[$table];
+        }
+
+        return $this->tableExistsCache[$table] = Schema::hasTable($table);
     }
 }

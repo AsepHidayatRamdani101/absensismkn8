@@ -21,10 +21,10 @@ class CharacterMappingRepository implements CharacterMappingRepositoryInterface
 
     private function sync(string $mappableType, int $mappableId, int $dimensionId, float $weight): void
     {
-        CharacterMapping::query()
+        CharacterMapping::withTrashed()
             ->where('mappable_type', $mappableType)
             ->where('mappable_id', $mappableId)
-            ->delete();
+            ->forceDelete();
 
         CharacterMapping::query()->create([
             'mappable_type' => $mappableType,

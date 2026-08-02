@@ -6,7 +6,41 @@
             spChart: null,
             radarChart: null,
             activitiesTable: null,
+            refreshInFlight: false,
+            pendingRefresh: false,
         };
+        const CHARTS_DISABLED = true;
+        const AUTO_REFRESH_MS = 180000;
+
+        function toggleChartsVisibility() {
+            const chartIds = ['trendChart', 'spChart', 'growthChart', 'radarChart'];
+
+            chartIds.forEach((id) => {
+                const canvas = document.getElementById(id);
+                if (!canvas) {
+                    return;
+                }
+
+                const col = $(canvas).closest('[class*="col-"]');
+                if (col.length > 0) {
+                    if (CHARTS_DISABLED) {
+                        col.hide();
+                    } else {
+                        col.show();
+                    }
+                    return;
+                }
+
+                const card = $(canvas).closest('.card');
+                if (card.length > 0) {
+                    if (CHARTS_DISABLED) {
+                        card.hide();
+                    } else {
+                        card.show();
+                    }
+                }
+            });
+        }
 
         function filtersPayload() {
             const data = {};
@@ -101,7 +135,15 @@
             });
         }
 
-        function renderKpi(kpi) {
+        function setCountersDirectly() {
+            $('.counter-anim').each(function() {
+                const el = $(this);
+                const target = Number(el.data('value')) || 0;
+                el.text(Number.isInteger(target) ? Math.round(target) : target.toFixed(2));
+            });
+        }
+
+        function renderKpi(kpi, animate = false) {
             const items = [
                 ['Total Siswa', kpi.total_students, 'primary'],
                 ['Total Guru', kpi.total_teachers, 'info'],
@@ -116,14 +158,62 @@
 
             const html = items.map((x) => cardTemplate(x[0], x[1], x[2])).join('');
             $('#kpiCards').html(html);
-            animateCounters();
+            if (animate) {
+                animateCounters();
+                return;
+            }
+
+            setCountersDirectly();
         }
 
         function safeDestroy(chart) {
             if (chart) chart.destroy();
         }
 
+        function chartOptions(extra = {}) {
+            return Object.assign({
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                events: [],
+                transitions: {
+                    active: {
+                        animation: {
+                            duration: 0,
+                        },
+                    },
+                    resize: {
+                        animation: {
+                            duration: 0,
+                        },
+                    },
+                    show: {
+                        animation: {
+                            duration: 0,
+                        },
+                    },
+                    hide: {
+                        animation: {
+                            duration: 0,
+                        },
+                    },
+                },
+            }, extra);
+        }
+
         function renderCharts(trends, radar) {
+            if (CHARTS_DISABLED) {
+                safeDestroy(state.trendChart);
+                safeDestroy(state.growthChart);
+                safeDestroy(state.spChart);
+                safeDestroy(state.radarChart);
+                state.trendChart = null;
+                state.growthChart = null;
+                state.spChart = null;
+                state.radarChart = null;
+                return;
+            }
+
             if (window.dashboardMode !== 'detail') {
                 safeDestroy(state.trendChart);
                 safeDestroy(state.growthChart);
@@ -145,116 +235,133 @@
                 return;
             }
 
-            safeDestroy(state.trendChart);
-            safeDestroy(state.growthChart);
-            safeDestroy(state.spChart);
-            safeDestroy(state.radarChart);
-
-            state.trendChart = new Chart(trendEl, {
-                type: 'line',
-                data: {
-                    labels: trends.labels || [],
-                    datasets: [{
-                            label: 'Penghargaan',
-                            data: trends.reward_trend || [],
-                            borderColor: '#1e9f6e',
-                            backgroundColor: 'rgba(30,159,110,.15)',
-                            tension: .35
-                        },
-                        {
-                            label: 'Pelanggaran',
-                            data: trends.violation_trend || [],
-                            borderColor: '#d64545',
-                            backgroundColor: 'rgba(214,69,69,.15)',
-                            tension: .35
-                        },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                },
-            });
-
-            state.growthChart = new Chart(growthEl, {
-                type: 'bar',
-                data: {
-                    labels: trends.labels || [],
-                    datasets: [{
-                        label: 'Pertumbuhan Karakter',
-                        data: trends.character_growth || [],
-                        backgroundColor: '#3b82f6'
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                },
-            });
-
-            state.spChart = new Chart(spEl, {
-                type: 'doughnut',
-                data: {
-                    labels: ['SP1', 'SP2', 'SP3'],
-                    datasets: [{
-                        data: [trends.sp_distribution?.SP1 || 0, trends.sp_distribution?.SP2 || 0,
-                            trends.sp_distribution?.SP3 || 0
+            if (!state.trendChart) {
+                state.trendChart = new Chart(trendEl, {
+                    type: 'line',
+                    data: {
+                        labels: trends.labels || [],
+                        datasets: [{
+                                label: 'Penghargaan',
+                                data: trends.reward_trend || [],
+                                borderColor: '#1e9f6e',
+                                backgroundColor: 'rgba(30,159,110,.15)',
+                                tension: .35
+                            },
+                            {
+                                label: 'Pelanggaran',
+                                data: trends.violation_trend || [],
+                                borderColor: '#d64545',
+                                backgroundColor: 'rgba(214,69,69,.15)',
+                                tension: .35
+                            },
                         ],
-                        backgroundColor: ['#f59e0b', '#ef4444', '#7f1d1d']
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                },
-            });
+                    },
+                    options: chartOptions(),
+                });
+            } else {
+                state.trendChart.data.labels = trends.labels || [];
+                state.trendChart.data.datasets[0].data = trends.reward_trend || [];
+                state.trendChart.data.datasets[1].data = trends.violation_trend || [];
+                state.trendChart.update('none');
+            }
 
-            state.radarChart = new Chart(radarEl, {
-                type: 'radar',
-                data: {
-                    labels: radar.labels || [],
-                    datasets: [{
-                            label: 'Saat Ini',
-                            data: radar.current || [],
-                            borderColor: '#2563eb',
-                            backgroundColor: 'rgba(37,99,235,.15)'
-                        },
-                        {
-                            label: 'Semester Sebelumnya',
-                            data: radar.previous || [],
-                            borderColor: '#64748b',
-                            backgroundColor: 'rgba(100,116,139,.12)'
-                        },
-                        {
-                            label: 'Rata-rata Sekolah',
-                            data: radar.school_average || [],
-                            borderColor: '#16a34a',
-                            backgroundColor: 'rgba(22,163,74,.1)'
-                        },
-                        {
-                            label: 'Rata-rata Kelas',
-                            data: radar.class_average || [],
-                            borderColor: '#f97316',
-                            backgroundColor: 'rgba(249,115,22,.1)'
-                        },
-                        {
-                            label: 'Rata-rata Jurusan',
-                            data: radar.department_average || [],
-                            borderColor: '#9333ea',
-                            backgroundColor: 'rgba(147,51,234,.08)'
-                        },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        r: {
-                            beginAtZero: true
+            if (!state.growthChart) {
+                state.growthChart = new Chart(growthEl, {
+                    type: 'bar',
+                    data: {
+                        labels: trends.labels || [],
+                        datasets: [{
+                            label: 'Pertumbuhan Karakter',
+                            data: trends.character_growth || [],
+                            backgroundColor: '#3b82f6'
+                        }],
+                    },
+                    options: chartOptions(),
+                });
+            } else {
+                state.growthChart.data.labels = trends.labels || [];
+                state.growthChart.data.datasets[0].data = trends.character_growth || [];
+                state.growthChart.update('none');
+            }
+
+            if (!state.spChart) {
+                state.spChart = new Chart(spEl, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['SP1', 'SP2', 'SP3'],
+                        datasets: [{
+                            data: [trends.sp_distribution?.SP1 || 0, trends.sp_distribution?.SP2 ||
+                                0,
+                                trends.sp_distribution?.SP3 || 0
+                            ],
+                            backgroundColor: ['#f59e0b', '#ef4444', '#7f1d1d']
+                        }],
+                    },
+                    options: chartOptions(),
+                });
+            } else {
+                state.spChart.data.datasets[0].data = [
+                    trends.sp_distribution?.SP1 || 0,
+                    trends.sp_distribution?.SP2 || 0,
+                    trends.sp_distribution?.SP3 || 0,
+                ];
+                state.spChart.update('none');
+            }
+
+            if (!state.radarChart) {
+                state.radarChart = new Chart(radarEl, {
+                    type: 'radar',
+                    data: {
+                        labels: radar.labels || [],
+                        datasets: [{
+                                label: 'Saat Ini',
+                                data: radar.current || [],
+                                borderColor: '#2563eb',
+                                backgroundColor: 'rgba(37,99,235,.15)'
+                            },
+                            {
+                                label: 'Semester Sebelumnya',
+                                data: radar.previous || [],
+                                borderColor: '#64748b',
+                                backgroundColor: 'rgba(100,116,139,.12)'
+                            },
+                            {
+                                label: 'Rata-rata Sekolah',
+                                data: radar.school_average || [],
+                                borderColor: '#16a34a',
+                                backgroundColor: 'rgba(22,163,74,.1)'
+                            },
+                            {
+                                label: 'Rata-rata Kelas',
+                                data: radar.class_average || [],
+                                borderColor: '#f97316',
+                                backgroundColor: 'rgba(249,115,22,.1)'
+                            },
+                            {
+                                label: 'Rata-rata Jurusan',
+                                data: radar.department_average || [],
+                                borderColor: '#9333ea',
+                                backgroundColor: 'rgba(147,51,234,.08)'
+                            },
+                        ],
+                    },
+                    options: chartOptions({
+                        scales: {
+                            r: {
+                                beginAtZero: true
+                            }
                         }
-                    }
-                },
-            });
+                    }),
+                });
+            } else {
+                state.radarChart.data.labels = radar.labels || [];
+                state.radarChart.data.datasets[0].data = radar.current || [];
+                state.radarChart.data.datasets[1].data = radar.previous || [];
+                state.radarChart.data.datasets[2].data = radar.school_average || [];
+                state.radarChart.data.datasets[3].data = radar.class_average || [];
+                state.radarChart.data.datasets[4].data = radar.department_average || [];
+                state.radarChart.update('none');
+            }
         }
 
         function renderTable(selector, rows, mapper) {
@@ -421,9 +528,18 @@
             }
         }
 
-        function refreshDashboard() {
+        function refreshDashboard(options = {}) {
+            const animate = options.animate === true;
+
+            if (state.refreshInFlight) {
+                state.pendingRefresh = true;
+                return $.Deferred().resolve().promise();
+            }
+
+            state.refreshInFlight = true;
+
             return $.get(window.dashboardEndpoints.data, filtersPayload()).done((resp) => {
-                renderKpi(resp.kpi || {});
+                renderKpi(resp.kpi || {}, animate);
                 renderCharts(resp.trends || {}, resp.radar || {});
                 renderRankings(resp.rankings || {});
                 renderAlerts(resp.alerts || {});
@@ -434,7 +550,31 @@
                 renderCorrelationSummary(resp.correlation_analytics || {});
                 renderActivities();
                 $('#lastRefresh').text(new Date().toLocaleTimeString());
+            }).always(() => {
+                state.refreshInFlight = false;
+                if (state.pendingRefresh) {
+                    state.pendingRefresh = false;
+                    refreshDashboard({
+                        animate: false
+                    });
+                }
             });
+        }
+
+        function setupAutoRefresh() {
+            const badge = $('#badgeAutoRefresh');
+
+            if (window.dashboardMode === 'detail') {
+                badge.removeClass('badge-info').addClass('badge-secondary').text(
+                    'Auto-refresh nonaktif di mode Detail');
+                return;
+            }
+
+            const seconds = Math.floor(AUTO_REFRESH_MS / 1000);
+            badge.removeClass('badge-secondary').addClass('badge-info').text(`Pembaruan otomatis ${seconds} dtk`);
+            setInterval(() => refreshDashboard({
+                animate: false
+            }), AUTO_REFRESH_MS);
         }
 
         function buildExportUrl(baseUrl) {
@@ -454,13 +594,44 @@
         }
 
         $(function() {
+            if (window.Chart && window.Chart.defaults) {
+                window.Chart.defaults.animation = false;
+                if (window.Chart.defaults.transitions) {
+                    window.Chart.defaults.transitions.active = {
+                        animation: {
+                            duration: 0,
+                        },
+                    };
+                    window.Chart.defaults.transitions.resize = {
+                        animation: {
+                            duration: 0,
+                        },
+                    };
+                    window.Chart.defaults.transitions.show = {
+                        animation: {
+                            duration: 0,
+                        },
+                    };
+                    window.Chart.defaults.transitions.hide = {
+                        animation: {
+                            duration: 0,
+                        },
+                    };
+                }
+            }
+
             initSelect2();
             initActivitiesTable();
+            toggleChartsVisibility();
 
-            loadOptions().then(refreshDashboard);
+            loadOptions().then(() => refreshDashboard({
+                animate: false
+            }));
 
             $('#btnApplyFilter').on('click', function() {
-                refreshDashboard();
+                refreshDashboard({
+                    animate: false
+                });
                 Swal.fire({
                     toast: true,
                     timer: 1200,
@@ -474,7 +645,9 @@
             $('#btnResetFilter').on('click', function() {
                 document.getElementById('dashboardFilterForm').reset();
                 $('.select2').val('').trigger('change');
-                refreshDashboard();
+                refreshDashboard({
+                    animate: false
+                });
             });
 
             $('#btnExportCsv').on('click', function() {
@@ -482,6 +655,15 @@
             });
 
             $('#btnExportPng').on('click', function() {
+                if (CHARTS_DISABLED) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Chart dinonaktifkan sementara',
+                        text: 'Ekspor PNG chart sementara tidak tersedia.',
+                    });
+                    return;
+                }
+
                 const chartCandidates = [
                     document.getElementById('radarChart'),
                     document.getElementById('trendChart'),
@@ -489,7 +671,7 @@
                     document.getElementById('spChart'),
                 ];
                 const target = chartCandidates.find((canvas) =>
-                canvas instanceof HTMLCanvasElement);
+                    canvas instanceof HTMLCanvasElement);
 
                 if (!target) {
                     Swal.fire({
@@ -515,7 +697,7 @@
                 window.print();
             });
 
-            setInterval(refreshDashboard, 60000);
+            setupAutoRefresh();
         });
     })();
 </script>

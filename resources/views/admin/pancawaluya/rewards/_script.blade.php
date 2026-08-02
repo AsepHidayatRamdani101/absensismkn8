@@ -216,5 +216,128 @@
                 Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan', 'error');
             });
         });
+
+        // ---- Modal Create ----
+        $('#modalCreate').on('show.bs.modal', function() {
+            $('#formCreate')[0].reset();
+            $('#createErrors').addClass('d-none').html('');
+        });
+
+        $('#modalCreate').on('shown.bs.modal', function() {
+            const modal = $(this);
+            modal.find('.select2-modal').each(function() {
+                if ($(this).data('select2')) $(this).select2('destroy');
+            }).select2({
+                width: '100%',
+                dropdownParent: modal
+            });
+        });
+
+        $('#formCreate').on('submit', function(e) {
+            e.preventDefault();
+            const btn = $(this).find('[type=submit]').prop('disabled', true);
+            $('#createErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ route('pancawaluya.rewards.store') }}",
+                type: 'POST',
+                data: $(this).serialize(),
+                success: function(resp) {
+                    $('#modalCreate').modal('hide');
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                },
+                error: function(xhr) {
+                    const errors = xhr.responseJSON?.errors;
+                    if (errors) {
+                        const list = Object.values(errors).flat().map(m => `<li>${m}</li>`)
+                            .join('');
+                        $('#createErrors').removeClass('d-none').html('<ul class="mb-0">' +
+                            list + '</ul>');
+                    } else {
+                        Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan',
+                            'error');
+                    }
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                }
+            });
+        });
+
+        // ---- Modal Edit ----
+        let pendingEditData = null;
+
+        $(document).on('click', '.btn-edit', function() {
+            const id = $(this).data('id');
+            $('#editErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ url('pancawaluya/rewards') }}/" + id + "/edit",
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(data) {
+                    pendingEditData = data;
+                    $('#editId').val(data.id);
+                    $('#editCode').val(data.code);
+                    $('#editName').val(data.name);
+                    $('#editPoint').val(data.point);
+                    $('#editWeight').val(data.weight);
+                    $('#editDescription').val(data.description || '');
+                    $('#editIsActive').val(data.is_active ? '1' : '0');
+                    $('#modalEdit').modal('show');
+                },
+                error: function() {
+                    Swal.fire('Gagal', 'Gagal memuat data.', 'error');
+                }
+            });
+        });
+
+        $('#modalEdit').on('shown.bs.modal', function() {
+            const modal = $(this);
+            modal.find('.select2-modal').each(function() {
+                if ($(this).data('select2')) $(this).select2('destroy');
+            }).select2({
+                width: '100%',
+                dropdownParent: modal
+            });
+            if (pendingEditData) {
+                $('#editRewardCategoryId').val(pendingEditData.reward_category_id).trigger('change');
+                $('#editCharacterDimensionId').val(pendingEditData.character_dimension_id).trigger(
+                    'change');
+                pendingEditData = null;
+            }
+        });
+
+        $('#formEdit').on('submit', function(e) {
+            e.preventDefault();
+            const id = $('#editId').val();
+            const btn = $(this).find('[type=submit]').prop('disabled', true);
+            $('#editErrors').addClass('d-none').html('');
+            $.ajax({
+                url: "{{ url('pancawaluya/rewards') }}/" + id,
+                type: 'POST',
+                data: $(this).serialize(),
+                success: function(resp) {
+                    $('#modalEdit').modal('hide');
+                    Swal.fire('Berhasil', resp.message, 'success');
+                    table.ajax.reload();
+                },
+                error: function(xhr) {
+                    const errors = xhr.responseJSON?.errors;
+                    if (errors) {
+                        const list = Object.values(errors).flat().map(m => `<li>${m}</li>`)
+                            .join('');
+                        $('#editErrors').removeClass('d-none').html('<ul class="mb-0">' +
+                            list + '</ul>');
+                    } else {
+                        Swal.fire('Gagal', xhr.responseJSON?.message || 'Terjadi kesalahan',
+                            'error');
+                    }
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                }
+            });
+        });
     });
 </script>

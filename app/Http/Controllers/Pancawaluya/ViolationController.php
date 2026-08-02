@@ -96,12 +96,31 @@ class ViolationController extends Controller
     {
         $this->service->create($request->validated(), $request);
 
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Master pelanggaran berhasil ditambahkan.']);
+        }
+
         return redirect()->route('pancawaluya.violations.index')->with('success', 'Master pelanggaran berhasil ditambahkan.');
     }
 
     public function edit(ViolationItem $violation)
     {
         $violation->load('mappings');
+
+        if (request()->ajax()) {
+            $mapping = $violation->mappings->first();
+            return response()->json([
+                'id' => $violation->id,
+                'code' => $violation->code,
+                'name' => $violation->name,
+                'violation_category_id' => $violation->violation_category_id,
+                'point' => $violation->point,
+                'description' => $violation->description,
+                'is_active' => $violation->is_active,
+                'character_dimension_id' => $mapping?->character_dimension_id,
+                'weight' => $mapping?->weight,
+            ]);
+        }
 
         return view('admin.pancawaluya.violations.edit', [
             'violation' => $violation,
@@ -114,6 +133,10 @@ class ViolationController extends Controller
     public function update(UpdateViolationItemRequest $request, ViolationItem $violation)
     {
         $this->service->update($violation, $request->validated(), $request);
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Master pelanggaran berhasil diperbarui.']);
+        }
 
         return redirect()->route('pancawaluya.violations.index')->with('success', 'Master pelanggaran berhasil diperbarui.');
     }
@@ -249,7 +272,7 @@ class ViolationController extends Controller
                 . '<button class="btn btn-danger btn-xs btn-force-delete" data-id="' . $row->id . '"><i class="fas fa-times"></i></button>';
         }
 
-        return '<a href="' . route('pancawaluya.violations.edit', $row) . '" class="btn btn-warning btn-xs"><i class="fas fa-edit"></i></a> '
+        return '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $row->id . '"><i class="fas fa-edit"></i></button> '
             . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $row->id . '"><i class="fas fa-trash"></i></button>';
     }
 }
