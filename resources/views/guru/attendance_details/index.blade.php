@@ -372,7 +372,8 @@
                         <div class="col-md-4 mb-2 mb-md-0">
                             <label for="tanggal" class="mb-1">Tanggal</label>
                             <input type="date" name="tanggal" id="tanggal" class="form-control"
-                                value="{{ $hasFilter ? $tanggalFilter : '' }}" max="{{ now()->toDateString() }}">
+                                value="{{ $hasFilter ? $tanggalFilter : now()->toDateString() }}"
+                                max="{{ now()->toDateString() }}">
                         </div>
                         <div class="col-md-4 mb-2 mb-md-0">
                             <label for="classroom_id" class="mb-1">Filter Kelas (sesuai jadwal)</label>
@@ -1007,12 +1008,8 @@
             resetStatusSummary();
             syncAttendanceFilterState();
 
-            if (($tanggal.val() || '').trim() !== '') {
-                loadClassOptions("{{ (int) $selectedClassroomId }}");
-            } else {
-                table.settings()[0].oLanguage.emptyTable = noFilterMessage;
-                reloadTableWithLoading();
-            }
+            // Tanggal selalu terisi (hari ini), langsung muat opsi kelas dan tabel
+            loadClassOptions("{{ (int) $selectedClassroomId }}");
         });
     </script>
 
@@ -1021,16 +1018,10 @@
             $(function() {
                 Swal.fire({
                     icon: 'success',
-                    title: 'Absensi berhasil disimpan',
+                    title: 'Berhasil',
                     text: @json(session('success')),
-                    showCancelButton: true,
-                    confirmButtonText: 'Lanjutkan isi agenda',
-                    cancelButtonText: 'Tetap di halaman ini',
-                    reverseButtons: true,
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        window.location.href = @json(session('agenda_redirect_url', route('guru.agenda.index')));
-                    }
+                    timer: 2000,
+                    showConfirmButton: false,
                 });
             });
         </script>
