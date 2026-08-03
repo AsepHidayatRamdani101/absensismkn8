@@ -31,12 +31,16 @@ class Teacher extends Model
         'is_wali_kelas',
         'wali_classroom_id',
         'is_kurikulum',
+        'is_bk',
+        'is_kesiswaan',
         'foto',
     ];
 
     protected $casts = [
-        'is_wali_kelas' => 'boolean',
-        'is_kurikulum' => 'boolean',
+        'is_wali_kelas'  => 'boolean',
+        'is_kurikulum'   => 'boolean',
+        'is_bk'          => 'boolean',
+        'is_kesiswaan'   => 'boolean',
     ];
 
     public function waliClassroom()

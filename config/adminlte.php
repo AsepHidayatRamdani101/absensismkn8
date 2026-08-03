@@ -413,6 +413,11 @@ return [
                     'icon' => 'fas fa-chalkboard-teacher',
                 ],
                 [
+                    'text' => 'Tata Usaha (TU)',
+                    'route' => 'staff-tu.index',
+                    'icon' => 'fas fa-id-badge',
+                ],
+                [
                     'text' => 'Mata Pelajaran',
                     'route' => 'subjects.index',
                     'icon' => 'fas fa-book',
@@ -530,6 +535,12 @@ return [
             'can' => 'siswa-absen-guru',
         ],
         [
+            'text' => 'Izin Pulang Siswa',
+            'route' => 'siswa.mid-class-permits.index',
+            'icon' => 'fas fa-home',
+            'can' => 'siswa-absen-guru',
+        ],
+        [
             'text' => 'Riwayat Absen',
             'route' => 'siswa.attendance-history.index',
             'icon' => 'fas fa-history',
@@ -582,6 +593,11 @@ return [
                     'text' => 'Pengajuan Izin/Sakit Siswa',
                     'route' => 'guru.wali-kelas.leave-requests.index',
                     'icon' => 'fas fa-user-clock',
+                ],
+                [
+                    'text' => 'Izin Pulang Siswa',
+                    'route' => 'guru.wali-kelas.mid-class-permits.index',
+                    'icon' => 'fas fa-home',
                 ],
             ],
         ],

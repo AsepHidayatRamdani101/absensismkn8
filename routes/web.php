@@ -22,6 +22,8 @@ use App\Http\Controllers\TeacherAttendanceController;
 use App\Http\Controllers\TeacherLeaveRequestController;
 use App\Http\Controllers\TeacherSubjectController;
 use App\Http\Controllers\AppSettingController;
+use App\Http\Controllers\MidClassPermitController;
+use App\Http\Controllers\StaffTuController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\Pancawaluya\RewardCategoryController;
 use App\Http\Controllers\Pancawaluya\RewardController;
@@ -95,6 +97,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('teachers/generate-accounts', [TeacherController::class, 'generateAccounts'])->name('teachers.generate-accounts');
         Route::delete('teachers/destroy-multiple', [TeacherController::class, 'destroyMultiple'])->name('teachers.destroy-multiple');
         Route::resource('teachers', TeacherController::class)->except(['show', 'create']);
+
+        Route::delete('staff-tu/destroy-multiple', [StaffTuController::class, 'destroyMultiple'])->name('staff-tu.destroy-multiple');
+        Route::get('staff-tu/{staffTu}/edit', [StaffTuController::class, 'edit'])->name('staff-tu.edit');
+        Route::resource('staff-tu', StaffTuController::class)->except(['show', 'create', 'edit']);
 
         Route::post('subjects/import', [SubjectController::class, 'import'])->name('subjects.import');
         Route::get('subjects/template', [SubjectController::class, 'template'])->name('subjects.template');
@@ -605,6 +611,12 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::post('/guru/wali-kelas/pengajuan-siswa/hardfile', [StudentLeaveRequestController::class, 'waliStoreHardfile'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.leave-requests.hardfile');
+    Route::get('/guru/wali-kelas/izin-keluar-kelas', [MidClassPermitController::class, 'waliIndex'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.mid-class-permits.index');
+    Route::post('/guru/wali-kelas/izin-keluar-kelas', [MidClassPermitController::class, 'waliStore'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.mid-class-permits.store');
     Route::post('/guru/attendance-details/bulk-submit', [AttendanceDetailController::class, 'submitBulkForGuru'])
         ->name('guru.attendance-details.bulk-submit');
     Route::post('/guru/attendance-details/count-hadir', [AttendanceDetailController::class, 'submitCountPresentForGuru'])
@@ -659,6 +671,12 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::post('/siswa/izin-sakit-kelas', [StudentLeaveRequestController::class, 'officerLeaveStore'])
         ->middleware('can:siswa-absen-guru')
         ->name('siswa.officer-leave.store');
+    Route::get('/siswa/izin-keluar-kelas', [MidClassPermitController::class, 'officerIndex'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.mid-class-permits.index');
+    Route::post('/siswa/izin-keluar-kelas', [MidClassPermitController::class, 'officerStore'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.mid-class-permits.store');
 });
 
 Route::middleware(['auth', 'role:wali_kelas'])->group(function () {

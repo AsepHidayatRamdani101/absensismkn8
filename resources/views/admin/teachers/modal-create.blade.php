@@ -131,8 +131,20 @@
                             <label class="custom-control-label" for="create_is_kurikulum">Akun Kurikulum</label>
                         </div>
 
-                        <small class="text-muted d-block mt-1">Centang jika akun ini dipakai untuk akses menu
-                            Kurikulum.</small>
+                        <div class="custom-control custom-checkbox mt-1">
+                            <input type="checkbox" class="custom-control-input" id="create_is_bk" name="is_bk"
+                                value="1">
+                            <label class="custom-control-label" for="create_is_bk">Akun BK</label>
+                        </div>
+
+                        <div class="custom-control custom-checkbox mt-1">
+                            <input type="checkbox" class="custom-control-input" id="create_is_kesiswaan"
+                                name="is_kesiswaan" value="1">
+                            <label class="custom-control-label" for="create_is_kesiswaan">Akun Kesiswaan</label>
+                        </div>
+
+                        <small class="text-muted d-block mt-1">Centang sesuai akses tambahan yang dimiliki akun
+                            ini.</small>
 
                     </div>
 

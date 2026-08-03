@@ -61,6 +61,8 @@
                 $('#edit_alamat').val(data.alamat);
                 $('#edit_wali_classroom_id').val(data.wali_classroom_id ?? '');
                 $('#edit_is_kurikulum').prop('checked', !!data.is_kurikulum);
+                $('#edit_is_bk').prop('checked', !!data.is_bk);
+                $('#edit_is_kesiswaan').prop('checked', !!data.is_kesiswaan);
 
                 $('#modalEdit').modal('show');
 
@@ -97,6 +99,8 @@
                     alamat: $('#edit_alamat').val(),
                     wali_classroom_id: $('#edit_wali_classroom_id').val(),
                     is_kurikulum: $('#edit_is_kurikulum').is(':checked') ? 1 : 0,
+                    is_bk: $('#edit_is_bk').is(':checked') ? 1 : 0,
+                    is_kesiswaan: $('#edit_is_kesiswaan').is(':checked') ? 1 : 0,
 
                 },
 

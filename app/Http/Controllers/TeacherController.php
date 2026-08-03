@@ -92,6 +92,10 @@ class TeacherController extends Controller
 
             'is_kurikulum' => 'nullable|boolean',
 
+            'is_bk' => 'nullable|boolean',
+
+            'is_kesiswaan' => 'nullable|boolean',
+
         ];
 
         if ($hasWaliKelasColumns) {
@@ -110,6 +114,8 @@ class TeacherController extends Controller
         }
 
         $validated['is_kurikulum'] = $request->boolean('is_kurikulum');
+        $validated['is_bk']        = $request->boolean('is_bk');
+        $validated['is_kesiswaan'] = $request->boolean('is_kesiswaan');
 
         $teacher = Teacher::create($validated);
 
@@ -157,6 +163,10 @@ class TeacherController extends Controller
 
             'is_kurikulum' => 'nullable|boolean',
 
+            'is_bk' => 'nullable|boolean',
+
+            'is_kesiswaan' => 'nullable|boolean',
+
         ];
 
         if ($hasWaliKelasColumns) {
@@ -175,6 +185,8 @@ class TeacherController extends Controller
         }
 
         $validated['is_kurikulum'] = $request->boolean('is_kurikulum');
+        $validated['is_bk']        = $request->boolean('is_bk');
+        $validated['is_kesiswaan'] = $request->boolean('is_kesiswaan');
 
         $teacher->update($validated);
 
@@ -318,17 +330,19 @@ class TeacherController extends Controller
         }
 
         Role::firstOrCreate(['name' => 'kurikulum', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'bk', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'kesiswaan', 'guard_name' => 'web']);
 
-        if ($teacher->is_kurikulum) {
-            if (!$user->hasRole('kurikulum')) {
-                $user->assignRole('kurikulum');
+        foreach (['kurikulum' => $teacher->is_kurikulum, 'bk' => $teacher->is_bk, 'kesiswaan' => $teacher->is_kesiswaan] as $role => $enabled) {
+            if ($enabled) {
+                if (!$user->hasRole($role)) {
+                    $user->assignRole($role);
+                }
+            } else {
+                if ($user->hasRole($role)) {
+                    $user->removeRole($role);
+                }
             }
-
-            return;
-        }
-
-        if ($user->hasRole('kurikulum')) {
-            $user->removeRole('kurikulum');
         }
     }
 }
