@@ -529,14 +529,13 @@ class AttendanceDetailController extends Controller
             ->all();
 
         $summary = [
-            'total' => (int) $filteredStudentIds->count(),
-            'hadir' => 0,
-            'sakit' => 0,
-            'izin' => 0,
-            'dispen' => 0,
-            'alpa' => 0,
+            'total'     => (int) $filteredStudentIds->count(),
+            'hadir'     => 0,
+            'sakit'     => 0,
+            'izin'      => 0,
+            'alpa'      => 0,
             'terlambat' => 0,
-            'belum' => 0,
+            'belum'     => 0,
         ];
 
         foreach ($filteredStudentIds as $studentId) {
@@ -549,7 +548,7 @@ class AttendanceDetailController extends Controller
             } elseif ($status === 'Izin') {
                 $summary['izin']++;
             } elseif ($status === 'Dispen') {
-                $summary['dispen']++;
+                $summary['hadir']++; // Dispen dianggap Hadir
             } elseif ($status === 'Alpha' || $status === 'Alpa') {
                 $summary['alpa']++;
             } elseif ($status === 'Terlambat') {
@@ -1551,7 +1550,13 @@ class AttendanceDetailController extends Controller
         $teacherAttendanceBySchedule = [];
         $savedCount = 0;
         $skippedCount = 0;
-        $status = $validated['bulk_status'] === 'Alpa' ? 'Alpha' : $validated['bulk_status'];
+        // Dispen dianggap Hadir dalam bulk
+        $isDispenBulk = $validated['bulk_status'] === 'Dispen';
+        $status = match ($validated['bulk_status']) {
+            'Alpa', 'Alpha' => 'Alpha',
+            'Dispen'        => 'Hadir',
+            default         => $validated['bulk_status'],
+        };
 
         $validPairs = [];
         foreach ($studentIds as $studentId) {
@@ -1644,7 +1649,7 @@ class AttendanceDetailController extends Controller
                 'teacher_attendance_id' => $teacherAttendance->id,
                 'student_id' => $pair['student_id'],
                 'status' => $status,
-                'keterangan' => null,
+                'keterangan' => $isDispenBulk ? 'Dispen' : null,
                 'jam_absen' => $nowTime,
                 'created_at' => $nowStamp,
                 'updated_at' => $nowStamp,

@@ -435,7 +435,6 @@
                         <span class="summary-chip summary-hadir">Hadir <strong id="summaryHadir">0</strong></span>
                         <span class="summary-chip summary-sakit">Sakit <strong id="summarySakit">0</strong></span>
                         <span class="summary-chip summary-izin">Izin <strong id="summaryIzin">0</strong></span>
-                        <span class="summary-chip summary-dispen">Dispen <strong id="summaryDispen">0</strong></span>
                         <span class="summary-chip summary-alpa">Alpa <strong id="summaryAlpa">0</strong></span>
                         <span class="summary-chip summary-terlambat">Terlambat <strong
                                 id="summaryTerlambat">0</strong></span>
@@ -713,7 +712,6 @@
                 $('#summaryHadir').text('0');
                 $('#summarySakit').text('0');
                 $('#summaryIzin').text('0');
-                $('#summaryDispen').text('0');
                 $('#summaryAlpa').text('0');
                 $('#summaryTerlambat').text('0');
                 $('#summaryBelum').text('0');
@@ -732,7 +730,6 @@
                     $('#summaryHadir').text(String(latestServerSummary.hadir ?? 0));
                     $('#summarySakit').text(String(latestServerSummary.sakit ?? 0));
                     $('#summaryIzin').text(String(latestServerSummary.izin ?? 0));
-                    $('#summaryDispen').text(String(latestServerSummary.dispen ?? 0));
                     $('#summaryAlpa').text(String(latestServerSummary.alpa ?? 0));
                     $('#summaryTerlambat').text(String(latestServerSummary.terlambat ?? 0));
                     $('#summaryBelum').text(String(latestServerSummary.belum ?? 0));
@@ -747,7 +744,6 @@
                     Hadir: 0,
                     Sakit: 0,
                     Izin: 0,
-                    Dispen: 0,
                     Alpa: 0,
                     Terlambat: 0,
                     Belum: 0,
@@ -763,7 +759,7 @@
                     } else if (rawStatus === 'Izin') {
                         counts.Izin++;
                     } else if (rawStatus === 'Dispen') {
-                        counts.Dispen++;
+                        counts.Hadir++; // Dispen dianggap Hadir
                     } else if (rawStatus === 'Alpha' || rawStatus === 'Alpa') {
                         counts.Alpa++;
                     } else if (rawStatus === 'Terlambat') {
@@ -777,7 +773,6 @@
                 $('#summaryHadir').text(String(counts.Hadir));
                 $('#summarySakit').text(String(counts.Sakit));
                 $('#summaryIzin').text(String(counts.Izin));
-                $('#summaryDispen').text(String(counts.Dispen));
                 $('#summaryAlpa').text(String(counts.Alpa));
                 $('#summaryTerlambat').text(String(counts.Terlambat));
                 $('#summaryBelum').text(String(counts.Belum));
