@@ -50,6 +50,7 @@
                                 <option value="Hadir">Hadir</option>
                                 <option value="Izin">Izin</option>
                                 <option value="Sakit">Sakit</option>
+                                <option value="Dispen">Dispen</option>
                                 <option value="Alpha">Alpha</option>
                                 <option value="Terlambat">Terlambat</option>
                             </select>

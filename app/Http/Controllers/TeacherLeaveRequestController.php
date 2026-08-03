@@ -26,9 +26,60 @@ class TeacherLeaveRequestController extends Controller
             ->latest()
             ->get();
 
+        $teachers = Teacher::query()->orderBy('nama_lengkap')->get(['id', 'nama_lengkap', 'nip']);
+
         return view('kurikulum.teacher_leave_requests.index', [
             'requests' => $requests,
+            'teachers' => $teachers,
         ]);
+    }
+
+    public function kurikulumStoreDirect(Request $request)
+    {
+        if (!$this->hasLeaveRequestColumns()) {
+            return redirect()->route('kurikulum.teacher-leave-requests.index')
+                ->with('error', 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.');
+        }
+
+        $validated = $request->validate([
+            'teacher_id'       => 'required|integer|exists:teachers,id',
+            'jenis_pengajuan'  => ['required', Rule::in(['Izin', 'Sakit', 'Cuti', 'Dinas Luar', 'Home Visit'])],
+            'tanggal_mulai'    => 'required|date',
+            'tanggal_selesai'  => 'required|date|after_or_equal:tanggal_mulai',
+            'alasan'           => 'required|string|max:2000',
+            'lampiran_tugas'   => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
+            'deskripsi_tugas'  => 'nullable|string|max:3000',
+        ]);
+
+        $deskripsiTugas = trim((string) ($validated['deskripsi_tugas'] ?? ''));
+
+        if ($validated['jenis_pengajuan'] !== 'Cuti' && !$request->hasFile('lampiran_tugas') && $deskripsiTugas === '') {
+            return redirect()->route('kurikulum.teacher-leave-requests.index')
+                ->withErrors(['deskripsi_tugas' => 'Isi tugas wajib (file atau deskripsi teks) untuk semua pengajuan selain Cuti.'])
+                ->withInput();
+        }
+
+        $attachmentPath = $request->hasFile('lampiran_tugas')
+            ? $request->file('lampiran_tugas')->store('guru-pengajuan', 'public')
+            : null;
+
+        $leaveRequest = TeacherLeaveRequest::create([
+            'teacher_id'          => (int) $validated['teacher_id'],
+            'jenis_pengajuan'     => $validated['jenis_pengajuan'],
+            'tanggal_mulai'       => $validated['tanggal_mulai'],
+            'tanggal_selesai'     => $validated['tanggal_selesai'],
+            'alasan'              => $validated['alasan'],
+            'lampiran_tugas_path' => $attachmentPath,
+            'deskripsi_tugas'     => $deskripsiTugas !== '' ? $deskripsiTugas : null,
+            'status_pengajuan'    => 'Disetujui',
+        ]);
+
+        $this->syncApprovedLeaveToTeacherAttendances($leaveRequest);
+
+        $teacher = Teacher::find((int) $validated['teacher_id']);
+
+        return redirect()->route('kurikulum.teacher-leave-requests.index')
+            ->with('success', 'Izin guru ' . ($teacher->nama_lengkap ?? '') . ' berhasil dicatat dan absensi guru telah diperbarui.');
     }
 
     public function index()
@@ -81,7 +132,7 @@ class TeacherLeaveRequestController extends Controller
 
         if ($validated['jenis_pengajuan'] !== 'Cuti' && !$request->hasFile('lampiran_tugas') && $deskripsiTugas === '') {
             return redirect()->route('guru.leave-requests.index')
-            ->withErrors(['deskripsi_tugas' => 'Isi tugas wajib (file atau deskripsi) untuk semua pengajuan selain Cuti.'])
+                ->withErrors(['deskripsi_tugas' => 'Isi tugas wajib (file atau deskripsi) untuk semua pengajuan selain Cuti.'])
                 ->withInput();
         }
 

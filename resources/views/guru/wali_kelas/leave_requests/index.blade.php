@@ -39,10 +39,11 @@
 
     <div class="card mb-3">
         <div class="card-header">
-            <strong>Input Hardfile Surat (Jika Siswa Terkendala Upload)</strong>
+            <strong>Input Langsung Izin/Sakit Oleh Wali Kelas</strong>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ route('guru.wali-kelas.leave-requests.hardfile') }}">
+            <form method="POST" action="{{ route('guru.wali-kelas.leave-requests.hardfile') }}"
+                enctype="multipart/form-data">
                 @csrf
                 <div class="form-row">
                     <div class="form-group col-md-3">
@@ -77,7 +78,18 @@
                     <div class="form-group col-md-3">
                         <label>Catatan Wali</label>
                         <input type="text" name="catatan_wali" class="form-control"
-                            placeholder="Contoh: Hardfile surat diterima.">
+                            placeholder="Contoh: Bukti chat orang tua diverifikasi.">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Screenshot Surat/Chat Orang Tua</label>
+                    <input type="file" name="foto_surat" id="wali_foto_surat" class="form-control-file" accept="image/*"
+                        required data-preview-wrap="#wali_foto_preview_wrap" data-preview-image="#wali_foto_preview">
+                    <small class="text-muted">Format: JPG/JPEG/PNG/WEBP, maksimal 5MB, minimal 600x600 px.</small>
+                    <div id="wali_foto_preview_wrap" class="mt-2 d-none">
+                        <img id="wali_foto_preview" src="" alt="Preview Bukti"
+                            style="max-width: 240px; max-height: 240px; border:1px solid #e5e7eb; border-radius:.35rem;">
                     </div>
                 </div>
 
@@ -87,7 +99,7 @@
                 </div>
 
                 <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Simpan Hardfile + Auto Absen
+                    <i class="fas fa-save"></i> Simpan Izin/Sakit + Auto Absen
                 </button>
             </form>
         </div>
@@ -169,6 +181,7 @@
                             <th>Tanggal</th>
                             <th>Alasan</th>
                             <th>Surat</th>
+                            <th>Sumber Input</th>
                             <th>Status</th>
                             <th>Aksi</th>
                         </tr>
@@ -196,6 +209,23 @@
                                         </a>
                                     @else
                                         <span class="badge badge-secondary">Hardfile</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @php
+                                        $catatanLower = strtolower((string) ($item->catatan_wali ?? ''));
+                                        $isOfficerDirect = str_contains($catatanLower, 'pengurus kelas');
+                                        $isWaliDirect = str_contains($catatanLower, 'input langsung wali kelas');
+                                    @endphp
+
+                                    @if ($isOfficerDirect)
+                                        <span class="badge badge-info">Pengurus Kelas (Direct)</span>
+                                    @elseif ($isWaliDirect)
+                                        <span class="badge badge-primary">Wali Kelas (Direct)</span>
+                                    @elseif ($item->status_pengajuan === 'Menunggu')
+                                        <span class="badge badge-secondary">Siswa (Pengajuan)</span>
+                                    @else
+                                        <span class="badge badge-success">Siswa (Diverifikasi Wali)</span>
                                     @endif
                                 </td>
                                 <td>
@@ -259,7 +289,7 @@
                 let studentQuery = ($('#filterNamaSiswaPengajuan').val() || '').toLowerCase().trim();
                 let filterStartDate = $('#filterTanggalMulaiPengajuan').val();
                 let filterEndDate = $('#filterTanggalSelesaiPengajuan').val();
-                let rowStatus = (data[7] || '').trim();
+                let rowStatus = (data[8] || '').trim();
                 let rowStudentName = rowNode ? String($(rowNode).data('student-name') || '') : '';
                 let rowStartDate = rowNode ? String($(rowNode).data('start-date') || '') : '';
                 let rowEndDate = rowNode ? String($(rowNode).data('end-date') || '') : '';
@@ -301,6 +331,9 @@
             $('#filterTanggalMulaiPengajuan, #filterTanggalSelesaiPengajuan').on('change', function() {
                 table.draw();
             });
+
         });
     </script>
+
+    @include('components.image-upload-preview-script')
 @stop

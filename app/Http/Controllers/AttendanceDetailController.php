@@ -516,12 +516,57 @@ class AttendanceDetailController extends Controller
             ->pluck('status', 'student_id')
             ->all();
 
+        $filteredStudentIds = (clone $studentsQuery)
+            ->reorder()
+            ->pluck('students.id')
+            ->map(fn($id) => (int) $id)
+            ->values();
+
+        $attendanceStatusByFilteredStudent = AttendanceDetail::query()
+            ->whereIn('teacher_attendance_id', $teacherAttendances->pluck('id')->values())
+            ->whereIn('student_id', $filteredStudentIds)
+            ->pluck('status', 'student_id')
+            ->all();
+
+        $summary = [
+            'total' => (int) $filteredStudentIds->count(),
+            'hadir' => 0,
+            'sakit' => 0,
+            'izin' => 0,
+            'dispen' => 0,
+            'alpa' => 0,
+            'terlambat' => 0,
+            'belum' => 0,
+        ];
+
+        foreach ($filteredStudentIds as $studentId) {
+            $status = $attendanceStatusByFilteredStudent[$studentId] ?? null;
+
+            if ($status === 'Hadir') {
+                $summary['hadir']++;
+            } elseif ($status === 'Sakit') {
+                $summary['sakit']++;
+            } elseif ($status === 'Izin') {
+                $summary['izin']++;
+            } elseif ($status === 'Dispen') {
+                $summary['dispen']++;
+            } elseif ($status === 'Alpha' || $status === 'Alpa') {
+                $summary['alpa']++;
+            } elseif ($status === 'Terlambat') {
+                $summary['terlambat']++;
+            } else {
+                $summary['belum']++;
+            }
+        }
+
         $csrfToken = csrf_token();
+        $selectedDate = $today->toDateString();
 
         $data = $students->values()->map(function (Student $student, int $index) use (
             $start,
             $attendanceStatusByStudent,
-            $csrfToken
+            $csrfToken,
+            $selectedDate
         ) {
             $rawStatus = $attendanceStatusByStudent[$student->id] ?? null;
             $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : ($rawStatus ?? 'Belum Absen');
@@ -532,6 +577,8 @@ class AttendanceDetailController extends Controller
                 $statusBadge = '<span class="badge badge-warning status-badge">Sakit</span>';
             } elseif ($displayStatus === 'Izin') {
                 $statusBadge = '<span class="badge badge-info status-badge">Izin</span>';
+            } elseif ($displayStatus === 'Dispen') {
+                $statusBadge = '<span class="badge badge-primary status-badge">Dispen</span>';
             } elseif ($displayStatus === 'Alpa') {
                 $statusBadge = '<span class="badge badge-danger status-badge">Alpa</span>';
             } elseif ($displayStatus === 'Terlambat') {
@@ -540,10 +587,11 @@ class AttendanceDetailController extends Controller
                 $statusBadge = '<span class="badge badge-secondary status-badge">Belum Absen</span>';
             }
 
-            $buildActionForm = function (string $status, string $buttonClass, string $label) use ($student, $csrfToken) {
+            $buildActionForm = function (string $status, string $buttonClass, string $label) use ($student, $csrfToken, $selectedDate) {
                 return '<form method="POST" action="' . route('guru.attendance-details.submit', $student->id) . '" class="d-inline">'
                     . '<input type="hidden" name="_token" value="' . $csrfToken . '">'
                     . '<input type="hidden" name="classroom_id" value="' . (int) $student->classroom_id . '">'
+                    . '<input type="hidden" name="tanggal" value="' . e($selectedDate) . '">'
                     . '<input type="hidden" name="status" value="' . e($status) . '">'
                     . '<button type="submit" class="btn ' . $buttonClass . ' btn-xs">' . e($label) . '</button>'
                     . '</form>';
@@ -551,8 +599,9 @@ class AttendanceDetailController extends Controller
 
             $aksi = '<div class="attendance-actions">'
                 . $buildActionForm('Hadir', 'btn-success', 'Hadir')
-                . '<button type="button" class="btn btn-warning btn-xs" disabled title="Nonaktif, gunakan approval izin/sakit wali kelas">Sakit</button>'
-                . '<button type="button" class="btn btn-info btn-xs" disabled title="Nonaktif, gunakan approval izin/sakit wali kelas">Izin</button>'
+                . $buildActionForm('Sakit', 'btn-warning', 'Sakit')
+                . $buildActionForm('Izin', 'btn-info', 'Izin')
+                . $buildActionForm('Dispen', 'btn-primary', 'Dispen')
                 . $buildActionForm('Alpa', 'btn-danger', 'Alpa')
                 . $buildActionForm('Terlambat', 'btn-warning', 'Terlambat')
                 . '</div>';
@@ -564,6 +613,7 @@ class AttendanceDetailController extends Controller
                 'kelas' => e($student->classroom->nama_kelas ?? '-'),
                 'status' => $statusBadge,
                 'aksi' => $aksi,
+                'raw_status' => $rawStatus,
             ];
         })->all();
 
@@ -572,6 +622,89 @@ class AttendanceDetailController extends Controller
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
             'data' => $data,
+            'summary' => $summary,
+        ]);
+    }
+
+    public function guruClassOptions(Request $request)
+    {
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return response()->json([
+                'options' => [],
+                'selected' => 0,
+                'is_weekend_holiday' => false,
+            ]);
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $tanggalInput = trim((string) $request->query('tanggal', ''));
+        if ($tanggalInput === '') {
+            return response()->json([
+                'options' => [],
+                'selected' => 0,
+                'is_weekend_holiday' => false,
+            ]);
+        }
+
+        $date = Carbon::parse($tanggalInput);
+        $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
+        $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true);
+
+        if ($dayName === null || $isWeekendHoliday) {
+            return response()->json([
+                'options' => [],
+                'selected' => 0,
+                'is_weekend_holiday' => true,
+            ]);
+        }
+
+        $todaySchedules = Schedule::query()
+            ->with('teacherSubject.classroom')
+            ->where('hari', $dayName)
+            ->whereHas('teacherSubject', function ($query) use ($teacher) {
+                $query->where('teacher_id', $teacher->id);
+            })
+            ->orderBy('jam_mulai')
+            ->get();
+
+        $classOptions = $todaySchedules
+            ->map(fn($schedule) => $schedule->teacherSubject->classroom)
+            ->filter()
+            ->unique('id')
+            ->sortBy('nama_kelas')
+            ->values();
+
+        $allowedClassroomIds = $classOptions->pluck('id')->map(fn($id) => (int) $id)->values()->all();
+        $selectedClassroomId = (int) $request->query('classroom_id', 0);
+
+        if ($selectedClassroomId !== 0 && !in_array($selectedClassroomId, $allowedClassroomIds, true)) {
+            $selectedClassroomId = 0;
+        }
+
+        return response()->json([
+            'options' => $classOptions->map(fn($classroom) => [
+                'id' => (int) $classroom->id,
+                'nama_kelas' => (string) $classroom->nama_kelas,
+                'kode_kelas' => (string) $classroom->kode_kelas,
+            ])->values(),
+            'selected' => $selectedClassroomId,
+            'is_weekend_holiday' => false,
         ]);
     }
 
@@ -986,7 +1119,7 @@ class AttendanceDetailController extends Controller
                     return $query->where('teacher_attendance_id', $request->teacher_attendance_id);
                 }),
             ],
-            'status' => 'required|in:Hadir,Izin,Sakit,Alpha,Terlambat',
+            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Terlambat',
             'keterangan' => 'nullable|string|max:255',
             'jam_absen' => 'nullable|date_format:H:i',
         ]);
@@ -1026,7 +1159,7 @@ class AttendanceDetailController extends Controller
                     return $query->where('teacher_attendance_id', $request->teacher_attendance_id);
                 })->ignore($attendanceDetail->id),
             ],
-            'status' => 'required|in:Hadir,Izin,Sakit,Alpha,Terlambat',
+            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Terlambat',
             'keterangan' => 'nullable|string|max:255',
             'jam_absen' => 'nullable|date_format:H:i',
         ]);
@@ -1078,8 +1211,9 @@ class AttendanceDetailController extends Controller
     public function submitForGuru(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'status' => 'required|in:Hadir,Alpa,Terlambat',
+            'status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
             'classroom_id' => 'required|integer',
+            'tanggal' => 'required|date|before_or_equal:today',
         ]);
 
         $user = auth()->user();
@@ -1103,11 +1237,14 @@ class AttendanceDetailController extends Controller
             7 => 'Minggu',
         ];
 
-        $today = Carbon::today();
+        $today = Carbon::parse((string) $validated['tanggal']);
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
         if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
-            return redirect()->route('guru.attendance-details.index', ['classroom_id' => $validated['classroom_id']])
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $validated['classroom_id'],
+            ])
                 ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
@@ -1128,7 +1265,10 @@ class AttendanceDetailController extends Controller
             ->first();
 
         if (!$schedule || !$schedule->teacherSubject) {
-            return redirect()->route('guru.attendance-details.index', ['classroom_id' => $classroomId])
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $classroomId,
+            ])
                 ->with('error', 'Jadwal hari ini untuk kelas tersebut tidak ditemukan.');
         }
 
@@ -1313,9 +1453,10 @@ class AttendanceDetailController extends Controller
     {
         $validated = $request->validate([
             'classroom_id' => 'nullable|integer',
-            'bulk_status' => 'required|in:Hadir,Alpa,Terlambat',
+            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'required|integer|exists:students,id',
+            'tanggal' => 'required|date|before_or_equal:today',
         ]);
 
         $user = auth()->user();
@@ -1339,11 +1480,14 @@ class AttendanceDetailController extends Controller
             7 => 'Minggu',
         ];
 
-        $today = Carbon::today();
+        $today = Carbon::parse((string) $validated['tanggal']);
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
         if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
-            return redirect()->route('guru.attendance-details.index', ['classroom_id' => (int) ($validated['classroom_id'] ?? 0)])
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => (int) ($validated['classroom_id'] ?? 0),
+            ])
                 ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
@@ -1366,7 +1510,10 @@ class AttendanceDetailController extends Controller
         $todaySchedules = $todaySchedulesQuery->get();
 
         if ($todaySchedules->isEmpty()) {
-            return redirect()->route('guru.attendance-details.index', ['classroom_id' => $selectedClassroomId])
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])
                 ->with('error', 'Jadwal hari ini tidak ditemukan.');
         }
 
@@ -1515,7 +1662,10 @@ class AttendanceDetailController extends Controller
         }
 
         if ($savedCount === 0) {
-            return redirect()->route('guru.attendance-details.index', ['classroom_id' => $selectedClassroomId])
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])
                 ->with('error', 'Tidak ada data yang tersimpan. Pastikan siswa berada pada kelas sesuai jadwal Anda hari ini.');
         }
 
@@ -1533,6 +1683,241 @@ class AttendanceDetailController extends Controller
             ->with('success', $message)
             ->with('offer_agenda_redirect', true)
             ->with('agenda_redirect_url', route('guru.agenda.index'));
+    }
+
+    public function submitCountPresentForGuru(Request $request)
+    {
+        $validated = $request->validate([
+            'classroom_id' => 'nullable|integer',
+            'tanggal' => 'required|date|before_or_equal:today',
+        ]);
+
+        $user = auth()->user();
+
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $targetDate = Carbon::parse((string) $validated['tanggal']);
+        $dayName = $dayMap[$targetDate->dayOfWeekIso] ?? null;
+
+        if ($dayName === null || in_array($dayName, ['Sabtu', 'Minggu'], true)) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $targetDate->toDateString(),
+                'classroom_id' => (int) ($validated['classroom_id'] ?? 0),
+            ])->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+        }
+
+        $selectedClassroomId = (int) ($validated['classroom_id'] ?? 0);
+
+        $schedulesQuery = Schedule::query()
+            ->where('hari', $dayName)
+            ->whereHas('teacherSubject', function ($query) use ($teacher) {
+                $query->where('teacher_id', $teacher->id);
+            })
+            ->with('teacherSubject')
+            ->orderBy('jam_mulai');
+
+        if ($selectedClassroomId !== 0) {
+            $schedulesQuery->whereHas('teacherSubject', function ($query) use ($selectedClassroomId) {
+                $query->where('classroom_id', $selectedClassroomId);
+            });
+        }
+
+        $schedules = $schedulesQuery->get();
+
+        if ($schedules->isEmpty()) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $targetDate->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])->with('error', 'Jadwal tidak ditemukan untuk tanggal dan kelas yang dipilih.');
+        }
+
+        $primaryScheduleByClass = [];
+        foreach ($schedules as $schedule) {
+            $classroomId = (int) ($schedule->teacherSubject->classroom_id ?? 0);
+
+            if ($classroomId === 0) {
+                continue;
+            }
+
+            if (!isset($primaryScheduleByClass[$classroomId]) || $schedule->jam_mulai < $primaryScheduleByClass[$classroomId]->jam_mulai) {
+                $primaryScheduleByClass[$classroomId] = $schedule;
+            }
+        }
+
+        $allowedClassroomIds = collect($primaryScheduleByClass)->keys()->map(fn($id) => (int) $id)->values();
+        if ($allowedClassroomIds->isEmpty()) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $targetDate->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])->with('error', 'Tidak ada kelas valid pada jadwal yang dipilih.');
+        }
+
+        $studentsQuery = Student::query()->whereIn('classroom_id', $allowedClassroomIds->all());
+        if ($selectedClassroomId !== 0) {
+            $studentsQuery->where('classroom_id', $selectedClassroomId);
+        }
+
+        $students = $studentsQuery->get(['id', 'classroom_id']);
+        if ($students->isEmpty()) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $targetDate->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])->with('error', 'Tidak ada siswa pada kelas terpilih.');
+        }
+
+        $studentIds = $students->pluck('id')->map(fn($id) => (int) $id)->values();
+
+        $approvedLeaveStudentIds = StudentLeaveRequest::query()
+            ->whereIn('student_id', $studentIds->all())
+            ->where('status_pengajuan', 'Disetujui')
+            ->whereDate('tanggal_mulai', '<=', $targetDate->toDateString())
+            ->whereDate('tanggal_selesai', '>=', $targetDate->toDateString())
+            ->pluck('student_id')
+            ->map(fn($id) => (int) $id)
+            ->flip()
+            ->all();
+
+        $scheduleIds = collect($primaryScheduleByClass)->pluck('id')->map(fn($id) => (int) $id)->values();
+        $teacherAttendanceBySchedule = TeacherAttendance::query()
+            ->whereDate('tanggal', $targetDate->toDateString())
+            ->whereIn('schedule_id', $scheduleIds)
+            ->get()
+            ->keyBy('schedule_id')
+            ->all();
+
+        $missingScheduleIds = $scheduleIds
+            ->reject(fn($scheduleId) => isset($teacherAttendanceBySchedule[(int) $scheduleId]))
+            ->values();
+
+        if ($missingScheduleIds->isNotEmpty()) {
+            $lastPertemuanBySchedule = TeacherAttendance::query()
+                ->selectRaw('schedule_id, MAX(pertemuan) as max_pertemuan')
+                ->whereIn('schedule_id', $missingScheduleIds)
+                ->groupBy('schedule_id')
+                ->pluck('max_pertemuan', 'schedule_id');
+
+            foreach ($missingScheduleIds as $scheduleId) {
+                $schedule = $schedules->firstWhere('id', (int) $scheduleId);
+
+                if (!$schedule || !$schedule->teacherSubject) {
+                    continue;
+                }
+
+                $teacherAttendance = TeacherAttendance::create([
+                    'teacher_id' => $schedule->teacherSubject->teacher_id,
+                    'schedule_id' => (int) $scheduleId,
+                    'classroom_id' => $schedule->teacherSubject->classroom_id,
+                    'subject_id' => $schedule->teacherSubject->subject_id,
+                    'academic_year_id' => $schedule->teacherSubject->academic_year_id,
+                    'tanggal' => $targetDate->toDateString(),
+                    'pertemuan' => max(((int) ($lastPertemuanBySchedule[(int) $scheduleId] ?? 0)) + 1, 1),
+                    'materi_pembelajaran' => null,
+                    'catatan_guru' => null,
+                    'status' => 'Draft',
+                ]);
+
+                $teacherAttendanceBySchedule[(int) $scheduleId] = $teacherAttendance;
+            }
+        }
+
+        $pairRows = [];
+        foreach ($students as $student) {
+            $studentId = (int) $student->id;
+
+            if (isset($approvedLeaveStudentIds[$studentId])) {
+                continue;
+            }
+
+            $schedule = $primaryScheduleByClass[(int) $student->classroom_id] ?? null;
+            if (!$schedule) {
+                continue;
+            }
+
+            $teacherAttendance = $teacherAttendanceBySchedule[(int) $schedule->id] ?? null;
+            if (!$teacherAttendance) {
+                continue;
+            }
+
+            $pairRows[] = [
+                'teacher_attendance_id' => (int) $teacherAttendance->id,
+                'student_id' => $studentId,
+            ];
+        }
+
+        if (empty($pairRows)) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $targetDate->toDateString(),
+                'classroom_id' => $selectedClassroomId,
+            ])->with('error', 'Tidak ada siswa yang bisa diproses untuk hitung hadir.');
+        }
+
+        $attendanceIds = collect($pairRows)->pluck('teacher_attendance_id')->unique()->values();
+        $pairStudentIds = collect($pairRows)->pluck('student_id')->unique()->values();
+
+        $existingPairs = AttendanceDetail::query()
+            ->whereIn('teacher_attendance_id', $attendanceIds)
+            ->whereIn('student_id', $pairStudentIds)
+            ->get(['teacher_attendance_id', 'student_id'])
+            ->mapWithKeys(fn($row) => [((int) $row->teacher_attendance_id) . ':' . ((int) $row->student_id) => true])
+            ->all();
+
+        $nowTime = now()->format('H:i:s');
+        $nowStamp = now();
+        $insertRows = [];
+
+        foreach ($pairRows as $pair) {
+            $pairKey = $pair['teacher_attendance_id'] . ':' . $pair['student_id'];
+            if (isset($existingPairs[$pairKey])) {
+                continue;
+            }
+
+            $insertRows[] = [
+                'teacher_attendance_id' => $pair['teacher_attendance_id'],
+                'student_id' => $pair['student_id'],
+                'status' => 'Hadir',
+                'keterangan' => null,
+                'jam_absen' => $nowTime,
+                'created_at' => $nowStamp,
+                'updated_at' => $nowStamp,
+            ];
+        }
+
+        if (!empty($insertRows)) {
+            AttendanceDetail::query()->insert($insertRows);
+        }
+
+        $savedCount = count($insertRows);
+        $existingCount = count($pairRows) - $savedCount;
+
+        $this->forgetGuruAttendanceSummaryCache($targetDate->toDateString());
+
+        $message = "Hitung hadir selesai. {$savedCount} siswa ditandai Hadir";
+        if ($existingCount > 0) {
+            $message .= ", {$existingCount} siswa sudah memiliki status sebelumnya";
+        }
+        $message .= '.';
+
+        return redirect()->route('guru.attendance-details.index', [
+            'tanggal' => $targetDate->toDateString(),
+            'classroom_id' => $selectedClassroomId,
+        ])->with('success', $message);
     }
 
     public function submitBulkForOfficer(Request $request)

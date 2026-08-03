@@ -127,15 +127,15 @@
                         <input type="hidden" name="schedule_id" value="{{ $selectedSchedule->id }}">
                         <div class="form-group mb-2">
                             <label class="mb-1">Alasan Pengajuan</label>
-                            <textarea name="alasan" class="form-control" rows="2" required
-                                placeholder="Contoh: Mengajukan izin sebagai petugas absen kelas pada jadwal ini."></textarea>
+                            <textarea name="alasan" class="form-control" rows="2" required accept="image/*" required
+                                data-preview-wrap="#officer_leave_foto_preview_wrap" data-preview-image="#officer_leave_foto_preview">
                         </div>
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="fas fa-paper-plane"></i>
                             {{ $officerPermit && $officerPermit->status_pengajuan === 'Ditolak' ? 'Ajukan Ulang ke Kurikulum' : 'Ajukan ke Kurikulum' }}
                         </button>
                     </form>
-                @endif
+@endif
             </div>
         </div>
     @endif
@@ -154,20 +154,12 @@
                 style="gap:.5rem; display: none;">
                 <small class="text-muted">
                     <span id="selectedCountLabel">0</span> siswa dipilih. Aksi massal:
-                    Hadir / Sakit / Izin / Alpa.
+                    Hadir / Alpa.
                 </small>
                 <div class="d-flex flex-wrap" style="gap: .4rem;">
                     <button type="button" class="btn btn-success btn-sm btn-bulk-status" data-status="Hadir"
                         @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
                         Hadir
-                    </button>
-                    <button type="button" class="btn btn-warning btn-sm btn-bulk-status" data-status="Sakit"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
-                        Sakit
-                    </button>
-                    <button type="button" class="btn btn-info btn-sm btn-bulk-status" data-status="Izin"
-                        @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
-                        Izin
                     </button>
                     <button type="button" class="btn btn-danger btn-sm btn-bulk-status" data-status="Alpa"
                         @if ($isWeekendHoliday || $students->isEmpty() || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
@@ -193,10 +185,10 @@
                     </thead>
                     <tbody>
                         @forelse ($students as $student)
-                            @php
-                                $rawStatus = $statusByStudentId[$student->id] ?? null;
-                                $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus ?? 'Belum Absen';
-                            @endphp
+@php
+    $rawStatus = $statusByStudentId[$student->id] ?? null;
+    $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : $rawStatus ?? 'Belum Absen';
+@endphp
                             <tr>
                                 <td class="text-center">
                                     <input type="checkbox" class="check-student" name="student_ids[]"
@@ -208,16 +200,16 @@
                                 <td>{{ $student->classroom->nama_kelas ?? '-' }}</td>
                                 <td>
                                     @if ($displayStatus === 'Hadir')
-                                        <span class="badge badge-success">Hadir</span>
-                                    @elseif ($displayStatus === 'Sakit')
-                                        <span class="badge badge-warning">Sakit</span>
-                                    @elseif ($displayStatus === 'Izin')
-                                        <span class="badge badge-info">Izin</span>
-                                    @elseif ($displayStatus === 'Alpa')
-                                        <span class="badge badge-danger">Alpa</span>
-                                    @else
-                                        <span class="badge badge-secondary">Belum Absen</span>
-                                    @endif
+<span class="badge badge-success">Hadir</span>
+@elseif ($displayStatus === 'Sakit')
+<span class="badge badge-warning">Sakit</span>
+@elseif ($displayStatus === 'Izin')
+<span class="badge badge-info">Izin</span>
+@elseif ($displayStatus === 'Alpa')
+<span class="badge badge-danger">Alpa</span>
+@else
+<span class="badge badge-secondary">Belum Absen</span>
+@endif
                                 </td>
                                 <td>
                                     <div class="d-flex flex-wrap" style="gap:.35rem;">
@@ -233,29 +225,21 @@
                                                 @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Hadir</button>
                                         </form>
 
-                                        <form method="POST"
-                                            action="{{ route('siswa.attendance-details.submit', $student->id) }}"
-                                            class="d-inline">
-                                            @csrf
-                                            <input type="hidden" name="classroom_id"
-                                                value="{{ $student->classroom_id }}">
-                                            <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
-                                            <input type="hidden" name="status" value="Sakit">
-                                            <button type="submit" class="btn btn-warning btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Sakit</button>
-                                        </form>
+                                        <button type="button" class="btn btn-warning btn-sm btn-open-leave-modal"
+                                            data-student-id="{{ $student->id }}"
+                                            data-student-name="{{ $student->nama_lengkap }}"
+                                            data-classroom-id="{{ $student->classroom_id }}" data-jenis="Sakit"
+                                            @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
+                                            Sakit + Bukti
+                                        </button>
 
-                                        <form method="POST"
-                                            action="{{ route('siswa.attendance-details.submit', $student->id) }}"
-                                            class="d-inline">
-                                            @csrf
-                                            <input type="hidden" name="classroom_id"
-                                                value="{{ $student->classroom_id }}">
-                                            <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
-                                            <input type="hidden" name="status" value="Izin">
-                                            <button type="submit" class="btn btn-info btn-sm"
-                                                @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>Izin</button>
-                                        </form>
+                                        <button type="button" class="btn btn-info btn-sm btn-open-leave-modal"
+                                            data-student-id="{{ $student->id }}"
+                                            data-student-name="{{ $student->nama_lengkap }}"
+                                            data-classroom-id="{{ $student->classroom_id }}" data-jenis="Izin"
+                                            @if ($isWeekendHoliday || !$selectedSchedule || !$canOfficerFillAttendance) disabled @endif>
+                                            Izin + Bukti
+                                        </button>
 
                                         <form method="POST"
                                             action="{{ route('siswa.attendance-details.submit', $student->id) }}"
@@ -277,75 +261,154 @@
                                     Tidak ada data siswa untuk kelas ini.
                                 </td>
                             </tr>
-                        @endforelse
+@endforelse
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-@stop
 
-@section('footer')
-    @include('components.app-footer')
-@stop
+    <div class="modal fade" id="modalOfficerLeaveInput" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('siswa.attendance-details.leave-input.store') }}"
+                    enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" name="student_id" id="modal_leave_student_id">
+                    <input type="hidden" name="classroom_id" id="modal_leave_classroom_id">
+                    <input type="hidden" name="schedule_id" value="{{ $selectedScheduleId }}">
 
-@section('js')
-    <script>
-        $(function() {
-            $('#tableOfficerAttendanceDetails').DataTable({
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
-                },
-                columnDefs: [{
-                    orderable: false,
-                    targets: 0
-                }, {
-                    orderable: false,
-                    targets: 5
-                }]
-            });
+                    <div class="modal-header">
+                        <h5 class="modal-title">Input Izin/Sakit Siswa + Bukti</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
 
-            $('#check_all_students, .check-student').prop('checked', false);
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 mb-3">
+                            Status siswa akan otomatis diisi sesuai jenis pengajuan dan bukti screenshot akan disimpan.
+                        </div>
 
-            $('#check_all_students').on('change', function() {
-                let checked = $(this).is(':checked');
-                $('.check-student').prop('checked', checked);
+                        <div class="form-group mb-2">
+                            <label class="mb-1">Nama Siswa</label>
+                            <input type="text" class="form-control" id="modal_leave_student_name" readonly>
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label class="mb-1">Jenis Pengajuan</label>
+                            <select name="jenis_pengajuan" id="modal_leave_jenis" class="form-control" required>
+                                <option value="Izin">Izin</option>
+                                <option value="Sakit">Sakit</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label class="mb-1">Alasan</label>
+                            <textarea name="alasan" class="form-control" rows="3" required
+                                placeholder="Contoh: Orang tua mengonfirmasi siswa izin/sakit hari ini melalui chat."></textarea>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label class="mb-1">Upload Screenshot Surat/Chat Orang Tua</label>
+                            <input type="file" name="foto_surat" id="officer_leave_foto_surat"
+                                class="form-control-file" accept="image/*" required>
+                            <small class="text-muted">Format: JPG/JPEG/PNG/WEBP, maksimal 5MB, minimal 600x600 px.</small>
+                            <div id="officer_leave_foto_preview_wrap" class="mt-2 d-none">
+                                <img id="officer_leave_foto_preview" src="" alt="Preview Bukti"
+                                    style="max-width: 240px; max-height: 240px; border:1px solid #e5e7eb; border-radius:.35rem;">
+                            </div>
+                        </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Simpan Izin/Sakit
+                </button>
+            </div>
+            </form>
+        </div>
+        </div>
+        </div>
+    @stop
+
+    @section('footer')
+        @include('components.app-footer')
+    @stop
+
+    @section('js')
+        <script>
+            $(function() {
+                $('#tableOfficerAttendanceDetails').DataTable({
+                    responsive: true,
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
+                    },
+                    columnDefs: [{
+                        orderable: false,
+                        targets: 0
+                    }, {
+                        orderable: false,
+                        targets: 5
+                    }]
+                });
+
+                $('#check_all_students, .check-student').prop('checked', false);
+
+                $('#check_all_students').on('change', function() {
+                    let checked = $(this).is(':checked');
+                    $('.check-student').prop('checked', checked);
+                    updateBulkActionBar();
+                });
+
+                $(document).on('change', '.check-student', function() {
+                    let total = $('.check-student').length;
+                    let checked = $('.check-student:checked').length;
+
+                    $('#check_all_students').prop('checked', total > 0 && total === checked);
+                    updateBulkActionBar();
+                });
+
+                function updateBulkActionBar() {
+                    let selectedCount = $('.check-student:checked').length;
+
+                    if (selectedCount > 0) {
+                        $('#selectedCountLabel').text(selectedCount);
+                        $('#bulkActionBar').show();
+                    } else {
+                        $('#bulkActionBar').hide();
+                    }
+                }
+
+                $('.btn-bulk-status').on('click', function() {
+                    let selectedCount = $('.check-student:checked').length;
+
+                    if (selectedCount === 0) {
+                        alert('Pilih minimal satu siswa terlebih dahulu.');
+                        return;
+                    }
+
+                    $('#bulk_status').val($(this).data('status'));
+                    $('#bulkAttendanceForm').submit();
+                });
+
+                $(document).on('click', '.btn-open-leave-modal', function() {
+                    $('#modal_leave_student_id').val($(this).data('student-id'));
+                    $('#modal_leave_student_name').val($(this).data('student-name'));
+                    $('#modal_leave_classroom_id').val($(this).data('classroom-id'));
+                    $('#modal_leave_jenis').val($(this).data('jenis'));
+
+                    $('#officer_leave_foto_surat').val('');
+                    $('#officer_leave_foto_preview').attr('src', '');
+                    $('#officer_leave_foto_preview_wrap').addClass('d-none');
+
+                    $('#modalOfficerLeaveInput').modal('show');
+                });
+
                 updateBulkActionBar();
             });
+        </script>
 
-            $(document).on('change', '.check-student', function() {
-                let total = $('.check-student').length;
-                let checked = $('.check-student:checked').length;
-
-                $('#check_all_students').prop('checked', total > 0 && total === checked);
-                updateBulkActionBar();
-            });
-
-            function updateBulkActionBar() {
-                let selectedCount = $('.check-student:checked').length;
-
-                if (selectedCount > 0) {
-                    $('#selectedCountLabel').text(selectedCount);
-                    $('#bulkActionBar').show();
-                } else {
-                    $('#bulkActionBar').hide();
-                }
-            }
-
-            $('.btn-bulk-status').on('click', function() {
-                let selectedCount = $('.check-student:checked').length;
-
-                if (selectedCount === 0) {
-                    alert('Pilih minimal satu siswa terlebih dahulu.');
-                    return;
-                }
-
-                $('#bulk_status').val($(this).data('status'));
-                $('#bulkAttendanceForm').submit();
-            });
-
-            updateBulkActionBar();
-        });
-    </script>
-@stop
+        @include('components.image-upload-preview-script')
+    @stop

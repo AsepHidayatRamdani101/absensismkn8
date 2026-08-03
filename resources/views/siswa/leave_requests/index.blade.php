@@ -67,8 +67,15 @@
 
                     <div class="form-group col-md-3">
                         <label>Foto Surat Orangtua</label>
-                        <input type="file" name="foto_surat" class="form-control-file" accept="image/*" required>
-                        <small class="text-muted d-block mt-1">Wajib diupload untuk semua pengajuan izin/sakit.</small>
+                        <input type="file" name="foto_surat" id="siswa_foto_surat" class="form-control-file"
+                            accept="image/*" required data-preview-wrap="#siswa_foto_preview_wrap"
+                            data-preview-image="#siswa_foto_preview">
+                        <small class="text-muted d-block mt-1">Wajib diupload. Format JPG/JPEG/PNG/WEBP, maksimal 5MB,
+                            minimal 600x600 px.</small>
+                        <div id="siswa_foto_preview_wrap" class="mt-2 d-none">
+                            <img id="siswa_foto_preview" src="" alt="Preview Surat"
+                                style="max-width: 240px; max-height: 240px; border:1px solid #e5e7eb; border-radius:.35rem;">
+                        </div>
                     </div>
                 </div>
 
@@ -161,6 +168,9 @@
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
                 }
             });
+
         });
     </script>
+
+    @include('components.image-upload-preview-script')
 @stop

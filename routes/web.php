@@ -485,6 +485,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('kurikulum/guru-leave-requests', [TeacherLeaveRequestController::class, 'approvalIndex'])
             ->name('kurikulum.teacher-leave-requests.index');
+        Route::post('kurikulum/guru-leave-requests/input-langsung', [TeacherLeaveRequestController::class, 'kurikulumStoreDirect'])
+            ->name('kurikulum.teacher-leave-requests.direct-store');
         Route::post('kurikulum/guru-leave-requests/{teacherLeaveRequest}/approve', [TeacherLeaveRequestController::class, 'approve'])
             ->name('kurikulum.teacher-leave-requests.approve');
         Route::post('kurikulum/guru-leave-requests/{teacherLeaveRequest}/reject', [TeacherLeaveRequestController::class, 'reject'])
@@ -560,6 +562,8 @@ Route::middleware(['auth', 'guru'])->group(function () {
         ->name('guru.attendance-details.index');
     Route::get('/guru/attendance-details/datatable', [AttendanceDetailController::class, 'guruDatatable'])
         ->name('guru.attendance-details.datatable');
+    Route::get('/guru/attendance-details/class-options', [AttendanceDetailController::class, 'guruClassOptions'])
+        ->name('guru.attendance-details.class-options');
     Route::get('/guru/attendance-details/teacher-attendance-detail', [AttendanceDetailController::class, 'guruTeacherAttendanceDetail'])
         ->name('guru.attendance-details.teacher-attendance-detail');
     Route::get('/guru/pengajuan', [TeacherLeaveRequestController::class, 'index'])
@@ -603,6 +607,8 @@ Route::middleware(['auth', 'guru'])->group(function () {
         ->name('guru.wali-kelas.leave-requests.hardfile');
     Route::post('/guru/attendance-details/bulk-submit', [AttendanceDetailController::class, 'submitBulkForGuru'])
         ->name('guru.attendance-details.bulk-submit');
+    Route::post('/guru/attendance-details/count-hadir', [AttendanceDetailController::class, 'submitCountPresentForGuru'])
+        ->name('guru.attendance-details.count-hadir');
     Route::post('/guru/attendance-details/{student}/submit', [AttendanceDetailController::class, 'submitForGuru'])
         ->name('guru.attendance-details.submit');
 });
@@ -637,6 +643,9 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::post('/siswa/attendance-details/{student}/submit', [AttendanceDetailController::class, 'submitForOfficer'])
         ->middleware('can:siswa-absen-guru')
         ->name('siswa.attendance-details.submit');
+    Route::post('/siswa/attendance-details/leave-input', [StudentLeaveRequestController::class, 'officerStoreDirect'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.attendance-details.leave-input.store');
     Route::post('/siswa/attendance-details/permit', [OfficerAttendancePermitController::class, 'store'])
         ->middleware('can:siswa-absen-guru')
         ->name('siswa.attendance-details.permit.store');
@@ -644,6 +653,12 @@ Route::middleware(['auth', 'siswa'])->group(function () {
         ->name('siswa.leave-requests.index');
     Route::post('/siswa/pengajuan-izin-sakit', [StudentLeaveRequestController::class, 'siswaStore'])
         ->name('siswa.leave-requests.store');
+    Route::get('/siswa/izin-sakit-kelas', [StudentLeaveRequestController::class, 'officerLeaveIndex'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.officer-leave.index');
+    Route::post('/siswa/izin-sakit-kelas', [StudentLeaveRequestController::class, 'officerLeaveStore'])
+        ->middleware('can:siswa-absen-guru')
+        ->name('siswa.officer-leave.store');
 });
 
 Route::middleware(['auth', 'role:wali_kelas'])->group(function () {

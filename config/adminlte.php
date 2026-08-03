@@ -341,18 +341,6 @@ return [
             'can' => 'siswa',
         ],
         [
-            'text' => 'Dasbor',
-            'route' => 'kurikulum.dashboard',
-            'icon' => 'fas fa-fw fa-home',
-            'can' => 'kurikulum',
-        ],
-        [
-            'text' => 'Dasbor Pancawaluya',
-            'route' => 'kurikulum.dashboard.dss',
-            'icon' => 'fas fa-fw fa-chart-line',
-            'can' => 'kurikulum',
-        ],
-        [
             'text' => 'Dasbor Pancawaluya',
             'route' => 'wali-kelas.dashboard.dss',
             'icon' => 'fas fa-fw fa-chart-line',
@@ -536,6 +524,12 @@ return [
             'can' => 'siswa-absen-guru',
         ],
         [
+            'text' => 'Izin/Sakit Siswa Kelas',
+            'route' => 'siswa.officer-leave.index',
+            'icon' => 'fas fa-notes-medical',
+            'can' => 'siswa-absen-guru',
+        ],
+        [
             'text' => 'Riwayat Absen',
             'route' => 'siswa.attendance-history.index',
             'icon' => 'fas fa-history',
@@ -598,6 +592,16 @@ return [
             'label' => 'Khusus',
             'label_color' => 'info',
             'submenu' => [
+                [
+                    'text' => 'Dasbor',
+                    'route' => 'kurikulum.dashboard',
+                    'icon' => 'fas fa-fw fa-home',
+                ],
+                [
+                    'text' => 'Dasbor Pancawaluya',
+                    'route' => 'kurikulum.dashboard.dss',
+                    'icon' => 'fas fa-fw fa-chart-line',
+                ],
                 [
                     'text' => 'Absensi',
                     'icon' => 'fas fa-clipboard-list',
