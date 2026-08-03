@@ -6,13 +6,34 @@
 @section('plugins.Sweetalert2', true)
 
 @section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1>Master Data Tata Usaha (TU)</h1>
-        <div>
-            <button class="btn btn-primary" data-toggle="modal" data-target="#modalCreateTu">
+    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:.5rem;">
+        <h1 class="mb-0">Master Data Tata Usaha (TU)</h1>
+        <div class="d-flex flex-wrap" style="gap:.35rem;">
+            <a href="{{ route('staff-tu.template') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-file-download"></i> Download Format
+            </a>
+            <a href="{{ route('staff-tu.export') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-file-excel"></i> Export Excel
+            </a>
+            <form id="formImportTu" action="{{ route('staff-tu.import') }}" method="POST" enctype="multipart/form-data"
+                class="d-inline">
+                @csrf
+                <input type="file" name="file" id="fileImportTu" class="d-none" accept=".xlsx,.xls,.csv">
+                <button type="button" id="btnImportTu" class="btn btn-warning btn-sm">
+                    <i class="fas fa-file-import"></i> Import
+                </button>
+            </form>
+            <form id="formGenerateAccountsTu" action="{{ route('staff-tu.generate-accounts') }}" method="POST"
+                class="d-inline">
+                @csrf
+                <button type="button" id="btnGenerateAccountsTu" class="btn btn-info btn-sm">
+                    <i class="fas fa-user-cog"></i> Generate Akun TU
+                </button>
+            </form>
+            <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modalCreateTu">
                 <i class="fas fa-plus"></i> Tambah Staf TU
             </button>
-            <button id="btnDeleteMultipleTu" class="btn btn-danger d-none ml-1">
+            <button id="btnDeleteMultipleTu" class="btn btn-danger btn-sm d-none">
                 <i class="fas fa-trash"></i> Hapus Terpilih (<span id="selectedCountTu">0</span>)
             </button>
         </div>
@@ -189,7 +210,7 @@
 @section('js')
     <script>
         $(function() {
-            const table = $('#tableStaffTu').DataTable({
+            $('#tableStaffTu').DataTable({
                 responsive: true,
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json'
@@ -198,6 +219,33 @@
                     orderable: false,
                     targets: [0, 7]
                 }],
+            });
+
+            // Import
+            $('#btnImportTu').on('click', () => $('#fileImportTu').trigger('click'));
+            $('#fileImportTu').on('change', function() {
+                if (this.files.length > 0) $('#formImportTu').submit();
+            });
+
+            // Generate akun
+            $('#btnGenerateAccountsTu').on('click', function() {
+                Swal.fire({
+                    title: 'Generate akun staf TU?',
+                    text: 'Username = NIP, password default = tu12345.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, generate',
+                    cancelButtonText: 'Batal',
+                }).then(result => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'Memproses...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+                        $('#formGenerateAccountsTu').submit();
+                    }
+                });
             });
 
             // Check-all

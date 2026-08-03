@@ -100,6 +100,10 @@ Route::middleware(['auth'])->group(function () {
 
         Route::delete('staff-tu/destroy-multiple', [StaffTuController::class, 'destroyMultiple'])->name('staff-tu.destroy-multiple');
         Route::get('staff-tu/{staffTu}/edit', [StaffTuController::class, 'edit'])->name('staff-tu.edit');
+        Route::post('staff-tu/import', [StaffTuController::class, 'import'])->name('staff-tu.import');
+        Route::get('staff-tu/template', [StaffTuController::class, 'template'])->name('staff-tu.template');
+        Route::get('staff-tu/export', [StaffTuController::class, 'export'])->name('staff-tu.export');
+        Route::post('staff-tu/generate-accounts', [StaffTuController::class, 'generateAccounts'])->name('staff-tu.generate-accounts');
         Route::resource('staff-tu', StaffTuController::class)->except(['show', 'create', 'edit']);
 
         Route::post('subjects/import', [SubjectController::class, 'import'])->name('subjects.import');
