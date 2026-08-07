@@ -15,6 +15,7 @@ use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherSubject;
+use App\Support\PklMode;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -436,12 +437,12 @@ class DashboardController extends Controller
             $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
             $todayScheduleCount = $todayDayName
-                ? (int) Schedule::query()
+                ? (int) PklMode::applyToScheduleQuery(Schedule::query()
                     ->where('hari', $todayDayName)
                     ->whereHas('teacherSubject', function ($query) use ($teacher) {
                         $query->where('teacher_id', $teacher->id);
                     })
-                    ->count()
+                    )->count()
                 : 0;
 
             $todayAttendanceCount = (int) TeacherAttendance::query()
@@ -464,6 +465,7 @@ class DashboardController extends Controller
         $schoolSetting = Cache::remember('school-settings:first', now()->addMinutes(30), function () {
             return SchoolSetting::query()->first();
         });
+        $isPklModeActive = PklMode::isActive();
 
         return view('guru.dashboard', compact(
             'teacher',
@@ -485,6 +487,7 @@ class DashboardController extends Controller
             'pendingStudentLeaveRequests',
             'isWaliKelas',
             'schoolSetting',
+            'isPklModeActive',
             'mode'
         ));
     }
@@ -508,11 +511,14 @@ class DashboardController extends Controller
             ->whereDate('tanggal', Carbon::today()->toDateString())
             ->count();
 
+        $isPklModeActive = PklMode::isActive();
+
         return view('kurikulum.dashboard', compact(
             'pendingGuruLeaveRequests',
             'pendingOfficerAttendancePermits',
             'pendingStudentLeaveRequests',
             'totalTeacherAttendancesToday',
+            'isPklModeActive',
             'mode'
         ));
     }
@@ -543,11 +549,13 @@ class DashboardController extends Controller
             7 => 'Minggu',
         ];
 
-        $schedulePerDay = Schedule::query()
+        $schedulePerDayQuery = Schedule::query()
             ->join('teacher_subjects', 'teacher_subjects.id', '=', 'schedules.teacher_subject_id')
             ->where('teacher_subjects.teacher_id', $teacherId)
             ->select('schedules.hari', DB::raw('COUNT(*) as total_jadwal'))
-            ->groupBy('schedules.hari')
+            ->groupBy('schedules.hari');
+
+        $schedulePerDay = PklMode::applyToScheduleQuery($schedulePerDayQuery)
             ->pluck('total_jadwal', 'schedules.hari');
 
         $expected = 0;

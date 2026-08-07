@@ -481,6 +481,7 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('schedules', ScheduleController::class)->except(['show', 'create']);
         Route::resource('holidays', HolidayController::class)->except(['show', 'create']);
         Route::post('schedules/import', [ScheduleController::class, 'import'])->name('schedules.import');
+        Route::post('schedules/pkl-mode', [ScheduleController::class, 'togglePklMode'])->name('schedules.toggle-pkl-mode');
         Route::post('schedules/reset', [ScheduleController::class, 'reset'])->name('schedules.reset');
         Route::get('schedules/template', [ScheduleController::class, 'template'])->name('schedules.template');
         Route::get('schedules/export', [ScheduleController::class, 'export'])->name('schedules.export');

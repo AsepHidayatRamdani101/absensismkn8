@@ -9,6 +9,19 @@
         <h1>Master Data Jadwal</h1>
 
         <div>
+            <form id="formTogglePklMode" action="{{ route('schedules.toggle-pkl-mode') }}" method="POST"
+                class="d-inline-block mr-2 align-middle">
+                @csrf
+                <input type="hidden" name="active" value="0">
+                <div class="custom-control custom-switch d-inline-block">
+                    <input type="checkbox" class="custom-control-input" id="switchPklMode" name="active" value="1"
+                        {{ !empty($isPklModeActive) ? 'checked' : '' }}>
+                    <label class="custom-control-label" for="switchPklMode">
+                        Mode PKL Kelas XII {{ !empty($isPklModeActive) ? '(Aktif)' : '(Nonaktif)' }}
+                    </label>
+                </div>
+            </form>
+
             <a href="{{ route('schedules.template') }}" class="btn btn-outline-secondary mr-1">
                 <i class="fas fa-file-download"></i>
                 Download Format
@@ -61,6 +74,13 @@
                 dan format <strong>jadwal hari dan waktu</strong> (kolom <strong>HARI / JAM KE / WAKTU</strong>).
                 Jam pelajaran dimulai pukul <strong>07.15</strong> sesuai format terbaru.
             </div>
+
+            @if (!empty($isPklModeActive))
+                <div class="alert alert-warning mb-3">
+                    Mode PKL aktif: kelas <strong>XII</strong> otomatis dikecualikan dari perhitungan pembelajaran,
+                    absensi siswa oleh guru, dan agenda guru.
+                </div>
+            @endif
 
             <div class="row mb-3">
                 <div class="col-md-3 mb-2 mb-md-0">
@@ -214,6 +234,10 @@
                         $('#formResetSchedules').submit();
                     }
                 });
+            });
+
+            $('#switchPklMode').on('change', function() {
+                $('#formTogglePklMode').submit();
             });
         });
     </script>

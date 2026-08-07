@@ -6,6 +6,7 @@ use App\Models\AttendanceDetail;
 use App\Models\Schedule;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Support\PklMode;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -32,14 +33,15 @@ class GuruAgendaController extends Controller
         $todaySchedules = collect();
 
         if (!$isWeekendHoliday && $todayDayName !== null) {
-            $todaySchedules = Schedule::query()
+            $todaySchedulesQuery = Schedule::query()
                 ->with(['teacherSubject.subject', 'teacherSubject.classroom', 'teacherSubject.academicYear'])
                 ->where('hari', $todayDayName)
                 ->whereHas('teacherSubject', function ($query) use ($teacher) {
                     $query->where('teacher_id', $teacher->id);
                 })
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
         }
 
         // Load semua jadwal dari kelas yang diajar guru hari ini untuk menghitung jam ke yang akurat
@@ -147,6 +149,11 @@ class GuruAgendaController extends Controller
 
         if ((int) ($schedule->teacherSubject->teacher_id ?? 0) !== (int) $teacher->id) {
             abort(403);
+        }
+
+        if (PklMode::excludesClassroomLevel($schedule->teacherSubject->classroom->tingkat ?? null)) {
+            return redirect()->route('guru.agenda.index')
+                ->with('error', 'Mode PKL aktif. Agenda untuk kelas XII dinonaktifkan sementara.');
         }
 
         [$today, $todayDayName, $isWeekendHoliday] = $this->resolveTodayContext();

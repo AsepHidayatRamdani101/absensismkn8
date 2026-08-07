@@ -11,6 +11,7 @@ use App\Models\Teacher;
 use App\Models\StudentLeaveRequest;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
+use App\Support\PklMode;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -233,14 +234,15 @@ class AttendanceDetailController extends Controller
         $todaySchedules = collect();
 
         if ($hasFilter && $todayDayName !== null && !$isWeekendHoliday) {
-            $todaySchedules = Schedule::query()
+            $todaySchedulesQuery = Schedule::query()
                 ->with(['teacherSubject.classroom', 'teacherSubject.subject'])
                 ->where('hari', $todayDayName)
                 ->whereHas('teacherSubject', function ($query) use ($teacher) {
                     $query->where('teacher_id', $teacher->id);
                 })
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
         }
 
         $classOptions = $todaySchedules
@@ -288,8 +290,9 @@ class AttendanceDetailController extends Controller
                         ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
                         ->where('hari', $todayDayName)
                         ->whereHas('teacherSubject.teacher')
-                        ->orderBy('jam_mulai')
-                        ->get();
+                        ->orderBy('jam_mulai');
+
+                    $allTodaySchedules = PklMode::applyToScheduleQuery($allTodaySchedules)->get();
 
                     $allScheduleIds = $allTodaySchedules->pluck('id')->values();
                     $allTeacherAttendances = TeacherAttendance::query()
@@ -423,8 +426,9 @@ class AttendanceDetailController extends Controller
             ->whereHas('teacherSubject', function ($query) use ($teacher) {
                 $query->where('teacher_id', $teacher->id);
             })
-            ->orderBy('jam_mulai')
-            ->get();
+            ->orderBy('jam_mulai');
+
+        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)->get();
 
         $classOptions = $todaySchedules
             ->map(function ($schedule) {
@@ -679,8 +683,9 @@ class AttendanceDetailController extends Controller
             ->whereHas('teacherSubject', function ($query) use ($teacher) {
                 $query->where('teacher_id', $teacher->id);
             })
-            ->orderBy('jam_mulai')
-            ->get();
+            ->orderBy('jam_mulai');
+
+        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)->get();
 
         $classOptions = $todaySchedules
             ->map(fn($schedule) => $schedule->teacherSubject->classroom)
@@ -736,12 +741,13 @@ class AttendanceDetailController extends Controller
 
         $todaySchedules = collect();
         if ($todayDayName !== null && !$isWeekendHoliday) {
-            $todaySchedules = Schedule::query()
+            $todaySchedulesQuery = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
                 ->where('hari', $todayDayName)
                 ->whereHas('teacherSubject.teacher')
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
         }
 
         // Get all teacher attendance for today's schedules
@@ -825,12 +831,13 @@ class AttendanceDetailController extends Controller
 
         $todaySchedules = collect();
         if ($todayDayName !== null && !$isWeekendHoliday) {
-            $todaySchedules = Schedule::query()
+            $todaySchedulesQuery = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
                 ->where('hari', $todayDayName)
                 ->whereHas('teacherSubject.teacher')
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
         }
 
         $scheduleIds = $todaySchedules->pluck('id')->values();
@@ -909,12 +916,13 @@ class AttendanceDetailController extends Controller
 
         $allTodaySchedules = collect();
         if ($todayDayName !== null && !$isWeekendHoliday) {
-            $allTodaySchedules = Schedule::query()
+            $allTodaySchedulesQuery = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
                 ->where('hari', $todayDayName)
                 ->whereHas('teacherSubject.teacher')
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $allTodaySchedules = PklMode::applyToScheduleQuery($allTodaySchedulesQuery)->get();
         }
 
         $allScheduleIds = $allTodaySchedules->pluck('id')->values();
@@ -1253,15 +1261,24 @@ class AttendanceDetailController extends Controller
             abort(403);
         }
 
-        $schedule = Schedule::query()
+        if (PklMode::excludesClassroomLevel($student->classroom->tingkat ?? null)) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $classroomId,
+            ])
+                ->with('error', 'Mode PKL aktif. Absensi siswa untuk kelas XII dinonaktifkan sementara.');
+        }
+
+        $scheduleQuery = Schedule::query()
             ->where('hari', $todayDayName)
             ->whereHas('teacherSubject', function ($query) use ($teacher, $classroomId) {
                 $query->where('teacher_id', $teacher->id)
                     ->where('classroom_id', $classroomId);
             })
             ->orderBy('jam_mulai')
-            ->with('teacherSubject')
-            ->first();
+            ->with('teacherSubject.classroom');
+
+        $schedule = PklMode::applyToScheduleQuery($scheduleQuery)->first();
 
         if (!$schedule || !$schedule->teacherSubject) {
             return redirect()->route('guru.attendance-details.index', [
@@ -1500,6 +1517,8 @@ class AttendanceDetailController extends Controller
             ->with('teacherSubject')
             ->orderBy('jam_mulai');
 
+        $todaySchedulesQuery = PklMode::applyToScheduleQuery($todaySchedulesQuery);
+
         if ($selectedClassroomId !== 0) {
             $todaySchedulesQuery->whereHas('teacherSubject', function ($query) use ($selectedClassroomId) {
                 $query->where('classroom_id', $selectedClassroomId);
@@ -1737,6 +1756,8 @@ class AttendanceDetailController extends Controller
             })
             ->with('teacherSubject')
             ->orderBy('jam_mulai');
+
+        $schedulesQuery = PklMode::applyToScheduleQuery($schedulesQuery);
 
         if ($selectedClassroomId !== 0) {
             $schedulesQuery->whereHas('teacherSubject', function ($query) use ($selectedClassroomId) {

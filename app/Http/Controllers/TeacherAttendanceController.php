@@ -11,6 +11,7 @@ use App\Models\Subject;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
+use App\Support\PklMode;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -64,14 +65,15 @@ class TeacherAttendanceController extends Controller
         $schedules = collect();
 
         if ($selectedDayName !== null && !$isWeekendHoliday) {
-            $schedules = Schedule::query()
+            $schedulesQuery = Schedule::query()
                 ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
                 ->where('hari', $selectedDayName)
                 ->whereHas('teacherSubject', function ($query) use ($student) {
                     $query->where('classroom_id', $student->classroom_id);
                 })
-                ->orderBy('jam_mulai')
-                ->get();
+                ->orderBy('jam_mulai');
+
+            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)->get();
         }
 
         $guruMapelOptions = $schedules
@@ -391,6 +393,11 @@ class TeacherAttendanceController extends Controller
 
         if ((int) $schedule->teacherSubject->classroom_id !== (int) $student->classroom_id) {
             abort(403);
+        }
+
+        if (PklMode::excludesClassroomLevel($schedule->teacherSubject->classroom->tingkat ?? null)) {
+            return redirect()->route('siswa.teacher-attendances.index')
+                ->with('error', 'Mode PKL aktif. Absensi guru untuk kelas XII dinonaktifkan sementara.');
         }
 
         $dayMap = [

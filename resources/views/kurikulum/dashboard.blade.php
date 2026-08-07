@@ -23,6 +23,11 @@
                     Detail
                 </a>
             </div>
+            @if (!empty($isPklModeActive))
+                <span class="badge badge-warning px-3 py-2">
+                    Mode PKL XII Aktif
+                </span>
+            @endif
         </div>
     </div>
 @stop

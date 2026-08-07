@@ -19,6 +19,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Models\TeacherSubject;
+use App\Support\PklMode;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1094,6 +1095,12 @@ class ReportController extends Controller
             $query->where('classroom_id', $request->classroom_id);
         }
 
+        if (PklMode::isActive()) {
+            $query->whereHas('classroom', function ($classroomQuery) {
+                $classroomQuery->where('tingkat', '!=', 'XII');
+            });
+        }
+
         return $query;
     }
 
@@ -1138,6 +1145,12 @@ class ReportController extends Controller
 
         if ($request->filled('classroom_id')) {
             $query->where('classroom_id', $request->classroom_id);
+        }
+
+        if (PklMode::isActive()) {
+            $query->whereHas('classroom', function ($classroomQuery) {
+                $classroomQuery->where('tingkat', '!=', 'XII');
+            });
         }
 
         return $query;

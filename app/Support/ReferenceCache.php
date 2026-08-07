@@ -32,7 +32,7 @@ class ReferenceCache
 
     public static function forgetSchoolSettings(): void
     {
-        self::forgetMany(['school-settings:first'], 'school_settings');
+        self::forgetMany(['school-settings:first', 'mode:pkl:active:db'], 'school_settings');
     }
 
     /**

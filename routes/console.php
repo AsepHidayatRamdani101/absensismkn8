@@ -5,6 +5,7 @@ use App\Models\Schedule as ScheduleModel;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\User;
+use App\Support\PklMode;
 use App\Services\Dashboard\DashboardCacheService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -244,8 +245,9 @@ Artisan::command('reminder:guru-absen-agenda', function () {
     $schedules = ScheduleModel::query()
         ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
         ->where('hari', $todayDayName)
-        ->orderBy('jam_mulai')
-        ->get();
+        ->orderBy('jam_mulai');
+
+    $schedules = PklMode::applyToScheduleQuery($schedules)->get();
 
     if ($schedules->isEmpty()) {
         $this->info('Tidak ada jadwal guru hari ini.');

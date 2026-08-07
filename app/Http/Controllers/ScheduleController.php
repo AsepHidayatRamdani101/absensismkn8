@@ -6,6 +6,7 @@ use App\Exports\SchedulesExport;
 use App\Exports\TemplateExport;
 use App\Imports\SchedulesImport;
 use App\Models\Schedule;
+use App\Support\PklMode;
 use App\Models\TeacherSubject;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,6 +16,8 @@ class ScheduleController extends Controller
 {
     public function index()
     {
+        $isPklModeActive = PklMode::isActive();
+
         $schedules = Schedule::with([
             'teacherSubject.teacher',
             'teacherSubject.subject',
@@ -77,8 +80,22 @@ class ScheduleController extends Controller
             'filterJurusans',
             'filterKelas',
             'filterGurus',
-            'filterMapels'
+            'filterMapels',
+            'isPklModeActive'
         ));
+    }
+
+    public function togglePklMode(Request $request)
+    {
+        $validated = $request->validate([
+            'active' => 'required|boolean',
+        ]);
+
+        PklMode::setActive((bool) $validated['active']);
+
+        $status = PklMode::isActive() ? 'aktif' : 'nonaktif';
+
+        return redirect()->route('schedules.index')->with('success', 'Mode PKL berhasil diubah ke status ' . $status . '.');
     }
 
     public function store(Request $request)

@@ -17,5 +17,6 @@ class SchoolSetting extends Model
         'logo',
         'jam_masuk',
         'batas_terlambat',
+        'pkl_mode_active',
     ];
 }
