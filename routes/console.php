@@ -6,6 +6,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\User;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use App\Services\Dashboard\DashboardCacheService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -190,15 +191,29 @@ Artisan::command('reminder:guru-absen-agenda', function () {
     $apiUrl = (string) config('services.fonnte.api_url', 'https://api.fonnte.com/send');
     $defaultCountryCode = (string) config('services.fonnte.default_country_code', '62');
     $schoolName = (string) config('services.fonnte.school_name', 'SMKN 8 GARUT');
+    $recordAutomaticRun = function (string $status, string $message, int $sent = 0, int $failed = 0, int $skipped = 0): void {
+        Cache::put('fonnte:reminder:last-run', [
+            'status' => $status,
+            'message' => $message,
+            'sent' => $sent,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'at' => now()->toDateTimeString(),
+        ], now()->addDays(7));
+    };
 
     if (!$fonnteEnabled || !$reminderEnabled) {
-        $this->info('Pengingat WA tidak aktif. Lewati proses kirim.');
+        $message = 'Pengingat otomatis tidak aktif; pesan tidak dikirim.';
+        $recordAutomaticRun('info', $message);
+        $this->info($message);
         return self::SUCCESS;
     }
 
     if ($token === '') {
-        $this->warn('Token Fonnte kosong. Lewati proses kirim.');
-        return self::SUCCESS;
+        $message = 'Token Fonnte kosong; tidak ada pesan yang dikirim.';
+        $recordAutomaticRun('error', $message, 0, 1);
+        $this->error($message);
+        return self::FAILURE;
     }
 
     $dayMap = [
@@ -216,10 +231,18 @@ Artisan::command('reminder:guru-absen-agenda', function () {
     $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
     if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
-        $this->info('Hari ini akhir pekan, tidak ada pengingat WA guru.');
+        $message = 'Hari ini akhir pekan; pengingat otomatis dilewati.';
+        $recordAutomaticRun('info', $message);
+        $this->info($message);
         return self::SUCCESS;
     }
 
+    if (SchoolCalendar::isHoliday($today)) {
+        $message = 'Hari ini ditetapkan sebagai hari libur; pengingat otomatis dilewati.';
+        $recordAutomaticRun('info', $message);
+        $this->info($message);
+        return self::SUCCESS;
+    }
     $normalizePhone = function (?string $phone) use ($defaultCountryCode): ?string {
         $digits = preg_replace('/\D+/', '', (string) $phone);
 
@@ -243,19 +266,33 @@ Artisan::command('reminder:guru-absen-agenda', function () {
     };
 
     $schedules = ScheduleModel::query()
-        ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
+        ->with([
+            'teacherSubject.teacher',
+            'teacherSubject.subject',
+            'teacherSubject.classroom.students',
+        ])
         ->where('hari', $todayDayName)
+        ->whereHas('teacherSubject.academicYear', fn($query) => $query->where('is_active', true))
         ->orderBy('jam_mulai');
 
     $schedules = PklMode::applyToScheduleQuery($schedules)->get();
 
     if ($schedules->isEmpty()) {
-        $this->info('Tidak ada jadwal guru hari ini.');
+        $message = 'Tidak ada jadwal guru hari ini; tidak ada pesan yang dikirim.';
+        $recordAutomaticRun('info', $message);
+        $this->info($message);
         return self::SUCCESS;
     }
 
     $sentCount = 0;
     $skipCount = 0;
+    $failedCount = 0;
+    $attendanceBySchedule = TeacherAttendance::query()
+        ->whereDate('tanggal', $todayLabel)
+        ->whereIn('schedule_id', $schedules->pluck('id'))
+        ->withCount('attendanceDetails')
+        ->get()
+        ->keyBy('schedule_id');
 
     $groupedByTeacher = $schedules->filter(function ($schedule) {
         return (int) ($schedule->teacherSubject?->teacher_id ?? 0) > 0;
@@ -278,11 +315,11 @@ Artisan::command('reminder:guru-absen-agenda', function () {
         $missingRows = [];
 
         foreach ($teacherSchedules as $schedule) {
-            $attendance = TeacherAttendance::query()
-                ->where('schedule_id', $schedule->id)
-                ->whereDate('tanggal', $todayLabel)
-                ->withCount('attendanceDetails')
-                ->first();
+            $attendance = $attendanceBySchedule->get($schedule->id);
+
+            if ($attendance && $attendance->kehadiran_guru !== 'Hadir') {
+                continue;
+            }
 
             $missingAttendance = !$attendance || (int) ($attendance->attendance_details_count ?? 0) === 0;
             $missingAgenda = !$attendance || (string) $attendance->status !== 'Selesai';
@@ -322,7 +359,7 @@ Artisan::command('reminder:guru-absen-agenda', function () {
             . "Pengingat dari {$schoolName}.\n"
             . "Hari {$todayDayName}, {$todayLabel} masih ada jadwal yang belum lengkap:\n"
             . implode("\n", $missingRows)
-            . "\n\nSilakan lengkapi di aplikasi absensi. Terima kasih.";
+            . "\n\nSilakan lengkapi di aplikasi absensi. Terima kasih.\n\nAdmin SiAbsensi";
 
         try {
             $response = Http::timeout(20)
@@ -334,7 +371,7 @@ Artisan::command('reminder:guru-absen-agenda', function () {
                     'countryCode' => $defaultCountryCode,
                 ]);
 
-            if ($response->successful()) {
+            if ($response->successful() && $response->json('status') !== false) {
                 Cache::put($cacheKey, $fingerprint, now()->endOfDay());
                 $sentCount++;
             } else {
@@ -345,6 +382,7 @@ Artisan::command('reminder:guru-absen-agenda', function () {
                     'response' => $response->body(),
                 ]);
                 $skipCount++;
+                $failedCount++;
             }
         } catch (\Throwable $e) {
             Log::channel('security')->error('Error kirim WA pengingat guru via Fonnte', [
@@ -353,10 +391,97 @@ Artisan::command('reminder:guru-absen-agenda', function () {
                 'message' => $e->getMessage(),
             ]);
             $skipCount++;
+            $failedCount++;
         }
     }
 
-    $this->info("Pengingat WA selesai. Terkirim: {$sentCount}, Dilewati/Gagal: {$skipCount}");
+    $photoMissingSchedules = (SchoolCalendar::isPjj($today) ? collect() : $schedules)
+        ->filter(function ($schedule) use ($attendanceBySchedule) {
+            $attendance = $attendanceBySchedule->get($schedule->id);
+
+            return empty($attendance?->foto_guru_path)
+                && (!$attendance || $attendance->kehadiran_guru === 'Hadir');
+        })
+        ->groupBy(fn($schedule) => (int) $schedule->teacherSubject->classroom_id);
+
+    foreach ($photoMissingSchedules as $missingClassroomSchedules) {
+        $classroom = $missingClassroomSchedules->first()->teacherSubject->classroom;
+        if (!$classroom) {
+            $skipCount++;
+            continue;
+        }
+
+        $missingRows = $missingClassroomSchedules->map(function ($schedule) {
+            return '- ' . ($schedule->teacherSubject?->teacher?->nama_lengkap ?? 'Guru')
+                . ' — ' . ($schedule->teacherSubject?->subject?->nama_mapel ?? '-')
+                . ' (' . $schedule->jam_mulai . '-' . $schedule->jam_selesai . ')';
+        })->values();
+
+        $officers = $classroom->students->filter(
+            fn(Student $student) => $student->canSubmitTeacherAttendance()
+        );
+
+        foreach ($officers as $student) {
+            $target = $normalizePhone($student->no_hp ?: $student->no_hp_orang_tua);
+            if (!$target) {
+                $skipCount++;
+                continue;
+            }
+
+            $cacheKey = 'fonnte:reminder:foto-siswa:' . $todayLabel . ':' . $classroom->id . ':' . hash('sha256', $target);
+            if (Cache::has($cacheKey)) {
+                $skipCount++;
+                continue;
+            }
+
+            $message = "Assalamu'alaikum {$student->nama_lengkap},\n"
+                . "Pengingat dari {$schoolName}.\n"
+                . "Mohon bantu melakukan foto absensi guru pada jadwal berikut yang belum memiliki bukti foto hari ini:\n"
+                . $missingRows->implode("\n")
+                . "Terima kasih.\n\nAdmin SiAbsensi";
+
+            try {
+                $response = Http::timeout(20)
+                    ->withHeaders(['Authorization' => $token])
+                    ->asForm()
+                    ->post($apiUrl, [
+                        'target' => $target,
+                        'message' => $message,
+                        'countryCode' => $defaultCountryCode,
+                    ]);
+
+                if ($response->successful() && $response->json('status') !== false) {
+                    Cache::put($cacheKey, true, now()->endOfDay());
+                    $sentCount++;
+                } else {
+                    Log::channel('security')->warning('Gagal kirim WA pengingat foto guru ke siswa via Fonnte', [
+                        'student_id' => $student->id,
+                        'classroom_id' => $classroom->id,
+                        'target' => $target,
+                        'status' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                    $skipCount++;
+                    $failedCount++;
+                }
+            } catch (\Throwable $e) {
+                Log::channel('security')->error('Error kirim WA pengingat foto guru ke siswa via Fonnte', [
+                    'student_id' => $student->id,
+                    'classroom_id' => $classroom->id,
+                    'target' => $target,
+                    'message' => $e->getMessage(),
+                ]);
+                $skipCount++;
+                $failedCount++;
+            }
+        }
+    }
+
+    $status = $failedCount > 0 || ($sentCount === 0 && $skipCount > 0) ? 'warning' : 'success';
+    $message = "Pengingat WA selesai. Permintaan diterima: {$sentCount}, gagal: {$failedCount}, dilewati: "
+        . max(0, $skipCount - $failedCount) . '.';
+    $recordAutomaticRun($status, $message, $sentCount, $failedCount, max(0, $skipCount - $failedCount));
+    $this->info($message);
 
     return self::SUCCESS;
 })->purpose('Kirim pengingat WA otomatis ke guru yang belum melengkapi absensi siswa dan agenda harian.');
@@ -366,5 +491,5 @@ Schedule::command('queue:prune-failed --hours=48')->hourly();
 Schedule::command('backup:db-daily')->dailyAt('01:00')->withoutOverlapping();
 Schedule::command('backup:full-weekly')->weeklyOn(0, '01:30')->withoutOverlapping();
 Schedule::command('reminder:guru-absen-agenda')
-    ->dailyAt((string) config('services.fonnte.reminder_time', '14:00'))
+    ->dailyAt('15:00')
     ->withoutOverlapping();

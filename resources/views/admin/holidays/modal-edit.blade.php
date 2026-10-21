@@ -19,8 +19,14 @@
 
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Tanggal</label>
+                        <label>Tanggal Mulai</label>
                         <input type="date" id="edit_tanggal" name="tanggal" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tanggal Selesai</label>
+                        <input type="date" id="edit_tanggal_akhir" name="tanggal_akhir" class="form-control" required>
+                        <small class="form-text text-muted">Semua tanggal dalam rentang ini menerapkan mode libur atau PJJ yang dipilih.</small>
                     </div>
 
                     <div class="form-group">
@@ -34,6 +40,20 @@
                                 value="1">
                             <label class="custom-control-label" for="edit_is_national">Libur nasional</label>
                         </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group mb-0">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="edit_is_pjj"
+                                name="is_pjj" value="1">
+                            <label class="custom-control-label" for="edit_is_pjj">Mode belajar PJJ</label>
+                        </div>
+                        <small class="form-text text-muted">
+                            PJJ tetap dihitung sebagai hari belajar efektif dan absensi siswa/agenda guru tetap berjalan.
+                            Foto kehadiran guru secara fisik dinonaktifkan.
+                        </small>
                     </div>
                 </div>
 

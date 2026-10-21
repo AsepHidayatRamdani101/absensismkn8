@@ -7,6 +7,7 @@ use App\Http\Resources\Api\V1\TeacherAttendanceResource;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\AttendanceDetail;
+use App\Support\SchoolCalendar;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,13 @@ class AttendanceApiController extends Controller
             'details.*.keterangan' => 'nullable|string|max:255',
 
         ]);
+
+        if (SchoolCalendar::isHoliday($validated['tanggal'])) {
+            return response()->json([
+                'success' => false,
+                'message' => SchoolCalendar::holidayMessage($validated['tanggal']) . '. Absensi tidak dapat disimpan.',
+            ], 422);
+        }
 
         $teacherId = (int) ($validated['teacher_id'] ?? 0);
 

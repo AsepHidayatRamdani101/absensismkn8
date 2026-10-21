@@ -12,6 +12,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -59,7 +60,10 @@ class TeacherAttendanceController extends Controller
         }
 
         $selectedDayName = $dayMap[$selectedDate->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($selectedDayName, ['Sabtu', 'Minggu'], true);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($selectedDate);
+        $isPjj = SchoolCalendar::isPjj($selectedDate);
+        $isWeekendHoliday = in_array($selectedDayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
         $isSelectedDateToday = $selectedDate->isSameDay($today);
 
         $schedules = collect();
@@ -208,6 +212,8 @@ class TeacherAttendanceController extends Controller
             'today' => $selectedDate,
             'todayDayName' => $selectedDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
+            'isPjj' => $isPjj,
             'scheduleRows' => $scheduleRows,
             'canSubmitTeacherAttendance' => $canSubmitTeacherAttendance,
             'selectedDate' => $selectedDate->toDateString(),
@@ -314,6 +320,13 @@ class TeacherAttendanceController extends Controller
             'status' => 'required|in:Draft,Selesai',
         ]);
 
+        if (SchoolCalendar::isHoliday($validated['tanggal'])) {
+            return response()->json([
+                'success' => false,
+                'message' => SchoolCalendar::holidayMessage($validated['tanggal']) . '. Absensi guru tidak dapat dibuat.',
+            ], 422);
+        }
+
         TeacherAttendance::create($validated);
 
         return response()->json([
@@ -341,6 +354,13 @@ class TeacherAttendanceController extends Controller
             'catatan_guru' => 'nullable|string',
             'status' => 'required|in:Draft,Selesai',
         ]);
+
+        if (SchoolCalendar::isHoliday($validated['tanggal'])) {
+            return response()->json([
+                'success' => false,
+                'message' => SchoolCalendar::holidayMessage($validated['tanggal']) . '. Absensi guru tidak dapat dibuat.',
+            ], 422);
+        }
 
         $teacherAttendance->update($validated);
 
@@ -412,6 +432,16 @@ class TeacherAttendanceController extends Controller
 
         $today = Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+
+        if (SchoolCalendar::isHoliday($today)) {
+            return redirect()->route('siswa.teacher-attendances.index')
+                ->with('error', SchoolCalendar::holidayMessage($today) . '. Absensi guru tidak tersedia.');
+        }
+
+        if (SchoolCalendar::isPjj($today) && ($request->hasFile('foto_guru') || $request->hasFile('foto_guru_kamera'))) {
+            return redirect()->route('siswa.teacher-attendances.index')
+                ->with('error', 'Pengiriman foto kehadiran guru secara fisik dinonaktifkan pada mode belajar PJJ.');
+        }
 
         if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true) || $schedule->hari !== $todayDayName) {
             return redirect()->route('siswa.teacher-attendances.index')

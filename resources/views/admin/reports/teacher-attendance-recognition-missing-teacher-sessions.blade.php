@@ -54,6 +54,15 @@
                                 <td>{{ $row['kelas'] }}</td>
                                 <td>
                                     @if ($row['absensi_guru_siswa_kamera'])
+                                        <a href="{{ asset('storage/' . $row['foto_guru_path']) }}"
+                                            target="_blank" rel="noopener noreferrer"
+                                            title="Buka bukti foto guru">
+                                            <img src="{{ asset('storage/' . $row['foto_guru_path']) }}"
+                                                alt="Bukti foto guru oleh siswa"
+                                                class="img-thumbnail"
+                                                loading="lazy"
+                                                style="width:72px;height:72px;object-fit:cover;">
+                                        </a>
                                         <span class="badge badge-success">Terisi</span>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>

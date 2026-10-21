@@ -23,6 +23,7 @@ use App\Http\Controllers\TeacherLeaveRequestController;
 use App\Http\Controllers\TeacherSubjectController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\MidClassPermitController;
+use App\Http\Controllers\PjjController;
 use App\Http\Controllers\StaffTuController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\Pancawaluya\RewardCategoryController;
@@ -55,12 +56,20 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('admin')->group(function () {
         Route::get('/admin', [DashboardController::class, 'admin'])->name('admin.dashboard');
         Route::get('/admin/dss', [DashboardDssController::class, 'admin'])->name('admin.dashboard.dss');
+        Route::get('/admin/pjj', [PjjController::class, 'adminIndex'])->defaults('section', 'dashboard')->name('admin.pjj.dashboard');
+        Route::get('/admin/pjj/tasks', [PjjController::class, 'adminIndex'])->defaults('section', 'tasks')->name('admin.pjj.tasks');
+        Route::get('/admin/pjj/teacher-attendance', [PjjController::class, 'adminIndex'])->defaults('section', 'teacher-attendance')->name('admin.pjj.teacher-attendance');
+        Route::get('/admin/pjj/student-attendance', [PjjController::class, 'adminIndex'])->defaults('section', 'student-attendance')->name('admin.pjj.student-attendance');
+        Route::get('/admin/pjj/effectiveness', [PjjController::class, 'adminIndex'])->defaults('section', 'effectiveness')->name('admin.pjj.effectiveness');
+        Route::get('/admin/pjj/attendance/{attendance}/photo', [PjjController::class, 'adminAttendancePhoto'])->name('admin.pjj.attendance-photo');
 
         Route::get('school-settings', [SchoolSettingController::class, 'index'])->name('school-settings.index');
         Route::put('school-settings', [SchoolSettingController::class, 'update'])->name('school-settings.update');
 
         Route::get('app-settings', [AppSettingController::class, 'index'])->name('app-settings.index');
         Route::post('app-settings/fonnte', [AppSettingController::class, 'updateFonnte'])->name('app-settings.fonnte.update');
+        Route::post('app-settings/fonnte/reminder-mode', [AppSettingController::class, 'updateFonnteReminderMode'])
+            ->name('app-settings.fonnte.reminder-mode');
         Route::post('app-settings/fonnte/test', [AppSettingController::class, 'sendFonnteTest'])->middleware('throttle:fonnte-test')->name('app-settings.fonnte.test');
         Route::post('app-settings/fonnte/test-guru-sample', [AppSettingController::class, 'sendFonnteTestToTeacherSamples'])->middleware('throttle:fonnte-test')->name('app-settings.fonnte.test-guru-sample');
         Route::post('app-settings/clear-all', [AppSettingController::class, 'clearAll'])->name('app-settings.clear-all');
@@ -515,6 +524,12 @@ Route::middleware(['auth'])->group(function () {
             ->name('reports.teacher-attendance.datatable');
         Route::get('reports/teacher-attendance-recognition', [ReportController::class, 'teacherAttendanceRecognition'])
             ->name('reports.teacher-attendance-recognition');
+        Route::post('reports/teacher-attendance-recognition/{schedule}/send-reminder', [ReportController::class, 'sendTeacherAttendanceRecognitionReminder'])
+            ->name('reports.teacher-attendance-recognition.send-reminder');
+        Route::get('reports/teacher-attendance-recognition/scheduled-teachers/{type}', [ReportController::class, 'teacherAttendanceRecognitionScheduledTeachers'])
+            ->name('reports.teacher-attendance-recognition.scheduled-teachers');
+        Route::delete('reports/teacher-attendance-recognition/scheduled-attendance/{teacherAttendance}', [ReportController::class, 'destroyScheduledTeacherAttendance'])
+            ->name('reports.teacher-attendance-recognition.scheduled-attendance.destroy');
         Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}', [ReportController::class, 'teacherAttendanceRecognitionMissingTeachers'])
             ->name('reports.teacher-attendance-recognition.missing-teachers');
         Route::get('reports/teacher-attendance-recognition/missing-teachers/{type}/{teacher}', [ReportController::class, 'teacherAttendanceRecognitionMissingTeacherSessions'])
@@ -567,6 +582,10 @@ Route::middleware(['auth', 'kurikulum'])->group(function () {
 Route::middleware(['auth', 'guru'])->group(function () {
     Route::get('/guru', [DashboardController::class, 'guru'])->name('guru.dashboard');
     Route::get('/guru/dss', [DashboardDssController::class, 'guru'])->name('guru.dashboard.dss');
+    Route::get('/guru/pjj', [PjjController::class, 'teacherIndex'])->name('guru.pjj.index');
+    Route::post('/guru/pjj/assignments', [PjjController::class, 'teacherStoreAssignment'])->name('guru.pjj.assignments.store');
+    Route::get('/guru/pjj/assignments/{assignment}', [PjjController::class, 'teacherShowAssignment'])->name('guru.pjj.assignments.show');
+    Route::post('/guru/pjj/submissions/{submission}/grade', [PjjController::class, 'teacherGradeSubmission'])->name('guru.pjj.submissions.grade');
     Route::get('/guru/agenda', [GuruAgendaController::class, 'index'])->name('guru.agenda.index');
     Route::post('/guru/agenda/{schedule}', [GuruAgendaController::class, 'store'])->name('guru.agenda.store');
     Route::get('/guru/attendance-details', [AttendanceDetailController::class, 'guruIndex'])
@@ -626,6 +645,8 @@ Route::middleware(['auth', 'guru'])->group(function () {
         ->name('guru.attendance-details.bulk-submit');
     Route::post('/guru/attendance-details/count-hadir', [AttendanceDetailController::class, 'submitCountPresentForGuru'])
         ->name('guru.attendance-details.count-hadir');
+    Route::post('/guru/attendance-details/save', [AttendanceDetailController::class, 'saveForGuru'])
+        ->name('guru.attendance-details.save');
     Route::post('/guru/attendance-details/{student}/submit', [AttendanceDetailController::class, 'submitForGuru'])
         ->name('guru.attendance-details.submit');
 });
@@ -633,6 +654,9 @@ Route::middleware(['auth', 'guru'])->group(function () {
 Route::middleware(['auth', 'siswa'])->group(function () {
     Route::get('/siswa', [DashboardController::class, 'siswa'])->name('siswa.dashboard');
     Route::get('/siswa/dss', [DashboardDssController::class, 'siswa'])->name('siswa.dashboard.dss');
+    Route::get('/siswa/pjj', [PjjController::class, 'studentIndex'])->name('siswa.pjj.index');
+    Route::post('/siswa/pjj/attendance', [PjjController::class, 'studentSubmitAttendance'])->middleware('throttle:10,1')->name('siswa.pjj.attendance');
+    Route::post('/siswa/pjj/assignments/{assignment}/submission', [PjjController::class, 'studentSubmitAssignment'])->name('siswa.pjj.assignments.submit');
     Route::get('/siswa/identitas', [StudentController::class, 'editOwnIdentity'])
         ->name('siswa.identity.edit');
     Route::get('/siswa/identitas/qr/download', [StudentController::class, 'downloadOwnQrCode'])
@@ -682,6 +706,11 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::post('/siswa/izin-keluar-kelas', [MidClassPermitController::class, 'officerStore'])
         ->middleware('can:siswa-absen-guru')
         ->name('siswa.mid-class-permits.store');
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/pjj/assignments/{assignment}/attachment', [PjjController::class, 'downloadAssignment'])->name('pjj.assignment.download');
+    Route::get('/pjj/submissions/{submission}/attachment', [PjjController::class, 'downloadSubmission'])->name('pjj.submission.download');
 });
 
 Route::middleware(['auth', 'role:wali_kelas'])->group(function () {

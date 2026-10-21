@@ -305,6 +305,38 @@ return [
             'can' => 'admin',
         ],
         [
+            'text' => 'Pembelajaran PJJ',
+            'icon' => 'fas fa-fw fa-laptop-house',
+            'can' => 'pjj-admin-menu',
+            'submenu' => [
+                [
+                    'text' => 'Dashboard PJJ',
+                    'route' => 'admin.pjj.dashboard',
+                    'icon' => 'fas fa-fw fa-chart-pie',
+                ],
+                [
+                    'text' => 'Data Tugas Guru',
+                    'route' => 'admin.pjj.tasks',
+                    'icon' => 'fas fa-fw fa-book',
+                ],
+                [
+                    'text' => 'Absensi Guru (Upload Tugas)',
+                    'route' => 'admin.pjj.teacher-attendance',
+                    'icon' => 'fas fa-fw fa-chalkboard-teacher',
+                ],
+                [
+                    'text' => 'Absensi Siswa (Selfie)',
+                    'route' => 'admin.pjj.student-attendance',
+                    'icon' => 'fas fa-fw fa-user-check',
+                ],
+                [
+                    'text' => 'Efektivitas Belajar',
+                    'route' => 'admin.pjj.effectiveness',
+                    'icon' => 'fas fa-fw fa-chart-line',
+                ],
+            ],
+        ],
+        [
             'text' => 'Dasbor Pancawaluya',
             'route' => 'admin.dashboard.dss',
             'icon' => 'fas fa-fw fa-chart-line',
@@ -317,6 +349,12 @@ return [
             'can' => 'guru',
         ],
         [
+            'text' => 'Tugas PJJ',
+            'route' => 'guru.pjj.index',
+            'icon' => 'fas fa-fw fa-book-reader',
+            'can' => 'pjj-guru-menu',
+        ],
+        [
             'text' => 'Dasbor Pancawaluya',
             'route' => 'guru.dashboard.dss',
             'icon' => 'fas fa-fw fa-chart-line',
@@ -327,6 +365,12 @@ return [
             'route' => 'siswa.dashboard',
             'icon' => 'fas fa-fw fa-home',
             'can' => 'siswa',
+        ],
+        [
+            'text' => 'Tugas dan Absensi PJJ',
+            'route' => 'siswa.pjj.index',
+            'icon' => 'fas fa-fw fa-laptop-house',
+            'can' => 'pjj-siswa-menu',
         ],
         [
             'text' => 'Dasbor Pancawaluya',

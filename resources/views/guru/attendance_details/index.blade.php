@@ -13,11 +13,6 @@
             font-weight: 600;
         }
 
-        #bulkActionBar {
-            background: #f8fafc;
-            border-left: 4px solid #007bff;
-        }
-
         #selectionQuickTools {
             background: #ffffff;
         }
@@ -98,33 +93,29 @@
             vertical-align: middle;
         }
 
-        #tableGuruAttendanceDetails .col-check {
-            width: 56px;
-            min-width: 56px;
+        #tableGuruAttendanceDetails th:first-child,
+        #tableGuruAttendanceDetails td:first-child {
             text-align: center;
-        }
-
-        #tableGuruAttendanceDetails input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
         }
 
         #tableGuruAttendanceDetails .attendance-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: .35rem;
+            display: inline-block;
         }
 
         #tableGuruAttendanceDetails .attendance-actions .btn {
-            min-width: 76px;
-            width: 100%;
+            min-width: 88px;
+            width: auto;
+            text-align: left;
         }
 
-        #tableGuruAttendanceDetails .status-badge {
-            min-width: 96px;
-            text-align: center;
-            font-weight: 600;
+        #tableGuruAttendanceDetails .attendance-actions .dropdown-menu {
+            min-width: 10rem;
+            z-index: 50;
+        }
+
+        #tableGuruAttendanceDetails .attendance-actions .dropdown-item {
+            padding: .55rem 1rem;
+            white-space: nowrap;
         }
 
         #guruAttendanceTableWrap {
@@ -187,143 +178,85 @@
                 width: 100%;
             }
 
-            #bulkActionBar {
-                position: sticky;
-                bottom: 0;
-                z-index: 30;
-                border-left: none;
-                border-top: 2px solid #007bff;
-                box-shadow: 0 -6px 16px rgba(15, 23, 42, .12);
-            }
-
-            #bulkActionBar small {
-                width: 100%;
-                margin-bottom: .35rem;
-            }
-
-            #bulkActionBar .bulk-status-grid {
+            #guruAttendancePage .filter-actions {
                 display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                width: 100%;
-                gap: .45rem;
+                grid-template-columns: minmax(0, 1fr);
+                gap: .5rem;
             }
 
-            #bulkActionBar .bulk-status-grid .btn {
+            #guruAttendancePage .filter-actions .btn {
                 width: 100%;
+                margin: 0 !important;
             }
 
-            #selectionQuickTools {
-                position: sticky;
-                top: 0;
-                z-index: 20;
-            }
-
-            #selectionQuickTools .quick-tools-grid {
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                width: 100%;
-                gap: .45rem;
-            }
-
-            #selectionQuickTools .quick-tools-grid .btn {
-                width: 100%;
+            #guruAttendancePage .filter-help {
+                margin-bottom: .25rem;
             }
 
             #guruAttendancePage .table-responsive {
-                padding: .75rem !important;
+                padding: .5rem !important;
+                overflow-x: auto !important;
             }
 
             #tableGuruAttendanceDetails {
-                border-collapse: separate;
-                border-spacing: 0 .55rem;
+                display: table !important;
+                width: 100% !important;
+                min-width: 420px;
+                table-layout: fixed;
+                border-collapse: collapse;
             }
 
             #tableGuruAttendanceDetails thead {
-                display: none;
-            }
-
-            #tableGuruAttendanceDetails tbody {
-                display: block;
+                display: table-header-group !important;
             }
 
             #tableGuruAttendanceDetails tbody tr {
-                display: block;
-                background: #ffffff;
-                border: 1px solid #e5e7eb;
-                border-radius: .75rem;
-                box-shadow: 0 4px 12px rgba(15, 23, 42, .06);
-                margin-bottom: .65rem;
-                overflow: hidden;
+                display: table-row !important;
+            }
+
+            #tableGuruAttendanceDetails th,
+            #tableGuruAttendanceDetails td {
+                display: table-cell !important;
+                vertical-align: middle;
+            }
+
+            #tableGuruAttendanceDetails th:first-child,
+            #tableGuruAttendanceDetails td:first-child {
+                width: 56px;
+                white-space: nowrap;
+                text-align: center;
+            }
+
+            #tableGuruAttendanceDetails th:last-child,
+            #tableGuruAttendanceDetails td:last-child {
+                width: 140px;
+                white-space: nowrap;
             }
 
             #tableGuruAttendanceDetails tbody td {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: .75rem;
-                padding: .6rem .75rem;
-                border: 0;
-                border-bottom: 1px solid #f1f5f9;
-                min-height: 42px;
+                padding: .5rem .4rem;
             }
 
-            #tableGuruAttendanceDetails tbody td::before {
-                color: #64748b;
-                font-size: .73rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: .03em;
-                flex-shrink: 0;
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(1)::before {
-                content: 'Pilih';
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(2)::before {
-                content: 'No';
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(3)::before {
-                content: 'Nama';
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(4)::before {
-                content: 'Kelas';
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(5)::before {
-                content: 'Status';
-            }
-
-            #tableGuruAttendanceDetails tbody td:nth-child(6)::before {
-                content: 'Aksi';
-            }
-
-            #tableGuruAttendanceDetails tbody td:last-child {
-                border-bottom: 0;
-            }
-
-            #tableGuruAttendanceDetails .col-check {
-                width: auto;
-                min-width: 0;
-                text-align: left;
-            }
-
-            #tableGuruAttendanceDetails .col-check input[type='checkbox'] {
-                margin-left: auto;
+            #tableGuruAttendanceDetails tbody td:nth-child(2) {
+                white-space: normal;
+                overflow-wrap: break-word;
             }
 
             #tableGuruAttendanceDetails .attendance-actions {
-                display: grid;
-                grid-template-columns: repeat(2, minmax(88px, 1fr));
-                width: 100%;
-                gap: .4rem;
+                display: inline-block;
             }
 
-            #tableGuruAttendanceDetails .status-badge {
-                min-width: 120px;
-                margin-left: auto;
+            #tableGuruAttendanceDetails .attendance-actions .btn {
+                min-height: 30px;
+                min-width: 88px;
+                max-width: 100%;
+                font-size: .72rem;
+                padding: .2rem .4rem;
+                white-space: nowrap;
+            }
+
+            #tableGuruAttendanceDetails .attendance-actions .dropdown-menu {
+                min-width: 11rem;
             }
         }
     </style>
@@ -333,7 +266,7 @@
     <div class="d-flex justify-content-between align-items-end flex-wrap">
         <div>
             <h1 class="mb-1">Absensi Siswa Oleh Guru</h1>
-            <p class="text-muted mb-0">Tampilan minimalis untuk input cepat status siswa per kelas hari ini.</p>
+            <p class="text-muted mb-0">Pilih tanggal dan kelas untuk mengisi absensi siswa.</p>
         </div>
         <span class="badge badge-light border px-3 py-2 mt-2 mt-md-0">
             <span id="guruRealtimeDate">{{ $today->format('d M Y') }}</span>
@@ -359,7 +292,8 @@
 
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} otomatis libur. Absensi siswa tidak dibuka.
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
+            Absensi siswa tidak dibuka.
         </div>
     @endif
 
@@ -378,7 +312,7 @@
                         <div class="col-md-4 mb-2 mb-md-0">
                             <label for="classroom_id" class="mb-1">Filter Kelas (sesuai jadwal)</label>
                             <select name="classroom_id" id="classroom_id" class="form-control">
-                                <option value="0">Semua Kelas</option>
+                                <option value="0">Pilih kelas</option>
                                 @foreach ($classOptions as $classroom)
                                     <option value="{{ $classroom->id }}" @selected($selectedClassroomId === (int) $classroom->id)>
                                         {{ $classroom->nama_kelas }} ({{ $classroom->kode_kelas }})
@@ -386,9 +320,10 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <small class="text-muted d-block mb-2">Filter berjalan otomatis: tanggal -> kelas ->
-                                tabel.</small>
+                        <div class="col-md-4 filter-actions">
+                            <small class="text-muted d-block mb-2 filter-help">
+                                Pilih tanggal dan kelas untuk menampilkan maksimal 50 siswa.
+                            </small>
                             <a href="{{ route('guru.attendance-details.index') }}"
                                 class="btn btn-outline-secondary ml-1">Reset</a>
                         </div>
@@ -399,28 +334,13 @@
 
         <div class="alert alert-info" id="filterHintAlert" @if ($hasFilter) style="display:none;" @endif>
             <i class="fas fa-filter mr-1"></i>
-            Pilih tanggal untuk menampilkan data absensi siswa.
+            Pilih tanggal dan kelas untuk menampilkan data absensi siswa.
         </div>
 
         <div class="card">
             <div class="card-body p-0">
-                <form id="bulkAttendanceForm" method="POST" action="{{ route('guru.attendance-details.bulk-submit') }}"
-                    class="d-none">
-                    @csrf
-                    <input type="hidden" name="tanggal" id="bulk_tanggal" value="{{ $hasFilter ? $tanggalFilter : '' }}">
-                    <input type="hidden" name="classroom_id" id="bulk_classroom_id" value="{{ $selectedClassroomId }}">
-                    <input type="hidden" name="bulk_status" id="bulk_status" value="">
-                </form>
-
-                <form id="countPresentForm" method="POST" action="{{ route('guru.attendance-details.count-hadir') }}"
-                    class="d-none">
-                    @csrf
-                    <input type="hidden" name="tanggal" id="count_tanggal" value="{{ $hasFilter ? $tanggalFilter : '' }}">
-                    <input type="hidden" name="classroom_id" id="count_classroom_id" value="{{ $selectedClassroomId }}">
-                </form>
-
                 <div id="statusSummaryBar" class="px-3 py-2 border-bottom"
-                    @if (!$hasFilter || $isWeekendHoliday) style="display:none;" @endif>
+                    @if (!$hasFilter || $selectedClassroomId === 0 || $isWeekendHoliday) style="display:none;" @endif>
                     <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:.55rem;">
                         <small class="text-muted mb-0">Ringkasan status (seluruh data terfilter)</small>
                         <div class="d-flex align-items-center" style="gap:.55rem;">
@@ -442,65 +362,16 @@
                     </div>
                 </div>
 
-                <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap"
-                    id="bulkActionBar" style="gap:.5rem; display: none;">
-                    <small class="text-muted">
-                        <span id="selectedCountLabel">0</span> siswa dipilih. Pilih aksi massal:
-                        Hadir / Sakit / Izin / Dispen / Alpa / Terlambat.
-                    </small>
-                    <div class="d-flex flex-wrap bulk-status-grid" style="gap: .4rem;">
-                        <button type="button" class="btn btn-success btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Hadir">
-                            Hadir
-                        </button>
-                        <button type="button" class="btn btn-warning btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Sakit">
-                            Sakit
-                        </button>
-                        <button type="button" class="btn btn-info btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Izin">
-                            Izin
-                        </button>
-                        <button type="button" class="btn btn-primary btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Dispen">
-                            Dispen
-                        </button>
-                        <button type="button" class="btn btn-danger btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Alpa">
-                            Alpa
-                        </button>
-                        <button type="button" class="btn btn-warning btn-xs btn-bulk-status js-attendance-action"
-                            data-status="Terlambat">
-                            Terlambat
-                        </button>
-                    </div>
-                </div>
-
-                <div class="px-3 pt-2 mobile-only">
-                    <small class="text-muted">Mode mobile aktif: pilih beberapa siswa lalu gunakan aksi massal di bagian
-                        bawah.</small>
-                </div>
-
                 <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap"
-                    id="selectionQuickTools" style="gap:.5rem;">
-                    <small class="text-muted mb-0">Pemilihan cepat siswa</small>
-                    <div class="d-flex flex-wrap quick-tools-grid" style="gap: .4rem;">
-                        <button type="button" id="btnSelectVisibleRows"
-                            class="btn btn-outline-primary btn-xs js-attendance-action">
-                            Pilih Semua Terlihat
-                        </button>
-                        <button type="button" id="btnClearSelectedRows"
-                            class="btn btn-outline-secondary btn-xs js-attendance-action">
-                            Bersihkan Pilihan
-                        </button>
-                        <button type="button" id="btnCountPresent"
-                            class="btn btn-outline-success btn-xs js-attendance-action">
-                            Hitung Hadir
-                        </button>
-                    </div>
+                    id="selectionQuickTools" style="gap:.5rem; display:none;">
+                    <small class="text-muted mb-0">Pilih status setiap siswa, lalu simpan perubahan.</small>
+                    <button type="button" id="btnSaveAttendance" class="btn btn-success btn-sm js-attendance-action" disabled>
+                        <i class="fas fa-save mr-1"></i> Simpan
+                    </button>
                 </div>
 
-                <div id="guruAttendanceTableWrap" class="p-3 pt-2">
+                <div id="guruAttendanceTableWrap" class="p-3 pt-2"
+                    @if ($selectedClassroomId === 0) style="display:none;" @endif>
                     <div id="guruAttendanceTableLoading">
                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                         Memuat data absensi siswa...
@@ -509,14 +380,9 @@
                         <table id="tableGuruAttendanceDetails" class="table table-bordered table-striped mb-0">
                             <thead>
                                 <tr>
-                                    <th class="col-check">
-                                        <input type="checkbox" id="check_all_students" class="js-attendance-action">
-                                    </th>
-                                    <th width="5%">No</th>
-                                    <th>Nama Siswa</th>
-                                    <th width="20%">Kelas</th>
-                                    <th width="18%">Status Saat Ini</th>
-                                    <th width="30%">Aksi</th>
+                                    <th style="width: 10%;">No</th>
+                                    <th>Nama</th>
+                                    <th style="width: 20%;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -566,13 +432,17 @@
 
             const updateRealtimeHeader = () => {
                 const currentDate = new Date();
+                const selectedDateValue = document.getElementById('tanggal')?.value;
+                const selectedDate = selectedDateValue ?
+                    new Date(`${selectedDateValue}T00:00:00`) :
+                    currentDate;
 
                 if (dateElement) {
-                    dateElement.textContent = dateFormatter.format(currentDate);
+                    dateElement.textContent = dateFormatter.format(selectedDate);
                 }
 
                 if (dayElement) {
-                    dayElement.textContent = dayFormatter.format(currentDate);
+                    dayElement.textContent = dayFormatter.format(selectedDate);
                 }
 
                 if (clockElement) {
@@ -589,24 +459,27 @@
             const $tableLoading = $('#guruAttendanceTableLoading');
             const $tanggal = $('#tanggal');
             const $classroom = $('#classroom_id');
-            const $bulkTanggal = $('#bulk_tanggal');
-            const $bulkClassroom = $('#bulk_classroom_id');
-            const $countTanggal = $('#count_tanggal');
-            const $countClassroom = $('#count_classroom_id');
+            const $btnSaveAttendance = $('#btnSaveAttendance');
             const $filterHintAlert = $('#filterHintAlert');
             const $statusSummaryBar = $('#statusSummaryBar');
             const $summaryLoadingState = $('#summaryLoadingState');
 
-            const hasFilterInitial = @json($hasFilter);
+            const selectedClassroomInitial = @json($selectedClassroomId > 0);
             const weekendFilterMessage = 'Tanggal jatuh pada hari libur (Sabtu/Minggu).';
-            const noFilterMessage = 'Pilih tanggal untuk menampilkan data absensi siswa.';
+            const noFilterMessage = 'Pilih tanggal dan kelas untuk menampilkan data absensi siswa.';
             const noDataMessage = 'Tidak ada data siswa dari kelas yang memiliki jadwal Anda pada tanggal ini.';
 
             let isWeekendDate = false;
+            let nonSchoolDayMessage = @json($schoolHolidayMessage ?? 'Tanggal jatuh pada hari libur (Sabtu/Minggu).');
             let isSyncingClassOptions = false;
+            let isLoadingClassOptions = false;
+            let isSavingAttendance = false;
             let latestServerSummary = null;
-            let firstTableLoaded = false;
-
+            let activeDraftKey = '';
+            let stagedStatuses = new Map();
+            let originalStatuses = new Map();
+            let dirtyStudentIds = new Set();
+            const stagedStatusesByFilter = new Map();
             if ($tableWrap.length) {
                 $tableWrap.addClass('table-hidden-initial');
             }
@@ -615,8 +488,10 @@
                 processing: true,
                 serverSide: true,
                 responsive: false,
-                scrollX: true,
                 autoWidth: false,
+                searching: true,
+                pageLength: 50,
+                lengthChange: false,
                 ajax: {
                     url: "{{ route('guru.attendance-details.datatable') }}",
                     data: function(d) {
@@ -625,16 +500,23 @@
                     },
                     dataSrc: function(json) {
                         latestServerSummary = (json && json.summary) ? json.summary : null;
-                        return (json && json.data) ? json.data : [];
+                        const rows = (json && json.data) ? json.data : [];
+                        rows.forEach((row) => {
+                            const studentId = String(row.student_id);
+                            if (!originalStatuses.has(studentId)) {
+                                originalStatuses.set(studentId, row.raw_status
+                                    ? normalizeAttendanceStatus(row.raw_status)
+                                    : 'Belum');
+                            }
+                            if (!stagedStatuses.has(studentId)) {
+                                stagedStatuses.set(studentId, normalizeAttendanceStatus(row.raw_status));
+                            }
+                        });
+                        updateSaveButtonState();
+                        return rows;
                     }
                 },
                 columns: [{
-                        data: 'checkbox',
-                        name: 'checkbox',
-                        searchable: false,
-                        orderable: false
-                    },
-                    {
                         data: 'no',
                         name: 'no',
                         searchable: false,
@@ -645,16 +527,6 @@
                         name: 'nama'
                     },
                     {
-                        data: 'kelas',
-                        name: 'kelas'
-                    },
-                    {
-                        data: 'status',
-                        name: 'status',
-                        searchable: false,
-                        orderable: false
-                    },
-                    {
                         data: 'aksi',
                         name: 'aksi',
                         searchable: false,
@@ -663,17 +535,16 @@
                 ],
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.8/i18n/id.json',
-                    emptyTable: hasFilterInitial ? noDataMessage : noFilterMessage
+                    emptyTable: selectedClassroomInitial ? noDataMessage : noFilterMessage
                 },
                 columnDefs: [{
                     orderable: false,
                     targets: 0
                 }, {
                     orderable: false,
-                    targets: 5
+                    targets: 2
                 }],
                 initComplete: function() {
-                    firstTableLoaded = true;
                     $tableWrap.removeClass('table-hidden-initial');
                     $tableLoading.addClass('d-none');
                 }
@@ -684,27 +555,90 @@
                 toggleSummaryLoadingState(isProcessing);
             });
 
-            function updateHiddenFilterInputs() {
-                const tanggalValue = $tanggal.val() || '';
-                const classroomValue = $classroom.val() || '0';
+            function normalizeAttendanceStatus(status) {
+                if (!status) {
+                    return 'Hadir';
+                }
 
-                $bulkTanggal.val(tanggalValue);
-                $bulkClassroom.val(classroomValue);
-                $countTanggal.val(tanggalValue);
-                $countClassroom.val(classroomValue);
+                return status === 'Alpha' ? 'Alpa' : String(status);
+            }
+
+            function activateDraftForCurrentFilter() {
+                const key = `${$tanggal.val() || ''}:${$classroom.val() || '0'}`;
+                if (key === activeDraftKey) {
+                    return;
+                }
+
+                if (activeDraftKey) {
+                    stagedStatusesByFilter.set(activeDraftKey, {
+                        statuses: stagedStatuses,
+                        originals: originalStatuses,
+                        dirty: dirtyStudentIds,
+                    });
+                }
+
+                activeDraftKey = key;
+                const draft = stagedStatusesByFilter.get(key) || {
+                    statuses: new Map(),
+                    originals: new Map(),
+                    dirty: new Set(),
+                };
+                stagedStatuses = draft.statuses;
+                originalStatuses = draft.originals;
+                dirtyStudentIds = draft.dirty;
+                stagedStatusesByFilter.set(key, draft);
+                updateSaveButtonState();
+            }
+
+            function updateSaveButtonState() {
+                const hasFilter = ($tanggal.val() || '') !== '' && Number($classroom.val() || 0) > 0;
+                $btnSaveAttendance.prop('disabled',
+                    !hasFilter || isWeekendDate || isSavingAttendance || dirtyStudentIds.size === 0
+                );
+            }
+
+            function updateActionButton($button, status) {
+                const label = normalizeAttendanceStatus(status);
+                const statusClass = {
+                    Hadir: 'btn-success',
+                    Sakit: 'btn-warning',
+                    Izin: 'btn-info',
+                    Dispen: 'btn-primary',
+                    Alpa: 'btn-danger',
+                    Terlambat: 'btn-warning',
+                }[label] || 'btn-success';
+
+                $button
+                    .removeClass('btn-success btn-warning btn-info btn-primary btn-danger')
+                    .addClass(statusClass)
+                    .text(label);
+            }
+
+            function renderStagedStatuses() {
+                $('#tableGuruAttendanceDetails tbody tr').each(function() {
+                    const row = table.row(this).data();
+                    if (!row) {
+                        return;
+                    }
+
+                    const status = stagedStatuses.get(String(row.student_id));
+                    if (status) {
+                        updateActionButton($(this).find('.attendance-actions .dropdown-toggle'), status);
+                    }
+                });
             }
 
             function toggleAttendanceActions() {
                 const hasDate = ($tanggal.val() || '') !== '';
-                const disabled = !hasDate || isWeekendDate;
+                const hasClassroom = Number($classroom.val() || 0) > 0;
+                const disabled = !hasDate || !hasClassroom || isWeekendDate || isLoadingClassOptions ||
+                    isSavingAttendance;
 
                 $('.js-attendance-action').prop('disabled', disabled);
-
-                if (disabled) {
-                    $('#check_all_students').prop('checked', false);
-                    $('.check-student').prop('checked', false);
-                    updateBulkActionBar();
-                }
+                updateSaveButtonState();
+                $('#statusSummaryBar').toggle(hasDate && hasClassroom && !isWeekendDate);
+                $('#selectionQuickTools').toggle(hasDate && hasClassroom && !isWeekendDate);
+                $('#guruAttendanceTableWrap').toggle(hasDate && hasClassroom && !isWeekendDate);
             }
 
             function resetStatusSummary() {
@@ -718,7 +652,8 @@
             }
 
             function toggleSummaryLoadingState(isLoading) {
-                const canShow = ($tanggal.val() || '').trim() !== '' && !isWeekendDate &&
+                const canShow = ($tanggal.val() || '').trim() !== '' &&
+                    Number($classroom.val() || 0) > 0 && !isWeekendDate &&
                     $statusSummaryBar.is(':visible');
 
                 $summaryLoadingState.toggleClass('d-none', !(isLoading && canShow));
@@ -780,8 +715,9 @@
 
             function toggleStatusSummary() {
                 const hasDate = ($tanggal.val() || '').trim() !== '';
+                const hasClassroom = Number($classroom.val() || 0) > 0;
 
-                if (!hasDate || isWeekendDate) {
+                if (!hasDate || !hasClassroom || isWeekendDate) {
                     latestServerSummary = null;
                     $statusSummaryBar.hide();
                     toggleSummaryLoadingState(false);
@@ -795,6 +731,7 @@
 
             function updateFilterHint() {
                 const tanggalValue = ($tanggal.val() || '').trim();
+                const hasClassroom = Number($classroom.val() || 0) > 0;
 
                 if (tanggalValue === '') {
                     $filterHintAlert.removeClass('alert-warning').addClass('alert-info').html(
@@ -803,9 +740,16 @@
                     return;
                 }
 
+                if (!hasClassroom) {
+                    $filterHintAlert.removeClass('alert-warning').addClass('alert-info').html(
+                        '<i class="fas fa-filter mr-1"></i> Pilih kelas untuk menampilkan maksimal 50 siswa.'
+                    ).show();
+                    return;
+                }
+
                 if (isWeekendDate) {
                     $filterHintAlert.removeClass('alert-info').addClass('alert-warning').html(
-                        '<i class="fas fa-calendar-times mr-1"></i> ' + weekendFilterMessage
+                        '<i class="fas fa-calendar-times mr-1"></i> ' + nonSchoolDayMessage
                     ).show();
                     return;
                 }
@@ -822,12 +766,11 @@
                 table.ajax.reload(function() {
                     $tableWrap.removeClass('table-hidden-initial');
                     $tableLoading.addClass('d-none');
-                    forceDesktopTableMode();
                 }, true);
             }
 
             function syncAttendanceFilterState() {
-                updateHiddenFilterInputs();
+                activateDraftForCurrentFilter();
                 toggleAttendanceActions();
                 toggleStatusSummary();
                 updateFilterHint();
@@ -837,10 +780,11 @@
                 const tanggalValue = ($tanggal.val() || '').trim();
 
                 if (tanggalValue === '') {
+                    isLoadingClassOptions = false;
                     latestServerSummary = null;
                     isWeekendDate = false;
                     isSyncingClassOptions = true;
-                    $classroom.html('<option value="0">Semua Kelas</option>').val('0');
+                    $classroom.html('<option value="0">Pilih kelas</option>').val('0');
                     isSyncingClassOptions = false;
                     table.settings()[0].oLanguage.emptyTable = noFilterMessage;
                     syncAttendanceFilterState();
@@ -848,6 +792,8 @@
                     return;
                 }
 
+                isLoadingClassOptions = true;
+                syncAttendanceFilterState();
                 const query = new URLSearchParams({
                     tanggal: tanggalValue,
                     classroom_id: preferredClassroomId ?? ($classroom.val() || '0')
@@ -860,15 +806,17 @@
                     })
                     .then((response) => response.json())
                     .then((payload) => {
+                        isLoadingClassOptions = false;
                         latestServerSummary = null;
                         isWeekendDate = !!payload.is_weekend_holiday;
+                        nonSchoolDayMessage = payload.holiday_message || weekendFilterMessage;
 
                         const options = Array.isArray(payload.options) ? payload.options : [];
                         const selected = String(payload.selected ?? 0);
 
                         isSyncingClassOptions = true;
                         $classroom.empty();
-                        $classroom.append('<option value="0">Semua Kelas</option>');
+                        $classroom.append('<option value="0">Pilih kelas</option>');
 
                         options.forEach((item) => {
                             const optionLabel = `${item.nama_kelas} (${item.kode_kelas})`;
@@ -884,11 +832,20 @@
                         reloadTableWithLoading();
                     })
                     .catch(() => {
+                        isLoadingClassOptions = false;
                         latestServerSummary = null;
                         isWeekendDate = false;
+                        isSyncingClassOptions = true;
+                        $classroom.val('0');
+                        isSyncingClassOptions = false;
                         table.settings()[0].oLanguage.emptyTable = noDataMessage;
                         syncAttendanceFilterState();
                         reloadTableWithLoading();
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal memuat kelas',
+                            text: 'Daftar kelas untuk tanggal tersebut tidak dapat dimuat. Silakan coba lagi.'
+                        });
                     });
             }
 
@@ -906,104 +863,103 @@
                     return;
                 }
 
+                activateDraftForCurrentFilter();
                 syncAttendanceFilterState();
                 table.settings()[0].oLanguage.emptyTable = isWeekendDate ? weekendFilterMessage :
                     noDataMessage;
                 reloadTableWithLoading();
             });
 
-            $('#btnCountPresent').on('click', function() {
-                if (($tanggal.val() || '').trim() === '') {
-                    alert('Pilih tanggal terlebih dahulu.');
+            $('#tableGuruAttendanceDetails tbody').on('click', '.js-status-option', function() {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) {
                     return;
                 }
 
-                $('#countPresentForm').submit();
-            });
-
-            function forceDesktopTableMode() {
-                let $table = $('#tableGuruAttendanceDetails');
-                $table.removeClass('dtr-inline collapsed');
-                $table.find('tbody tr.child').remove();
-                $table.find('tbody tr').removeClass('parent');
-
-                if (window.matchMedia('(max-width: 767.98px)').matches) {
-                    $table.closest('.dataTables_wrapper').find('.dtr-title').filter(function() {
-                        return $(this).text().trim().toLowerCase() === 'kolom 1';
-                    }).remove();
-                }
-            }
-
-            table.on('draw', forceDesktopTableMode);
-            table.on('draw', updateStatusSummaryFromTable);
-            forceDesktopTableMode();
-
-            // Hindari state checkbox tersimpan dari browser agar aksi massal tidak muncul saat awal load.
-            $('#check_all_students, .check-student').prop('checked', false);
-
-            $('#check_all_students').on('change', function() {
-                let checked = $(this).is(':checked');
-                $('.check-student').prop('checked', checked);
-                updateBulkActionBar();
-            });
-
-            $('#btnSelectVisibleRows').on('click', function() {
-                table.rows({
-                    search: 'applied'
-                }).nodes().to$().find('.check-student:not(:disabled)').prop('checked', true);
-
-                $('#check_all_students').prop(
-                    'checked',
-                    $('.check-student:not(:disabled)').length > 0 &&
-                    $('.check-student:not(:disabled):checked').length === $(
-                        '.check-student:not(:disabled)').length
-                );
-
-                updateBulkActionBar();
-            });
-
-            $('#btnClearSelectedRows').on('click', function() {
-                $('.check-student').prop('checked', false);
-                $('#check_all_students').prop('checked', false);
-                updateBulkActionBar();
-            });
-
-            $(document).on('change', '.check-student', function() {
-                let total = $('.check-student').length;
-                let checked = $('.check-student:checked').length;
-
-                $('#check_all_students').prop('checked', total > 0 && total === checked);
-                updateBulkActionBar();
-            });
-
-            function updateBulkActionBar() {
-                let selectedCount = $('.check-student:checked').length;
-
-                if (selectedCount > 0) {
-                    $('#selectedCountLabel').text(selectedCount);
-                    $('#bulkActionBar').show();
+                const status = normalizeAttendanceStatus($(this).data('status'));
+                const studentId = String(row.student_id);
+                stagedStatuses.set(studentId, status);
+                if (status === originalStatuses.get(studentId)) {
+                    dirtyStudentIds.delete(studentId);
                 } else {
-                    $('#bulkActionBar').hide();
+                    dirtyStudentIds.add(studentId);
                 }
-            }
+                updateActionButton($(this).closest('.attendance-actions').find('.dropdown-toggle'), status);
+                updateSaveButtonState();
+                $(this).closest('.dropdown').find('.dropdown-toggle').dropdown('toggle');
+            });
 
-            $('.btn-bulk-status').on('click', function() {
-                let selectedCount = $('.check-student:checked').length;
-
-                if (selectedCount === 0) {
-                    alert('Pilih minimal satu siswa terlebih dahulu.');
+            $btnSaveAttendance.on('click', async function() {
+                if (dirtyStudentIds.size === 0 || isSavingAttendance) {
                     return;
                 }
 
-                $('#bulk_status').val($(this).data('status'));
-                $('#bulkAttendanceForm').submit();
+                isSavingAttendance = true;
+                toggleAttendanceActions();
+                $btnSaveAttendance.html('<span class="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span> Menyimpan...');
+
+                try {
+                    const response = await fetch("{{ route('guru.attendance-details.save') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': @json(csrf_token()),
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({
+                            tanggal: $tanggal.val(),
+                            classroom_id: Number($classroom.val()),
+                            attendances: Array.from(dirtyStudentIds, (studentId) => ({
+                                student_id: Number(studentId),
+                                status: stagedStatuses.get(studentId),
+                            })),
+                        }),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        const validationErrors = payload.errors ?
+                            Object.values(payload.errors).flat().join(' ') :
+                            '';
+                        throw new Error(validationErrors || payload.message || 'Absensi gagal disimpan.');
+                    }
+
+                    dirtyStudentIds.forEach((studentId) => {
+                        originalStatuses.set(studentId, stagedStatuses.get(studentId));
+                    });
+                    dirtyStudentIds.clear();
+                    updateSaveButtonState();
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil',
+                        text: payload.message || 'Absensi siswa berhasil disimpan.',
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                    reloadTableWithLoading();
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal menyimpan absensi',
+                        text: error.message || 'Terjadi kesalahan saat menyimpan absensi.',
+                    });
+                } finally {
+                    isSavingAttendance = false;
+                    $btnSaveAttendance.html('<i class="fas fa-save mr-1"></i> Simpan');
+                    toggleAttendanceActions();
+                }
             });
 
-            updateBulkActionBar();
+            table.on('draw', function() {
+                updateStatusSummaryFromTable();
+                renderStagedStatuses();
+                updateSaveButtonState();
+            });
             resetStatusSummary();
             syncAttendanceFilterState();
 
-            // Tanggal selalu terisi (hari ini), langsung muat opsi kelas dan tabel
+            // Muat opsi kelas tanggal terpilih; data siswa baru diminta setelah kelas dipilih.
             loadClassOptions("{{ (int) $selectedClassroomId }}");
         });
     </script>

@@ -12,4 +12,9 @@ class Subject extends Model
         'kategori',
         'jam_per_minggu',
     ];
+
+    public function teacherSubjects()
+    {
+        return $this->hasMany(TeacherSubject::class);
+    }
 }

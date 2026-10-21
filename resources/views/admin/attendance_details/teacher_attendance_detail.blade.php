@@ -1,6 +1,6 @@
 @extends('adminlte::page')
 
-@section('title', 'Detail Status Absensi Guru Hari Ini')
+@section('title', 'Detail Status Absensi Guru')
 
 @section('css')
     <style>
@@ -64,11 +64,14 @@
 @section('content_header')
     <div class="d-flex justify-content-between align-items-end flex-wrap">
         <div>
-            <h1 class="mb-1">Detail Status Absensi Guru Hari Ini</h1>
-            <p class="text-muted mb-0">Daftar guru yang sudah dan belum melakukan absensi hari ini sesuai jadwal.</p>
+            <h1 class="mb-1">Detail Status Absensi Guru</h1>
+            <p class="text-muted mb-0">
+                Daftar guru yang sudah dan belum mengisi absensi siswa sesuai jadwal pada
+                {{ $today->format('d/m/Y') }}.
+            </p>
         </div>
         <div class="mt-2 mt-md-0">
-            <a href="{{ route('attendance-details.index') }}" class="btn btn-outline-secondary">
+            <a href="{{ route('attendance-details.index', $filters) }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Kembali
             </a>
         </div>
@@ -78,17 +81,18 @@
 @section('content')
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} otomatis libur. Tidak ada jadwal guru untuk hari ini.
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
+            Tidak ada jadwal guru pada {{ $today->format('d/m/Y') }}.
         </div>
     @elseif ($todaySchedules->isEmpty())
         <div class="alert alert-info">
-            Tidak ada jadwal untuk hari ini ({{ $todayDayName }}).
+            Tidak ada jadwal untuk {{ $todayDayName }} ({{ $today->format('d/m/Y') }}) yang sesuai dengan filter.
         </div>
     @else
         <!-- Statistics Cards with filter links -->
         <div class="row mb-4">
             <div class="col-md-4">
-                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'all']) }}"
+                <a href="{{ route('attendance-details.teacher-attendance-detail', array_merge($filters, ['filter' => 'all'])) }}"
                     class="text-decoration-none">
                     <div class="stat-card {{ $filter === 'all' ? 'border-2 border-primary' : '' }}"
                         style="background:#e9f0fb; border:1px solid {{ $filter === 'all' ? '#1a56db' : '#b8d0f7' }};">
@@ -98,7 +102,7 @@
                 </a>
             </div>
             <div class="col-md-4">
-                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'sudah']) }}"
+                <a href="{{ route('attendance-details.teacher-attendance-detail', array_merge($filters, ['filter' => 'sudah'])) }}"
                     class="text-decoration-none">
                     <div class="stat-card present" style="{{ $filter === 'sudah' ? 'border: 2px solid #155724;' : '' }}">
                         <h3>{{ count($teachersWithAttendance) }}</h3>
@@ -107,7 +111,7 @@
                 </a>
             </div>
             <div class="col-md-4">
-                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'belum']) }}"
+                <a href="{{ route('attendance-details.teacher-attendance-detail', array_merge($filters, ['filter' => 'belum'])) }}"
                     class="text-decoration-none">
                     <div class="stat-card absent" style="{{ $filter === 'belum' ? 'border: 2px solid #721c24;' : '' }}">
                         <h3>{{ count($teachersWithoutAttendance) }}</h3>

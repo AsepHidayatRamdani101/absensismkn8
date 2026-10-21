@@ -48,6 +48,9 @@ use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\Student;
 use App\Support\ReferenceCache;
+use App\Support\FonnteSettings;
+use App\Support\SchoolCalendar;
+use Carbon\Carbon;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
@@ -82,6 +85,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        FonnteSettings::load();
         $this->configureRateLimiters();
 
         $this->registerReferenceCacheInvalidationHooks();
@@ -141,6 +145,18 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('siswa', function ($user) {
             return $user->hasRole('siswa');
+        });
+
+        Gate::define('pjj-admin-menu', function ($user) {
+            return $user->hasRole('admin') && SchoolCalendar::isPjj(Carbon::today());
+        });
+
+        Gate::define('pjj-guru-menu', function ($user) {
+            return $user->hasRole('guru') && SchoolCalendar::isPjj(Carbon::today());
+        });
+
+        Gate::define('pjj-siswa-menu', function ($user) {
+            return $user->hasRole('siswa') && SchoolCalendar::isPjj(Carbon::today());
         });
 
         Gate::define('wali_kelas', function ($user) {

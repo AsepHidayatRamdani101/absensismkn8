@@ -23,4 +23,27 @@ class DashboardRouteRegistrationTest extends TestCase
         $this->assertTrue(Route::has('kesiswaan.dashboard'));
         $this->assertTrue(Route::has('siswa.dashboard'));
     }
+
+    #[Test]
+    public function pjj_routes_are_registered_for_each_school_role(): void
+    {
+        foreach ([
+            'admin.pjj.dashboard',
+            'admin.pjj.tasks',
+            'admin.pjj.teacher-attendance',
+            'admin.pjj.student-attendance',
+            'admin.pjj.effectiveness',
+            'guru.pjj.index',
+            'guru.pjj.assignments.store',
+            'guru.pjj.assignments.show',
+            'guru.pjj.submissions.grade',
+            'siswa.pjj.index',
+            'siswa.pjj.attendance',
+            'siswa.pjj.assignments.submit',
+            'pjj.assignment.download',
+            'pjj.submission.download',
+        ] as $routeName) {
+            $this->assertTrue(Route::has($routeName), "Expected route [{$routeName}] to be registered.");
+        }
+    }
 }

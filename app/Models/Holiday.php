@@ -8,12 +8,16 @@ class Holiday extends Model
 {
     protected $fillable = [
         'tanggal',
+        'tanggal_akhir',
         'keterangan',
         'is_national',
+        'is_pjj',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'tanggal_akhir' => 'date',
         'is_national' => 'boolean',
+        'is_pjj' => 'boolean',
     ];
 }

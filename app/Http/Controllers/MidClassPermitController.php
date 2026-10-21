@@ -8,6 +8,7 @@ use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -222,6 +223,9 @@ class MidClassPermitController extends Controller
         }
 
         $tanggal = Carbon::parse($permit->tanggal);
+        if (SchoolCalendar::isHoliday($tanggal)) {
+            return;
+        }
 
         $dayMap = [
             1 => 'Senin',

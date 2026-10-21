@@ -9,10 +9,12 @@
         <h1>Absensi Siswa Oleh Guru</h1>
 
         <div>
-            <button class="btn btn-primary mr-1" data-toggle="modal" data-target="#modalCreate">
-                <i class="fas fa-plus"></i>
-                Tambah Absensi Siswa
-            </button>
+            @unless ($isWeekendHoliday)
+                <button class="btn btn-primary mr-1" data-toggle="modal" data-target="#modalCreate">
+                    <i class="fas fa-plus"></i>
+                    Tambah Absensi Siswa
+                </button>
+            @endunless
 
             <button id="btnDeleteMultipleAttendanceDetails" class="btn btn-danger d-none">
                 <i class="fas fa-trash"></i>
@@ -23,35 +25,40 @@
 @stop
 
 @section('content')
-    @if (!$isWeekendHoliday)
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'sudah']) }}"
+    @if ($isWeekendHoliday)
+        <div class="alert alert-info">
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
+            Tidak ada absensi siswa yang dapat diisi pada tanggal ini.
+        </div>
+    @else
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <a href="{{ route('attendance-details.teacher-attendance-detail', array_merge($cardFilters, ['tanggal' => $selectedDate->toDateString(), 'filter' => 'sudah'])) }}"
                     class="text-decoration-none">
                     <div class="info-box bg-success" style="cursor:pointer;">
                         <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
                         <div class="info-box-content">
-                            <span class="info-box-text">Guru Sudah Absen Hari Ini</span>
+                            <span class="info-box-text">Guru Sudah Absen Siswa ({{ $selectedDate->format('d/m/Y') }})</span>
                             <span class="info-box-number">{{ count($teachersWithAttendance) }}</span>
                             <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
                         </div>
                     </div>
                 </a>
-            </div>
-            <div class="col-md-6">
-                <a href="{{ route('attendance-details.teacher-attendance-detail', ['filter' => 'belum']) }}"
+        </div>
+        <div class="col-md-6">
+            <a href="{{ route('attendance-details.teacher-attendance-detail', array_merge($cardFilters, ['tanggal' => $selectedDate->toDateString(), 'filter' => 'belum'])) }}"
                     class="text-decoration-none">
                     <div class="info-box bg-danger" style="cursor:pointer;">
                         <span class="info-box-icon"><i class="fas fa-times-circle"></i></span>
                         <div class="info-box-content">
-                            <span class="info-box-text">Guru Belum Absen Hari Ini</span>
+                            <span class="info-box-text">Guru Belum Absen Siswa ({{ $selectedDate->format('d/m/Y') }})</span>
                             <span class="info-box-number">{{ count($teachersWithoutAttendance) }}</span>
                             <span class="progress-description"><i class="fas fa-eye"></i> Lihat Detail</span>
                         </div>
                     </div>
                 </a>
-            </div>
         </div>
+    </div>
     @endif
 
     <div class="card">
@@ -135,6 +142,10 @@
                             <i class="fas fa-filter"></i> Terapkan
                         </button>
                         <a href="{{ route('attendance-details.index') }}" class="btn btn-secondary btn-sm">Reset</a>
+                        <small class="form-text text-muted mt-2">
+                            Card guru mengikuti tanggal, tahun ajaran, guru, mapel, dan kelas. Filter status hanya
+                            memengaruhi tabel rincian absensi siswa.
+                        </small>
                     </div>
                 </div>
             </form>

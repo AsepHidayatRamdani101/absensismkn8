@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -483,7 +484,11 @@ class StudentLeaveRequestController extends Controller
         foreach ($period as $date) {
             $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
 
-            if ($dayName === null || in_array($dayName, ['Sabtu', 'Minggu'], true)) {
+            if (
+                $dayName === null
+                || in_array($dayName, ['Sabtu', 'Minggu'], true)
+                || SchoolCalendar::isHoliday($date)
+            ) {
                 continue;
             }
 

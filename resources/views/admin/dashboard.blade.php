@@ -100,6 +100,11 @@
                 class="btn btn-sm btn-outline-secondary">
                 Dashboard Pancawaluya
             </a>
+            @if (\App\Support\SchoolCalendar::isPjj(today()))
+                <a href="{{ route('admin.pjj.dashboard') }}" class="btn btn-sm btn-primary">
+                    Dashboard PJJ
+                </a>
+            @endif
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode tampilan dashboard admin">
                 <a href="{{ route('admin.dashboard', ['mode' => 'ringkas']) }}"
                     class="btn {{ ($mode ?? 'ringkas') === 'ringkas' ? 'btn-primary' : 'btn-outline-primary' }}">
@@ -125,7 +130,7 @@
             <div class="small-box bg-primary stat-card">
                 <div class="inner">
                     <h3>{{ $todayTeacherAttendances }}</h3>
-                    <p>Absensi Guru Hari Ini</p>
+                    <p>Sesi Absensi Guru Hari Ini</p>
                 </div>
                 <div class="icon">
                     <i class="fas fa-user-check"></i>
@@ -221,7 +226,44 @@
         </div>
     </div>
 
+    <p class="section-title mt-2">Hari Efektif Bulan Ini</p>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card card-outline card-success kpi-card">
+                <div class="card-body">
+                    <div class="kpi-label">{{ $dashboardMonthLabel }}</div>
+                    <div class="kpi-value text-success">{{ $effective_days }}</div>
+                    <div class="text-muted">hari efektif sekolah</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-outline card-warning kpi-card">
+                <div class="card-body">
+                    <div class="kpi-label">{{ $dashboardMonthLabel }}</div>
+                    <div class="kpi-value text-warning">{{ $holiday_weekdays }}</div>
+                    <div class="text-muted">hari kerja yang ditetapkan sebagai libur</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="alert alert-light border">
+        Hari efektif dihitung dari Senin sampai Jumat pada bulan ini, dikurangi tanggal yang tercatat di
+        Master Data Hari Libur (<code>holidays</code>). Sabtu dan Minggu tidak dihitung sebagai hari efektif.
+    </div>
+
     <p class="section-title mt-2">Persentase Kehadiran</p>
+    <div class="alert alert-light border">
+        <strong>Sumber dan cara hitung:</strong>
+        kehadiran guru diambil dari catatan agenda/absensi mengajar pada tabel <code>teacher_attendances</code> dengan status
+        <code>kehadiran_guru = Hadir</code>. Kehadiran siswa diambil dari absensi sekolah
+        (<code>attendances</code>, termasuk metode Manual/RFID/Face/QR) dan absensi kelas oleh guru
+        (<code>attendance_details</code>); status
+        <code>Hadir</code> dan <code>Terlambat</code> dihitung hadir. Orang yang sama dihitung satu kali pada setiap
+        periode berdasarkan ID, termasuk jika tercatat di lebih dari satu sumber. Angka mingguan/bulanan berarti orang
+        unik yang tercatat hadir setidaknya satu kali pada periode itu, bukan jumlah akumulasi kehadiran harian.
+        Persentase = jumlah orang unik hadir dibagi total data guru/siswa, lalu dikali 100.
+    </div>
     <div class="row">
         <div class="col-md-6">
             <div class="card card-outline card-success kpi-card">
@@ -231,6 +273,7 @@
                 <div class="card-body">
                     <div class="metric-stack">
                         <div class="kpi-label">Hari Ini</div>
+                        <div class="text-muted mb-1">{{ $teacherPresentToday }} dari {{ $totalTeachers }} guru hadir</div>
                         <div class="kpi-value text-success">{{ $teacherPresencePercent }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-success" role="progressbar"
@@ -242,6 +285,7 @@
 
                     <div class="metric-stack">
                         <div class="kpi-label">Minggu Ini</div>
+                        <div class="text-muted mb-1">{{ $teacherPresentThisWeek }} dari {{ $totalTeachers }} guru unik</div>
                         <div class="kpi-value text-primary">{{ $teacherPresencePercentWeek }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-primary" role="progressbar"
@@ -253,6 +297,7 @@
 
                     <div class="metric-stack">
                         <div class="kpi-label">Bulan Ini</div>
+                        <div class="text-muted mb-1">{{ $teacherPresentThisMonth }} dari {{ $totalTeachers }} guru unik</div>
                         <div class="kpi-value text-indigo">{{ $teacherPresencePercentMonth }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-indigo" role="progressbar"
@@ -273,6 +318,7 @@
                 <div class="card-body">
                     <div class="metric-stack">
                         <div class="kpi-label">Hari Ini</div>
+                        <div class="text-muted mb-1">{{ $studentPresentToday }} dari {{ $totalStudents }} siswa hadir</div>
                         <div class="kpi-value text-info">{{ $studentPresencePercent }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-info" role="progressbar"
@@ -284,6 +330,7 @@
 
                     <div class="metric-stack">
                         <div class="kpi-label">Minggu Ini</div>
+                        <div class="text-muted mb-1">{{ $studentPresentThisWeek }} dari {{ $totalStudents }} siswa unik</div>
                         <div class="kpi-value text-secondary">{{ $studentPresencePercentWeek }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-secondary" role="progressbar"
@@ -295,12 +342,67 @@
 
                     <div class="metric-stack">
                         <div class="kpi-label">Bulan Ini</div>
+                        <div class="text-muted mb-1">{{ $studentPresentThisMonth }} dari {{ $totalStudents }} siswa unik</div>
                         <div class="kpi-value text-warning">{{ $studentPresencePercentMonth }}%</div>
                         <div class="progress">
                             <div class="progress-bar bg-warning" role="progressbar"
                                 style="width: {{ min(100, $studentPresencePercentMonth) }}%"
                                 aria-valuenow="{{ $studentPresencePercentMonth }}" aria-valuemin="0"
                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="section-title mt-2">Keefektifan Belajar</p>
+    <div class="alert alert-light border">
+        Indikator ini menggunakan persentase siswa unik yang hadir sebagai gambaran keefektifan belajar. Sumbernya
+        adalah absensi sekolah (<code>attendances</code>) dan absensi kelas (<code>attendance_details</code>);
+        status <code>Hadir</code> dan <code>Terlambat</code> dihitung hadir. Rumus: jumlah siswa unik yang tercatat
+        hadir pada periode tersebut dibagi total siswa, lalu dikali 100. Angka mingguan dan bulanan menghitung setiap
+        siswa satu kali meskipun hadir pada beberapa hari.
+    </div>
+    <div class="card card-outline card-primary kpi-card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="metric-stack">
+                        <div class="kpi-label">Harian</div>
+                        <div class="text-muted mb-1">{{ $studentPresentToday }} dari {{ $totalStudents }} siswa hadir</div>
+                        <div class="kpi-value text-info">{{ $studentPresencePercent }}%</div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar"
+                                style="width: {{ min(100, $studentPresencePercent) }}%"
+                                aria-valuenow="{{ $studentPresencePercent }}" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="metric-stack">
+                        <div class="kpi-label">Mingguan</div>
+                        <div class="text-muted mb-1">{{ $studentPresentThisWeek }} dari {{ $totalStudents }} siswa unik</div>
+                        <div class="kpi-value text-primary">{{ $studentPresencePercentWeek }}%</div>
+                        <div class="progress">
+                            <div class="progress-bar bg-primary" role="progressbar"
+                                style="width: {{ min(100, $studentPresencePercentWeek) }}%"
+                                aria-valuenow="{{ $studentPresencePercentWeek }}" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="metric-stack">
+                        <div class="kpi-label">Bulanan</div>
+                        <div class="text-muted mb-1">{{ $studentPresentThisMonth }} dari {{ $totalStudents }} siswa unik</div>
+                        <div class="kpi-value text-warning">{{ $studentPresencePercentMonth }}%</div>
+                        <div class="progress">
+                            <div class="progress-bar bg-warning" role="progressbar"
+                                style="width: {{ min(100, $studentPresencePercentMonth) }}%"
+                                aria-valuenow="{{ $studentPresencePercentMonth }}" aria-valuemin="0" aria-valuemax="100">
                             </div>
                         </div>
                     </div>

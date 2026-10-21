@@ -6,6 +6,7 @@ use App\Models\Teacher;
 use App\Models\TeacherLeaveRequest;
 use App\Models\TeacherAttendance;
 use App\Models\Schedule;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -320,7 +321,7 @@ class TeacherLeaveRequestController extends Controller
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
 
-            if (!$dayName) {
+            if (!$dayName || SchoolCalendar::isHoliday($date)) {
                 continue;
             }
 

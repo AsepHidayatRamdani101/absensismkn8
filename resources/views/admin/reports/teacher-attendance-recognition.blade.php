@@ -13,6 +13,239 @@
 @section('content')
     <div class="card">
         <div class="card-body">
+            @if (session('wa_notification'))
+                <div class="alert alert-{{ session('wa_notification.status') === 'success' ? 'success' : (session('wa_notification.status') === 'warning' ? 'warning' : 'danger') }} alert-dismissible fade show"
+                    role="alert">
+                    <strong>Status WhatsApp:</strong> {{ session('wa_notification.message') }}
+                    @if (session('wa_notification.results'))
+                        <ul class="mb-1 mt-2">
+                            @foreach (session('wa_notification.results') as $result)
+                                <li>
+                                    <strong>{{ $result['name'] }}:</strong>
+                                    {{ $result['status'] === 'accepted' ? 'Diterima Fonnte' : ($result['status'] === 'skipped' ? 'Dilewati' : 'Gagal') }}
+                                    — {{ $result['message'] }}
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if (session('wa_notification.delivery_note'))
+                        <small class="d-block">{{ session('wa_notification.delivery_note') }}</small>
+                    @endif
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Tutup">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            @endif
+            @if (session('success'))
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    {{ session('success') }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Tutup">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            @endif
+            @if (session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ session('error') }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Tutup">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            @endif
+
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center">
+                    <div class="mb-2 mb-md-0">
+                        <strong>Mode pengingat WhatsApp:</strong>
+                        @if ($automaticReminderMode)
+                            <span class="badge badge-primary">Otomatis</span>
+                            <span class="text-muted">Setiap hari efektif pukul 15.00; tombol kirim manual nonaktif.</span>
+                        @else
+                            <span class="badge badge-secondary">Manual</span>
+                            <span class="text-muted">Pengiriman otomatis nonaktif.</span>
+                        @endif
+                    </div>
+                    <div class="d-flex">
+                        @if ($automaticReminderMode)
+                            <form method="POST" action="{{ route('app-settings.fonnte.reminder-mode') }}">
+                                @csrf
+                                <input type="hidden" name="mode" value="manual">
+                                <button class="btn btn-outline-secondary btn-sm mr-2" type="submit">
+                                    Gunakan Manual
+                                </button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('app-settings.fonnte.reminder-mode') }}">
+                                @csrf
+                                <input type="hidden" name="mode" value="automatic">
+                                <button class="btn btn-primary btn-sm" type="submit"
+                                    {{ !$fonnteReady ? 'disabled' : '' }}>
+                                    Aktifkan Otomatis
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+                @if (!$fonnteReady)
+                    <small class="text-danger d-block mt-2">Aktifkan integrasi Fonnte dan isi token di Pengaturan Aplikasi untuk mengirim pesan.</small>
+                @endif
+            </div>
+            @if ($automaticReminderMode && !$fonnteReady)
+                <div class="alert alert-danger py-2">
+                    Mode otomatis dipilih tetapi integrasi Fonnte belum siap; pengingat belum dapat dikirim.
+                </div>
+            @endif
+
+            @if ($automaticReminderStatus)
+                <div class="alert alert-{{ $automaticReminderStatus['status'] === 'success' || $automaticReminderStatus['status'] === 'info' ? 'info' : ($automaticReminderStatus['status'] === 'error' ? 'danger' : 'warning') }} py-2">
+                    <strong>Status otomatis terakhir:</strong>
+                    {{ $automaticReminderStatus['message'] }}
+                    <small class="d-block">{{ $automaticReminderStatus['at'] }}</small>
+                </div>
+            @endif
+            @if ($manualReminderStatus && !$automaticReminderMode && !session('wa_notification'))
+                <div class="alert alert-{{ $manualReminderStatus['status'] === 'success' ? 'success' : ($manualReminderStatus['status'] === 'warning' ? 'warning' : 'danger') }} py-2">
+                    <strong>Status kirim manual terakhir:</strong>
+                    {{ $manualReminderStatus['message'] }}
+                    @if (!empty($manualReminderStatus['results']))
+                        <ul class="mb-1 mt-2">
+                            @foreach ($manualReminderStatus['results'] as $result)
+                                <li>
+                                    <strong>{{ $result['name'] }}:</strong>
+                                    {{ $result['status'] === 'accepted' ? 'Diterima Fonnte' : ($result['status'] === 'skipped' ? 'Dilewati' : 'Gagal') }}
+                                    — {{ $result['message'] }}
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if (!empty($manualReminderStatus['delivery_note']))
+                        <small class="d-block">{{ $manualReminderStatus['delivery_note'] }}</small>
+                    @endif
+                    <small class="d-block">{{ $manualReminderStatus['at'] }}</small>
+                </div>
+            @endif
+
+            <div class="card card-outline card-success mb-3">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fab fa-whatsapp mr-1"></i> Pengingat Aktivitas Hari Ini
+                    </h3>
+                </div>
+                <div class="card-body p-2">
+                    @if ($scheduledTeacherSummary['is_holiday'])
+                        <span class="text-warning">
+                            {{ $scheduledTeacherSummary['holiday_message'] ?? 'Hari ini ditetapkan sebagai hari libur.' }}
+                            Pengingat WhatsApp tidak dikirim pada hari libur.
+                        </span>
+                    @elseif ($scheduledTeacherSummary['date']->isWeekend())
+                        <span class="text-muted">
+                            Hari ini akhir pekan; pengingat WhatsApp hanya tersedia pada hari efektif.
+                        </span>
+                    @elseif ($scheduledTeacherSummary['is_pjj'])
+                        <span class="text-info">
+                            Mode belajar PJJ aktif. Pengingat guru tetap tersedia; pengingat foto fisik pengurus dinonaktifkan.
+                        </span>
+                    @elseif (!$scheduledTeacherSummary['date']->isToday())
+                        <span class="text-muted">
+                            Tombol kirim hanya tersedia untuk jadwal hari ini.
+                        </span>
+                    @elseif ($automaticReminderMode)
+                        <span class="text-info">Mode otomatis aktif; pengiriman manual dinonaktifkan.</span>
+                    @elseif (!$fonnteReady)
+                        <span class="text-danger">Fonnte belum aktif atau token belum diisi.</span>
+                    @elseif ($scheduledTeacherRows->isEmpty())
+                        <span class="text-muted">Tidak ada jadwal aktif hari ini untuk filter yang dipilih.</span>
+                    @else
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Guru / Jadwal</th>
+                                        <th>Aktivitas tertunda</th>
+                                        <th>Kirim pesan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php
+                                        $hasReminderAction = false;
+                                    @endphp
+                                    @foreach ($scheduledTeacherRows as $teacherRow)
+                                        @foreach ($teacherRow['schedules'] as $scheduleRow)
+                                            @php
+                                                $teacherNeedsReminder = $scheduleRow['is_teacher_present']
+                                                    && (!$scheduleRow['has_agenda'] || !$scheduleRow['has_student_attendance']);
+                                                $officersNeedReminder = !$scheduledTeacherSummary['is_pjj']
+                                                    && $scheduleRow['is_teacher_present']
+                                                    && !$scheduleRow['has_camera_attendance'];
+                                            @endphp
+                                            @if ($teacherNeedsReminder || $officersNeedReminder)
+                                                @php
+                                                    $hasReminderAction = true;
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <strong>{{ $teacherRow['teacher_name'] }}</strong><br>
+                                                        <small>
+                                                            {{ $scheduleRow['schedule']->teacherSubject->subject->nama_mapel ?? '-' }}
+                                                            — {{ $scheduleRow['schedule']->teacherSubject->classroom->nama_kelas ?? '-' }}
+                                                            ({{ $scheduleRow['schedule']->jam_mulai }}–{{ $scheduleRow['schedule']->jam_selesai }})
+                                                        </small>
+                                                    </td>
+                                                    <td>
+                                                        @if ($teacherNeedsReminder)
+                                                            @if (!$scheduleRow['has_student_attendance'])
+                                                                <span class="badge badge-warning">Absensi siswa</span>
+                                                            @endif
+                                                            @if (!$scheduleRow['has_agenda'])
+                                                                <span class="badge badge-warning">Agenda</span>
+                                                            @endif
+                                                        @endif
+                                                        @if ($officersNeedReminder)
+                                                            <span class="badge badge-info">Foto guru oleh pengurus</span>
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if ($teacherNeedsReminder)
+                                                            <form method="POST"
+                                                                action="{{ route('reports.teacher-attendance-recognition.send-reminder', $scheduleRow['schedule']->id) }}"
+                                                                class="d-inline">
+                                                                @csrf
+                                                                <input type="hidden" name="recipient" value="teacher">
+                                                                <button class="btn btn-success btn-sm mb-1" type="submit">
+                                                                    <i class="fab fa-whatsapp"></i> Kirim pesan ke guru
+                                                                </button>
+                                                            </form>
+                                                        @endif
+                                                        @if ($officersNeedReminder)
+                                                            <form method="POST"
+                                                                action="{{ route('reports.teacher-attendance-recognition.send-reminder', $scheduleRow['schedule']->id) }}"
+                                                                class="d-inline">
+                                                                @csrf
+                                                                <input type="hidden" name="recipient" value="students">
+                                                                <button class="btn btn-outline-success btn-sm mb-1" type="submit">
+                                                                    <i class="fab fa-whatsapp"></i> Kirim pesan ke pengurus
+                                                                </button>
+                                                            </form>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                        @endforeach
+                                    @endforeach
+                                    @unless ($hasReminderAction)
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted">
+                                                Tidak ada aktivitas tertunda yang perlu diingatkan untuk jadwal hari ini.
+                                            </td>
+                                        </tr>
+                                    @endunless
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             <form method="GET" action="{{ route('reports.teacher-attendance-recognition') }}" class="mb-3">
                 <div class="form-row">
                     <div class="form-group col-md-3">
@@ -168,11 +401,47 @@
                         <div class="small-box bg-warning mb-0">
                             <div class="inner">
                                 <h3>{{ $missingTeacherCards['foto_belum'] ?? 0 }}</h3>
-                                <p>Guru Tidak Difoto Oleh Siswa</p>
+                                <p>Guru Belum Diabsen Siswa (Kamera)</p>
                             </div>
                             <div class="icon"><i class="fas fa-camera-retro"></i></div>
                             <div class="small-box-footer">Lihat Detail <i class="fas fa-arrow-circle-right"></i></div>
                         </div>
+                    </a>
+                </div>
+            </div>
+
+            <p class="text-muted mb-2">
+                <strong>Ringkasan jadwal:</strong>
+                {{ $scheduledTeacherSummary['date']->locale('id')->translatedFormat('l, d F Y') }}
+                @if ($scheduledTeacherSummary['is_holiday'])
+                    — hari libur, tidak ada guru yang dijadwalkan.
+                @endif
+            </p>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <a href="{{ route('reports.teacher-attendance-recognition.scheduled-teachers', array_merge(['type' => 'without-activity'], request()->query())) }}"
+                        class="text-decoration-none">
+                    <div class="small-box bg-danger mb-0">
+                        <div class="inner">
+                            <h3>{{ $scheduledTeacherSummary['teachers_without_activity'] }}</h3>
+                            <p>Guru Terjadwal Belum Melakukan Aktivitas Apa Pun</p>
+                        </div>
+                        <div class="icon"><i class="fas fa-user-clock"></i></div>
+                        <div class="small-box-footer">Lihat Detail <i class="fas fa-arrow-circle-right"></i></div>
+                    </div>
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="{{ route('reports.teacher-attendance-recognition.scheduled-teachers', array_merge(['type' => 'expected'], request()->query())) }}"
+                        class="text-decoration-none">
+                    <div class="small-box bg-info mb-0">
+                        <div class="inner">
+                            <h3>{{ $scheduledTeacherSummary['total_teachers'] }}</h3>
+                            <p>Guru Seharusnya Hadir di Kelas</p>
+                        </div>
+                        <div class="icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                        <div class="small-box-footer">Lihat Detail <i class="fas fa-arrow-circle-right"></i></div>
+                    </div>
                     </a>
                 </div>
             </div>
@@ -191,6 +460,7 @@
                             <th>Agenda Oleh Guru</th>
                             <th>Absensi Siswa Oleh Guru</th>
                             <th>Skor Diakui</th>
+                            <th>Kirim WhatsApp</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -204,7 +474,11 @@
                                 <td>{{ $row['item']->classroom->nama_kelas ?? '-' }}</td>
                                 <td>
                                     @if ($row['has_absensi_guru_siswa_kamera'])
-                                        <span class="badge badge-success">Terisi</span>
+                                        <a class="btn btn-info btn-xs"
+                                            href="{{ asset('storage/' . $row['item']->foto_guru_path) }}"
+                                            target="_blank" rel="noopener noreferrer">
+                                            <i class="fas fa-image"></i> Lihat Foto
+                                        </a>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>
                                     @endif
@@ -228,6 +502,48 @@
                                         <span class="badge badge-primary">1</span>
                                     @else
                                         <span class="badge badge-light">0</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if (\Illuminate\Support\Carbon::parse($row['item']->tanggal)->isToday())
+                                        @if ($automaticReminderMode)
+                                            <span class="badge badge-info">Mode otomatis aktif</span>
+                                        @elseif (!$fonnteReady)
+                                        <span class="badge badge-secondary">Fonnte nonaktif</span>
+                                        @else
+                                            @if (($row['item']->kehadiran_guru ?? 'Hadir') === 'Hadir'
+                                                && (!$row['has_agenda_guru'] || !$row['has_absensi_siswa_oleh_guru']))
+                                                <form method="POST"
+                                                    action="{{ route('reports.teacher-attendance-recognition.send-reminder', $row['item']->schedule_id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="recipient" value="teacher">
+                                                    <button class="btn btn-success btn-xs mb-1" type="submit">
+                                                        <i class="fab fa-whatsapp"></i> Ingatkan Guru
+                                                    </button>
+                                                </form>
+                                            @endif
+                                            @if (!$scheduledTeacherSummary['is_pjj']
+                                                && !$row['has_absensi_guru_siswa_kamera']
+                                                && ($row['item']->kehadiran_guru ?? 'Hadir') === 'Hadir')
+                                                <form method="POST"
+                                                    action="{{ route('reports.teacher-attendance-recognition.send-reminder', $row['item']->schedule_id) }}"
+                                                    class="d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="recipient" value="students">
+                                                    <button class="btn btn-outline-success btn-xs mb-1" type="submit">
+                                                        <i class="fab fa-whatsapp"></i> Ingatkan Pengurus
+                                                    </button>
+                                                </form>
+                                            @endif
+                                            @if ($row['has_agenda_guru']
+                                                && $row['has_absensi_siswa_oleh_guru']
+                                                && $row['has_absensi_guru_siswa_kamera'])
+                                                <span class="badge badge-success">Aktivitas lengkap</span>
+                                            @endif
+                                        @endif
+                                    @else
+                                        <span class="text-muted">Tersedia untuk tanggal hari ini</span>
                                     @endif
                                 </td>
                             </tr>

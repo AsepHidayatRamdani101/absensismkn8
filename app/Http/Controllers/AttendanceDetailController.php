@@ -12,10 +12,12 @@ use App\Models\StudentLeaveRequest;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -104,7 +106,9 @@ class AttendanceDetailController extends Controller
 
         $today = Carbon::today(config('app.timezone'));
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
 
         $leaveSchedules = collect();
 
@@ -190,6 +194,7 @@ class AttendanceDetailController extends Controller
             'today' => $today,
             'todayDayName' => $todayDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
             'leaveSchedules' => $leaveSchedules,
             'selectedScheduleId' => $selectedScheduleId,
             'selectedSchedule' => $selectedSchedule,
@@ -229,7 +234,9 @@ class AttendanceDetailController extends Controller
         $hasFilter    = $tanggalInput !== '';
         $today        = $hasFilter ? Carbon::parse($tanggalInput) : Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
 
         $todaySchedules = collect();
 
@@ -263,14 +270,11 @@ class AttendanceDetailController extends Controller
 
         $studentsCount = 0;
 
-        if ($hasFilter && !empty($allowedClassroomIds)) {
-            $studentsQuery = Student::query()->whereIn('classroom_id', $allowedClassroomIds);
-
-            if ($selectedClassroomId !== 0) {
-                $studentsQuery->where('classroom_id', $selectedClassroomId);
-            }
-
-            $studentsCount = (clone $studentsQuery)->count();
+        if ($hasFilter && $selectedClassroomId !== 0 && in_array($selectedClassroomId, $allowedClassroomIds, true)) {
+            $studentsCount = min(
+                Student::query()->where('classroom_id', $selectedClassroomId)->count(),
+                50
+            );
         }
 
         // Get ALL schedules for the selected date (for teacher attendance summary cards)
@@ -350,6 +354,7 @@ class AttendanceDetailController extends Controller
             'today' => $today,
             'todayDayName' => $todayDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
             'classOptions' => $classOptions,
             'selectedClassroomId' => $selectedClassroomId,
             'tanggalFilter' => $today->toDateString(),
@@ -367,7 +372,7 @@ class AttendanceDetailController extends Controller
     {
         $draw = (int) $request->input('draw', 1);
         $start = max((int) $request->input('start', 0), 0);
-        $length = max(min((int) $request->input('length', 10), 100), 10);
+        $length = max(min((int) $request->input('length', 50), 50), 1);
 
         $user = auth()->user();
 
@@ -409,7 +414,9 @@ class AttendanceDetailController extends Controller
 
         $today = Carbon::parse($tanggalInput);
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
 
         if ($todayDayName === null || $isWeekendHoliday) {
             return response()->json([
@@ -417,6 +424,15 @@ class AttendanceDetailController extends Controller
                 'recordsTotal' => 0,
                 'recordsFiltered' => 0,
                 'data' => [],
+                'summary' => [
+                    'total' => 0,
+                    'hadir' => 0,
+                    'sakit' => 0,
+                    'izin' => 0,
+                    'alpa' => 0,
+                    'terlambat' => 0,
+                    'belum' => 0,
+                ],
             ]);
         }
 
@@ -445,12 +461,21 @@ class AttendanceDetailController extends Controller
             $selectedClassroomId = 0;
         }
 
-        if (empty($allowedClassroomIds)) {
+        if (empty($allowedClassroomIds) || $selectedClassroomId === 0) {
             return response()->json([
                 'draw' => $draw,
                 'recordsTotal' => 0,
                 'recordsFiltered' => 0,
                 'data' => [],
+                'summary' => [
+                    'total' => 0,
+                    'hadir' => 0,
+                    'sakit' => 0,
+                    'izin' => 0,
+                    'alpa' => 0,
+                    'terlambat' => 0,
+                    'belum' => 0,
+                ],
             ]);
         }
 
@@ -462,7 +487,7 @@ class AttendanceDetailController extends Controller
             $studentsQuery->where('classroom_id', $selectedClassroomId);
         }
 
-        $recordsTotal = (clone $studentsQuery)->count();
+        $recordsTotal = min((clone $studentsQuery)->count(), 50);
 
         $searchValue = trim((string) data_get($request->input('search', []), 'value', ''));
         if ($searchValue !== '') {
@@ -475,13 +500,12 @@ class AttendanceDetailController extends Controller
             });
         }
 
-        $recordsFiltered = (clone $studentsQuery)->count();
+        $recordsFiltered = min((clone $studentsQuery)->count(), 50);
 
-        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 2);
+        $orderColumnIndex = (int) data_get($request->input('order', []), '0.column', 1);
         $orderDirection = strtolower((string) data_get($request->input('order', []), '0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
         $columnOrderMap = [
-            2 => 'students.nama_lengkap',
-            3 => 'students.classroom_id',
+            1 => 'students.nama_lengkap',
         ];
         $orderColumn = $columnOrderMap[$orderColumnIndex] ?? 'students.nama_lengkap';
 
@@ -490,7 +514,7 @@ class AttendanceDetailController extends Controller
             ->orderBy($orderColumn, $orderDirection)
             ->orderBy('students.id')
             ->skip($start)
-            ->take($length)
+            ->take(min($length, max(50 - $start, 0)))
             ->get();
 
         $primaryScheduleByClass = [];
@@ -522,6 +546,9 @@ class AttendanceDetailController extends Controller
 
         $filteredStudentIds = (clone $studentsQuery)
             ->reorder()
+            ->orderBy('students.nama_lengkap')
+            ->orderBy('students.id')
+            ->limit(50)
             ->pluck('students.id')
             ->map(fn($id) => (int) $id)
             ->values();
@@ -562,59 +589,44 @@ class AttendanceDetailController extends Controller
             }
         }
 
-        $csrfToken = csrf_token();
-        $selectedDate = $today->toDateString();
-
         $data = $students->values()->map(function (Student $student, int $index) use (
             $start,
-            $attendanceStatusByStudent,
-            $csrfToken,
-            $selectedDate
+            $attendanceStatusByStudent
         ) {
             $rawStatus = $attendanceStatusByStudent[$student->id] ?? null;
-            $displayStatus = $rawStatus === 'Alpha' ? 'Alpa' : ($rawStatus ?? 'Belum Absen');
-
-            if ($displayStatus === 'Hadir') {
-                $statusBadge = '<span class="badge badge-success status-badge">Hadir</span>';
-            } elseif ($displayStatus === 'Sakit') {
-                $statusBadge = '<span class="badge badge-warning status-badge">Sakit</span>';
-            } elseif ($displayStatus === 'Izin') {
-                $statusBadge = '<span class="badge badge-info status-badge">Izin</span>';
-            } elseif ($displayStatus === 'Dispen') {
-                $statusBadge = '<span class="badge badge-primary status-badge">Dispen</span>';
-            } elseif ($displayStatus === 'Alpa') {
-                $statusBadge = '<span class="badge badge-danger status-badge">Alpa</span>';
-            } elseif ($displayStatus === 'Terlambat') {
-                $statusBadge = '<span class="badge badge-warning status-badge">Terlambat</span>';
-            } else {
-                $statusBadge = '<span class="badge badge-secondary status-badge">Belum Absen</span>';
-            }
-
-            $buildActionForm = function (string $status, string $buttonClass, string $label) use ($student, $csrfToken, $selectedDate) {
-                return '<form method="POST" action="' . route('guru.attendance-details.submit', $student->id) . '" class="d-inline">'
-                    . '<input type="hidden" name="_token" value="' . $csrfToken . '">'
-                    . '<input type="hidden" name="classroom_id" value="' . (int) $student->classroom_id . '">'
-                    . '<input type="hidden" name="tanggal" value="' . e($selectedDate) . '">'
-                    . '<input type="hidden" name="status" value="' . e($status) . '">'
-                    . '<button type="submit" class="btn ' . $buttonClass . ' btn-xs">' . e($label) . '</button>'
-                    . '</form>';
+            $buildStatusOption = function (string $status, string $label) {
+                return '<button type="button" class="dropdown-item js-status-option" data-status="' . e($status) . '">'
+                    . e($label)
+                    . '</button>';
             };
 
-            $aksi = '<div class="attendance-actions">'
-                . $buildActionForm('Hadir', 'btn-success', 'Hadir')
-                . $buildActionForm('Sakit', 'btn-warning', 'Sakit')
-                . $buildActionForm('Izin', 'btn-info', 'Izin')
-                . $buildActionForm('Dispen', 'btn-primary', 'Dispen')
-                . $buildActionForm('Alpa', 'btn-danger', 'Alpa')
-                . $buildActionForm('Terlambat', 'btn-warning', 'Terlambat')
-                . '</div>';
+            $actionLabel = $rawStatus === null
+                ? 'Hadir'
+                : ($rawStatus === 'Alpha' ? 'Alpa' : $rawStatus);
+            $actionButtonClass = match ($actionLabel) {
+                'Sakit', 'Terlambat' => 'btn-warning',
+                'Izin' => 'btn-info',
+                'Dispen' => 'btn-primary',
+                'Alpa' => 'btn-danger',
+                default => 'btn-success',
+            };
+            $aksi = '<div class="dropdown attendance-actions">'
+                . '<button type="button" class="btn ' . $actionButtonClass . ' btn-xs dropdown-toggle js-attendance-action" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">'
+                . e($actionLabel)
+                . '</button>'
+                . '<div class="dropdown-menu dropdown-menu-right">'
+                . $buildStatusOption('Hadir', 'Hadir')
+                . $buildStatusOption('Sakit', 'Sakit')
+                . $buildStatusOption('Izin', 'Izin')
+                . $buildStatusOption('Dispen', 'Dispen')
+                . $buildStatusOption('Alpa', 'Alpa')
+                . $buildStatusOption('Terlambat', 'Terlambat')
+                . '</div></div>';
 
             return [
-                'checkbox' => '<input type="checkbox" class="check-student" name="student_ids[]" value="' . $student->id . '" form="bulkAttendanceForm">',
                 'no' => $start + $index + 1,
+                'student_id' => (int) $student->id,
                 'nama' => e($student->nama_lengkap),
-                'kelas' => e($student->classroom->nama_kelas ?? '-'),
-                'status' => $statusBadge,
                 'aksi' => $aksi,
                 'raw_status' => $rawStatus,
             ];
@@ -667,13 +679,16 @@ class AttendanceDetailController extends Controller
 
         $date = Carbon::parse($tanggalInput);
         $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($date);
+        $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
 
         if ($dayName === null || $isWeekendHoliday) {
             return response()->json([
                 'options' => [],
                 'selected' => 0,
                 'is_weekend_holiday' => true,
+                'holiday_message' => $schoolHolidayMessage,
             ]);
         }
 
@@ -709,6 +724,7 @@ class AttendanceDetailController extends Controller
             ])->values(),
             'selected' => $selectedClassroomId,
             'is_weekend_holiday' => false,
+            'holiday_message' => null,
         ]);
     }
 
@@ -737,7 +753,9 @@ class AttendanceDetailController extends Controller
 
         $today = Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($today);
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
 
         $todaySchedules = collect();
         if ($todayDayName !== null && !$isWeekendHoliday) {
@@ -806,6 +824,7 @@ class AttendanceDetailController extends Controller
             'today' => $today,
             'todayDayName' => $todayDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
             'todaySchedules' => $todaySchedules,
             'teachersData' => $teachersData,
             'teachersWithAttendance' => $teachersWithAttendance,
@@ -816,71 +835,27 @@ class AttendanceDetailController extends Controller
 
     public function adminTeacherAttendanceDetail(Request $request)
     {
-        $today = Carbon::today();
-        $dayMap = [
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-        ];
-        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
-
-        $todaySchedules = collect();
-        if ($todayDayName !== null && !$isWeekendHoliday) {
-            $todaySchedulesQuery = Schedule::query()
-                ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
-                ->where('hari', $todayDayName)
-                ->whereHas('teacherSubject.teacher')
-                ->orderBy('jam_mulai');
-
-            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
-        }
-
-        $scheduleIds = $todaySchedules->pluck('id')->values();
-        $teacherAttendances = TeacherAttendance::query()
-            ->whereDate('tanggal', $today->toDateString())
-            ->whereIn('schedule_id', $scheduleIds)
-            ->get()
-            ->keyBy('schedule_id');
-
-        $teachersData = $todaySchedules
-            ->map(function ($schedule) use ($teacherAttendances) {
-                $schedTeacher = $schedule->teacherSubject->teacher;
-                $hasAttendance = $teacherAttendances->has($schedule->id);
-                $record = $teacherAttendances->get($schedule->id);
-                return [
-                    'schedule' => $schedule,
-                    'teacher' => $schedTeacher,
-                    'teacher_id' => $schedTeacher?->id,
-                    'subject' => $schedule->teacherSubject->subject,
-                    'classroom' => $schedule->teacherSubject->classroom,
-                    'jam_mulai' => $schedule->jam_mulai,
-                    'jam_selesai' => $schedule->jam_selesai,
-                    'has_attendance' => $hasAttendance,
-                    'status' => $hasAttendance ? ($record?->kehadiran_guru ?? 'Hadir') : 'Belum Absen',
-                    'teacher_attendance_id' => $record?->id,
-                ];
-            })
-            ->groupBy('teacher_id')
-            ->map(function ($items) {
-                $firstItem = $items[0];
-                $hasAny = $items->contains('has_attendance', true);
-                return [
-                    'teacher' => $firstItem['teacher'],
-                    'schedules' => $items->values(),
-                    'has_attendance' => $hasAny,
-                    'status' => $hasAny ? 'Sudah Absen' : 'Belum Absen',
-                ];
-            })
-            ->sortBy(fn($item) => $item['teacher']?->nama_lengkap ?? '')
-            ->values();
-
-        $teachersWithAttendance = $teachersData->filter(fn($i) => $i['has_attendance'])->values();
-        $teachersWithoutAttendance = $teachersData->filter(fn($i) => !$i['has_attendance'])->values();
+        $validatedFilters = $request->validate([
+            'tanggal' => 'nullable|date_format:Y-m-d',
+            'tahun_ajaran' => 'nullable|string|max:20',
+            'guru' => 'nullable|string|max:255',
+            'mapel' => 'nullable|string|max:255',
+            'kelas' => 'nullable|string|max:255',
+            'status' => 'nullable|string|max:20',
+        ]);
+        $filters = array_map(fn($value) => $value ?? '', array_merge([
+            'tanggal' => Carbon::today()->toDateString(),
+            'tahun_ajaran' => '',
+            'guru' => '',
+            'mapel' => '',
+            'kelas' => '',
+            'status' => '',
+        ], $validatedFilters));
+        $filters['tanggal'] = $filters['tanggal'] !== ''
+            ? $filters['tanggal']
+            : Carbon::today()->toDateString();
+        $today = Carbon::parse($filters['tanggal']);
+        $overview = $this->buildTeacherAttendanceOverview($today, $filters);
 
         $filter = $request->query('filter', 'all');
         if (!in_array($filter, ['all', 'sudah', 'belum'])) {
@@ -889,19 +864,20 @@ class AttendanceDetailController extends Controller
 
         return view('admin.attendance_details.teacher_attendance_detail', [
             'today' => $today,
-            'todayDayName' => $todayDayName,
-            'isWeekendHoliday' => $isWeekendHoliday,
-            'todaySchedules' => $todaySchedules,
-            'teachersData' => $teachersData,
-            'teachersWithAttendance' => $teachersWithAttendance,
-            'teachersWithoutAttendance' => $teachersWithoutAttendance,
+            'todayDayName' => $overview['dayName'],
+            'isWeekendHoliday' => $overview['isWeekendHoliday'],
+            'schoolHolidayMessage' => $overview['schoolHolidayMessage'],
+            'todaySchedules' => $overview['schedules'],
+            'teachersData' => $overview['teachersData'],
+            'teachersWithAttendance' => $overview['teachersWithAttendance'],
+            'teachersWithoutAttendance' => $overview['teachersWithoutAttendance'],
             'filter' => $filter,
+            'filters' => $filters,
         ]);
     }
 
-    public function index(Request $request)
+    private function buildTeacherAttendanceOverview(Carbon $date, array $filters): array
     {
-        $today = Carbon::today();
         $dayMap = [
             1 => 'Senin',
             2 => 'Selasa',
@@ -911,39 +887,110 @@ class AttendanceDetailController extends Controller
             6 => 'Sabtu',
             7 => 'Minggu',
         ];
-        $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
-        $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true);
+        $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($date);
+        $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true)
+            || $schoolHolidayMessage !== null;
 
-        $allTodaySchedules = collect();
-        if ($todayDayName !== null && !$isWeekendHoliday) {
-            $allTodaySchedulesQuery = Schedule::query()
-                ->with(['teacherSubject.teacher', 'teacherSubject.classroom', 'teacherSubject.subject'])
-                ->where('hari', $todayDayName)
+        $schedules = collect();
+        if ($dayName !== null && !$isWeekendHoliday) {
+            $schedulesQuery = Schedule::query()
+                ->with(['teacherSubject.teacher', 'teacherSubject.subject', 'teacherSubject.classroom'])
+                ->where('hari', $dayName)
                 ->whereHas('teacherSubject.teacher')
+                ->when($filters['tahun_ajaran'] !== '', function ($query) use ($filters) {
+                    $query->whereHas('teacherSubject.academicYear', fn($yearQuery) => $yearQuery
+                        ->where('tahun_ajaran', $filters['tahun_ajaran']));
+                })
+                ->when($filters['guru'] !== '', function ($query) use ($filters) {
+                    $query->whereHas('teacherSubject.teacher', fn($teacherQuery) => $teacherQuery
+                        ->where('nama_lengkap', $filters['guru']));
+                })
+                ->when($filters['mapel'] !== '', function ($query) use ($filters) {
+                    $query->whereHas('teacherSubject.subject', fn($subjectQuery) => $subjectQuery
+                        ->where('nama_mapel', $filters['mapel']));
+                })
+                ->when($filters['kelas'] !== '', function ($query) use ($filters) {
+                    $query->whereHas('teacherSubject.classroom', fn($classroomQuery) => $classroomQuery
+                        ->where('nama_kelas', $filters['kelas']));
+                })
                 ->orderBy('jam_mulai');
 
-            $allTodaySchedules = PklMode::applyToScheduleQuery($allTodaySchedulesQuery)->get();
+            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)->get();
         }
 
-        $allScheduleIds = $allTodaySchedules->pluck('id')->values();
-        $todayTeacherAttendances = TeacherAttendance::query()
-            ->whereDate('tanggal', $today->toDateString())
-            ->whereIn('schedule_id', $allScheduleIds)
+        $teacherAttendances = TeacherAttendance::query()
+            ->whereDate('tanggal', $date->toDateString())
+            ->whereIn('schedule_id', $schedules->pluck('id'))
             ->get()
             ->keyBy('schedule_id');
 
-        $teachersFromSchedules = $allTodaySchedules
-            ->map(fn($s) => ['schedule' => $s, 'teacher' => $s->teacherSubject->teacher, 'teacher_id' => $s->teacherSubject->teacher?->id])
-            ->groupBy('teacher_id')
-            ->map(function ($items) use ($todayTeacherAttendances) {
-                $teacher = $items[0]['teacher'];
-                $hasAttendance = $items->pluck('schedule')->some(fn($s) => $todayTeacherAttendances->has($s->id));
-                return ['teacher' => $teacher, 'has_attendance' => $hasAttendance];
+        $teachersData = $schedules
+            ->map(function ($schedule) use ($teacherAttendances) {
+                $teacher = $schedule->teacherSubject->teacher;
+                $record = $teacherAttendances->get($schedule->id);
+
+                return [
+                    'schedule' => $schedule,
+                    'teacher' => $teacher,
+                    'teacher_id' => $teacher?->id,
+                    'subject' => $schedule->teacherSubject->subject,
+                    'classroom' => $schedule->teacherSubject->classroom,
+                    'jam_mulai' => $schedule->jam_mulai,
+                    'jam_selesai' => $schedule->jam_selesai,
+                    'has_attendance' => $record !== null,
+                    'status' => $record?->kehadiran_guru ?? ($record ? 'Hadir' : 'Belum Absen'),
+                    'teacher_attendance_id' => $record?->id,
+                ];
             })
+            ->groupBy('teacher_id')
+            ->map(function ($items) {
+                $firstItem = $items[0];
+                $hasAttendance = $items->contains('has_attendance', true);
+
+                return [
+                    'teacher' => $firstItem['teacher'],
+                    'schedules' => $items->values(),
+                    'has_attendance' => $hasAttendance,
+                    'status' => $hasAttendance ? 'Sudah Absen' : 'Belum Absen',
+                ];
+            })
+            ->sortBy(fn($item) => $item['teacher']?->nama_lengkap ?? '')
             ->values();
 
-        $teachersWithAttendance    = $teachersFromSchedules->filter(fn($i) => $i['has_attendance'])->values();
-        $teachersWithoutAttendance = $teachersFromSchedules->filter(fn($i) => !$i['has_attendance'])->values();
+        return [
+            'dayName' => $dayName,
+            'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
+            'schedules' => $schedules,
+            'teachersData' => $teachersData,
+            'teachersWithAttendance' => $teachersData->filter(fn($item) => $item['has_attendance'])->values(),
+            'teachersWithoutAttendance' => $teachersData->filter(fn($item) => !$item['has_attendance'])->values(),
+        ];
+    }
+
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'tahun_ajaran' => 'nullable|string|max:20',
+            'tanggal' => 'nullable|date_format:Y-m-d',
+            'guru' => 'nullable|string|max:255',
+            'mapel' => 'nullable|string|max:255',
+            'kelas' => 'nullable|string|max:255',
+            'status' => 'nullable|string|max:20',
+        ]);
+        $filters = array_map(fn($value) => $value ?? '', array_merge([
+            'tahun_ajaran' => '',
+            'tanggal' => '',
+            'guru' => '',
+            'mapel' => '',
+            'kelas' => '',
+            'status' => '',
+        ], $filters));
+        $selectedDate = $filters['tanggal'] !== '' ? Carbon::parse($filters['tanggal']) : Carbon::today();
+        $overviewFilters = $filters;
+        $overviewFilters['tanggal'] = $selectedDate->toDateString();
+        $overview = $this->buildTeacherAttendanceOverview($selectedDate, $overviewFilters);
 
         // Filter options always loaded from all records
         $filterTahunAjarans = AttendanceDetail::query()
@@ -973,8 +1020,11 @@ class AttendanceDetailController extends Controller
         $filterStatuses = AttendanceDetail::query()
             ->select('status')->distinct()->orderBy('status')->pluck('status');
 
-        $filters    = $request->only(['tahun_ajaran', 'tanggal', 'guru', 'mapel', 'kelas', 'status']);
         $hasFilter  = (bool) array_filter($filters);
+        $cardFilters = array_filter(
+            collect($filters)->only(['tahun_ajaran', 'guru', 'mapel', 'kelas'])->all(),
+            fn($value) => $value !== ''
+        );
 
         $attendanceDetails = collect();
 
@@ -983,7 +1033,7 @@ class AttendanceDetailController extends Controller
 
         $students = Student::with('classroom')->orderBy('nama_lengkap')->get();
 
-        return view('admin.attendance_details.index', compact(
+        return view('admin.attendance_details.index', array_merge(compact(
             'attendanceDetails',
             'hasFilter',
             'filters',
@@ -993,12 +1043,16 @@ class AttendanceDetailController extends Controller
             'filterGurus',
             'filterMapels',
             'filterKelas',
-            'filterStatuses',
-            'teachersWithAttendance',
-            'teachersWithoutAttendance',
-            'isWeekendHoliday',
-            'todayDayName'
-        ));
+            'filterStatuses'
+        ), [
+            'teachersWithAttendance' => $overview['teachersWithAttendance'],
+            'teachersWithoutAttendance' => $overview['teachersWithoutAttendance'],
+            'isWeekendHoliday' => $overview['isWeekendHoliday'],
+            'schoolHolidayMessage' => $overview['schoolHolidayMessage'],
+            'todayDayName' => $overview['dayName'],
+            'selectedDate' => $selectedDate,
+            'cardFilters' => $cardFilters,
+        ]));
     }
 
     public function adminDatatable(Request $request)
@@ -1135,10 +1189,14 @@ class AttendanceDetailController extends Controller
             ->whereKey($validated['teacher_attendance_id'])
             ->value('tanggal');
 
-        if ($teacherAttendanceDate && $this->isWeekendHoliday($teacherAttendanceDate)) {
+        if ($teacherAttendanceDate && (
+            $this->isWeekendHoliday($teacherAttendanceDate)
+            || SchoolCalendar::isHoliday($teacherAttendanceDate)
+        )) {
             return response()->json([
                 'success' => false,
-                'message' => 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
+                'message' => SchoolCalendar::holidayMessage($teacherAttendanceDate)
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
             ], 422);
         }
 
@@ -1175,10 +1233,14 @@ class AttendanceDetailController extends Controller
             ->whereKey($validated['teacher_attendance_id'])
             ->value('tanggal');
 
-        if ($teacherAttendanceDate && $this->isWeekendHoliday($teacherAttendanceDate)) {
+        if ($teacherAttendanceDate && (
+            $this->isWeekendHoliday($teacherAttendanceDate)
+            || SchoolCalendar::isHoliday($teacherAttendanceDate)
+        )) {
             return response()->json([
                 'success' => false,
-                'message' => 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
+                'message' => SchoolCalendar::holidayMessage($teacherAttendanceDate)
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
             ], 422);
         }
 
@@ -1247,12 +1309,16 @@ class AttendanceDetailController extends Controller
         $today = Carbon::parse((string) $validated['tanggal']);
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
-        if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
+        if (
+            $todayDayName === null
+            || in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($today)
+        ) {
             return redirect()->route('guru.attendance-details.index', [
                 'tanggal' => $today->toDateString(),
                 'classroom_id' => $validated['classroom_id'],
-            ])
-                ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+            ])->with('error', SchoolCalendar::holidayMessage($today)
+                ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
         $classroomId = (int) $validated['classroom_id'];
@@ -1337,6 +1403,144 @@ class AttendanceDetailController extends Controller
             ->with('agenda_redirect_url', route('guru.agenda.index'));
     }
 
+    public function saveForGuru(Request $request)
+    {
+        $validated = $request->validate([
+            'classroom_id' => 'required|integer|exists:classrooms,id',
+            'tanggal' => 'required|date|before_or_equal:today',
+            'attendances' => 'required|array|min:1|max:50',
+            'attendances.*.student_id' => 'required|integer|distinct|exists:students,id',
+            'attendances.*.status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
+        ]);
+
+        $user = auth()->user();
+        $teacher = Teacher::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+
+        if (!$teacher) {
+            return response()->json([
+                'message' => 'Data guru tidak ditemukan untuk akun ini.',
+            ], 422);
+        }
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        $date = Carbon::parse((string) $validated['tanggal']);
+        $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
+
+        if (
+            $dayName === null
+            || in_array($dayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($date)
+        ) {
+            return response()->json([
+                'message' => SchoolCalendar::holidayMessage($date)
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.',
+            ], 422);
+        }
+
+        $classroomId = (int) $validated['classroom_id'];
+        $scheduleQuery = Schedule::query()
+            ->where('hari', $dayName)
+            ->whereHas('teacherSubject', function ($query) use ($teacher, $classroomId) {
+                $query->where('teacher_id', $teacher->id)
+                    ->where('classroom_id', $classroomId);
+            })
+            ->with('teacherSubject.classroom')
+            ->orderBy('jam_mulai');
+
+        $schedule = PklMode::applyToScheduleQuery($scheduleQuery)->first();
+        if (!$schedule || !$schedule->teacherSubject) {
+            return response()->json([
+                'message' => 'Jadwal guru untuk kelas dan tanggal tersebut tidak ditemukan.',
+            ], 422);
+        }
+
+        if (PklMode::excludesClassroomLevel($schedule->teacherSubject->classroom->tingkat ?? null)) {
+            return response()->json([
+                'message' => 'Mode PKL aktif. Absensi siswa untuk kelas XII dinonaktifkan sementara.',
+            ], 422);
+        }
+
+        $attendances = collect($validated['attendances']);
+        $studentIds = $attendances->pluck('student_id')->map(fn($id) => (int) $id)->values();
+        $validStudentCount = Student::query()
+            ->whereIn('id', $studentIds)
+            ->where('classroom_id', $classroomId)
+            ->count();
+
+        if ($validStudentCount !== $studentIds->count()) {
+            return response()->json([
+                'message' => 'Sebagian data siswa tidak sesuai dengan kelas yang dipilih.',
+            ], 403);
+        }
+
+        $savedCount = DB::transaction(function () use ($schedule, $teacher, $classroomId, $date, $attendances) {
+            $teacherAttendance = TeacherAttendance::query()
+                ->where('schedule_id', $schedule->id)
+                ->whereDate('tanggal', $date->toDateString())
+                ->first();
+
+            if (!$teacherAttendance) {
+                $lastMeeting = (int) TeacherAttendance::query()
+                    ->where('schedule_id', $schedule->id)
+                    ->max('pertemuan');
+
+                $teacherAttendance = TeacherAttendance::create([
+                    'teacher_id' => $teacher->id,
+                    'schedule_id' => $schedule->id,
+                    'classroom_id' => $classroomId,
+                    'subject_id' => $schedule->teacherSubject->subject_id,
+                    'academic_year_id' => $schedule->teacherSubject->academic_year_id,
+                    'tanggal' => $date->toDateString(),
+                    'pertemuan' => max($lastMeeting + 1, 1),
+                    'materi_pembelajaran' => null,
+                    'catatan_guru' => null,
+                    'status' => 'Draft',
+                ]);
+            }
+
+            $now = now();
+            $rows = $attendances->map(function ($attendance) use ($teacherAttendance, $now) {
+                return [
+                    'teacher_attendance_id' => $teacherAttendance->id,
+                    'student_id' => (int) $attendance['student_id'],
+                    'status' => $attendance['status'] === 'Alpa' ? 'Alpha' : $attendance['status'],
+                    'keterangan' => null,
+                    'jam_absen' => $now->format('H:i:s'),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all();
+
+            AttendanceDetail::query()->upsert(
+                $rows,
+                ['teacher_attendance_id', 'student_id'],
+                ['status', 'keterangan', 'jam_absen', 'updated_at']
+            );
+
+            return count($rows);
+        });
+
+        $this->forgetGuruAttendanceSummaryCache($date->toDateString());
+
+        return response()->json([
+            'success' => true,
+            'message' => "Absensi {$savedCount} siswa berhasil disimpan.",
+            'saved_count' => $savedCount,
+        ]);
+    }
+
     public function submitForOfficer(Request $request, Student $student)
     {
         $validated = $request->validate([
@@ -1375,6 +1579,11 @@ class AttendanceDetailController extends Controller
 
         $today = Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
+
+        if (SchoolCalendar::isHoliday($today)) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $validated['schedule_id']])
+                ->with('error', SchoolCalendar::holidayMessage($today) . '. Absensi siswa tidak tersedia.');
+        }
 
         if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
             return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $validated['schedule_id']])
@@ -1499,12 +1708,17 @@ class AttendanceDetailController extends Controller
         $today = Carbon::parse((string) $validated['tanggal']);
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
-        if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
+        if (
+            $todayDayName === null
+            || in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($today)
+        ) {
             return redirect()->route('guru.attendance-details.index', [
                 'tanggal' => $today->toDateString(),
                 'classroom_id' => (int) ($validated['classroom_id'] ?? 0),
             ])
-                ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+                ->with('error', SchoolCalendar::holidayMessage($today)
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
         $selectedClassroomId = (int) ($validated['classroom_id'] ?? 0);
@@ -1740,11 +1954,16 @@ class AttendanceDetailController extends Controller
         $targetDate = Carbon::parse((string) $validated['tanggal']);
         $dayName = $dayMap[$targetDate->dayOfWeekIso] ?? null;
 
-        if ($dayName === null || in_array($dayName, ['Sabtu', 'Minggu'], true)) {
+        if (
+            $dayName === null
+            || in_array($dayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($targetDate)
+        ) {
             return redirect()->route('guru.attendance-details.index', [
                 'tanggal' => $targetDate->toDateString(),
                 'classroom_id' => (int) ($validated['classroom_id'] ?? 0),
-            ])->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+            ])->with('error', SchoolCalendar::holidayMessage($targetDate)
+                ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
         $selectedClassroomId = (int) ($validated['classroom_id'] ?? 0);
@@ -1987,9 +2206,14 @@ class AttendanceDetailController extends Controller
         $today = Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
-        if ($todayDayName === null || in_array($todayDayName, ['Sabtu', 'Minggu'], true)) {
+        if (
+            $todayDayName === null
+            || in_array($todayDayName, ['Sabtu', 'Minggu'], true)
+            || SchoolCalendar::isHoliday($today)
+        ) {
             return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $validated['schedule_id']])
-                ->with('error', 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
+                ->with('error', SchoolCalendar::holidayMessage($today)
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.');
         }
 
         $schedule = Schedule::query()

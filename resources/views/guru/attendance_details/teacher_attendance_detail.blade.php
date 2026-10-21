@@ -104,7 +104,8 @@
 @section('content')
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} otomatis libur. Tidak ada jadwal guru untuk hari ini.
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
+            Tidak ada jadwal guru untuk hari ini.
         </div>
     @elseif ($todaySchedules->isEmpty())
         <div class="alert alert-info">

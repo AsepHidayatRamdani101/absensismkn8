@@ -35,7 +35,13 @@
 
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} otomatis libur. Absensi siswa tidak dibuka.
+            {{ $schoolHolidayMessage ?? "Hari {$selectedDayName} otomatis libur." }}
+            Absensi guru tidak dibuka.
+        </div>
+    @endif
+    @if ($isPjj)
+        <div class="alert alert-info">
+            Mode belajar PJJ aktif. Absensi tetap berjalan; foto kehadiran guru secara fisik tidak diperlukan.
         </div>
     @endif
 
@@ -212,19 +218,23 @@
                                     @if ($canOfficerSubmitForRow)
                                         <form action="{{ route('siswa.teacher-attendances.submit', $schedule->id) }}"
                                             method="POST" enctype="multipart/form-data" class="form-absen-guru"
-                                            id="form_absen_{{ $schedule->id }}">
+                                            id="form_absen_{{ $schedule->id }}" data-pjj="{{ $isPjj ? '1' : '0' }}">
                                             @csrf
-                                            <input type="file" name="foto_guru" class="d-none foto-input"
-                                                id="foto_input_{{ $schedule->id }}" accept="image/*">
-                                            <input type="file" id="kamera_input_{{ $schedule->id }}"
-                                                name="foto_guru_kamera" class="d-none kamera-input" accept="image/*"
-                                                capture="environment">
+                                            @unless ($isPjj)
+                                                <input type="file" name="foto_guru" class="d-none foto-input"
+                                                    id="foto_input_{{ $schedule->id }}" accept="image/*">
+                                                <input type="file" id="kamera_input_{{ $schedule->id }}"
+                                                    name="foto_guru_kamera" class="d-none kamera-input" accept="image/*"
+                                                    capture="environment">
+                                            @endunless
 
                                             <div class="d-flex flex-wrap align-items-center" style="gap: 0.3rem;">
-                                                <button type="button" class="btn btn-light btn-xs btn-open-kamera"
-                                                    data-form-id="form_absen_{{ $schedule->id }}" title="Open Kamera">
-                                                    <i class="fas fa-camera"></i>
-                                                </button>
+                                                @unless ($isPjj)
+                                                    <button type="button" class="btn btn-light btn-xs btn-open-kamera"
+                                                        data-form-id="form_absen_{{ $schedule->id }}" title="Open Kamera">
+                                                        <i class="fas fa-camera"></i>
+                                                    </button>
+                                                @endunless
                                                 <button type="submit" class="btn btn-success btn-xs btn-hadir-submit"
                                                     name="action" disabled value="Hadir">H</button>
                                                 <button type="submit" class="btn btn-warning btn-xs" name="action"
@@ -233,10 +243,14 @@
                                                     value="Tanpa Keterangan">TK</button>
                                             </div>
 
-                                            <small class="text-muted d-block mt-1 kamera-file-label"
-                                                id="kamera_label_{{ $schedule->id }}">Gunakan ikon kamera.</small>
-                                            <small class="text-muted d-block upload-status-label"
-                                                id="status_label_{{ $schedule->id }}">Hadir butuh foto.</small>
+                                            @if ($isPjj)
+                                                <small class="text-info d-block mt-1">Mode PJJ: tidak perlu foto fisik.</small>
+                                            @else
+                                                <small class="text-muted d-block mt-1 kamera-file-label"
+                                                    id="kamera_label_{{ $schedule->id }}">Gunakan ikon kamera.</small>
+                                                <small class="text-muted d-block upload-status-label"
+                                                    id="status_label_{{ $schedule->id }}">Hadir butuh foto.</small>
+                                            @endif
                                         </form>
                                     @else
                                         @if (!$canSubmitTeacherAttendance)
@@ -339,6 +353,11 @@
 
             function syncHadirButton(formElement) {
                 const form = $(formElement);
+                if (form.data('pjj') === 1) {
+                    form.find('.btn-hadir-submit').prop('disabled', false);
+                    return;
+                }
+
                 const hasGalleryFile = form.find('input[name="foto_guru"]')[0]?.files?.length > 0;
                 const hasCameraFile = form.find('input[name="foto_guru_kamera"]')[0]?.files?.length > 0;
                 const enableHadir = hasGalleryFile || hasCameraFile;

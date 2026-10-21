@@ -64,7 +64,8 @@
 
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} adalah hari libur. Agenda guru tidak tersedia.
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} adalah hari libur." }}
+            Agenda guru tidak tersedia.
         </div>
     @endif
 

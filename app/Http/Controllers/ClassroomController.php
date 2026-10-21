@@ -7,8 +7,12 @@ use App\Exports\TemplateExport;
 use App\Imports\ClassroomsImport;
 use App\Models\Classroom;
 use App\Models\Major;
+use App\Models\Teacher;
+use App\Models\TeacherAttendance;
+use App\Models\TeacherSubject;
 use App\Support\ReferenceCache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -98,15 +102,20 @@ class ClassroomController extends Controller
      */
     public function destroy(Classroom $classroom)
     {
-        /*
-        // Aktifkan nanti jika tabel siswa sudah dibuat
-        if ($classroom->students()->exists()) {
+        $hasRelatedRecords = $classroom->students()->exists()
+            || TeacherSubject::query()->where('classroom_id', $classroom->id)->exists()
+            || TeacherAttendance::query()->where('classroom_id', $classroom->id)->exists()
+            || Teacher::query()->where('wali_classroom_id', $classroom->id)->exists()
+            || DB::table('officer_attendance_permits')->where('classroom_id', $classroom->id)->exists()
+            || DB::table('reward_transactions')->where('classroom_id', $classroom->id)->exists()
+            || DB::table('violation_transactions')->where('classroom_id', $classroom->id)->exists();
+
+        if ($hasRelatedRecords) {
             return response()->json([
                 'success' => false,
-                'message' => 'Kelas tidak dapat dihapus karena masih memiliki siswa.'
+                'message' => 'Kelas tidak dapat dihapus karena masih digunakan oleh data siswa, jadwal, absensi, wali kelas, izin, atau transaksi.'
             ], 422);
         }
-        */
 
         $classroom->delete();
         ReferenceCache::forgetAcademicReferences();

@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceDetail;
 use App\Models\AttendanceDevice;
 use App\Models\Classroom;
+use App\Models\Holiday;
 use App\Models\Major;
 use App\Models\OfficerAttendancePermit;
 use App\Models\Schedule;
@@ -16,6 +17,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherSubject;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -81,16 +83,13 @@ class DashboardController extends Controller
             })->count();
             $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
 
-            $teacherPresentToday = TeacherAttendance::whereDate('tanggal', $today)
-                ->distinct('teacher_id')
-                ->count('teacher_id');
+            $teacherPresentToday = $this->countPresentTeachers($today, $today);
+            $teacherPresentThisWeek = $this->countPresentTeachers($weekStart, $weekEnd);
+            $teacherPresentThisMonth = $this->countPresentTeachers($monthStart, $monthEnd);
 
-            $studentPresentToday = AttendanceDetail::where('status', 'Hadir')
-                ->whereHas('teacherAttendance', function ($query) use ($today) {
-                    $query->whereDate('tanggal', $today);
-                })
-                ->distinct('student_id')
-                ->count('student_id');
+            $studentPresentToday = $this->countPresentStudents($today, $today);
+            $studentPresentThisWeek = $this->countPresentStudents($weekStart, $weekEnd);
+            $studentPresentThisMonth = $this->countPresentStudents($monthStart, $monthEnd);
 
             $teacherPresencePercent = $totalTeachers > 0
                 ? round(($teacherPresentToday / $totalTeachers) * 100, 2)
@@ -99,40 +98,6 @@ class DashboardController extends Controller
             $studentPresencePercent = $totalStudents > 0
                 ? round(($studentPresentToday / $totalStudents) * 100, 2)
                 : 0;
-
-            $teacherPresentThisWeek = TeacherAttendance::whereBetween('tanggal', [
-                $weekStart->toDateString(),
-                $weekEnd->toDateString(),
-            ])
-                ->distinct('teacher_id')
-                ->count('teacher_id');
-
-            $teacherPresentThisMonth = TeacherAttendance::whereBetween('tanggal', [
-                $monthStart->toDateString(),
-                $monthEnd->toDateString(),
-            ])
-                ->distinct('teacher_id')
-                ->count('teacher_id');
-
-            $studentPresentThisWeek = AttendanceDetail::where('status', 'Hadir')
-                ->whereHas('teacherAttendance', function ($query) use ($weekStart, $weekEnd) {
-                    $query->whereBetween('tanggal', [
-                        $weekStart->toDateString(),
-                        $weekEnd->toDateString(),
-                    ]);
-                })
-                ->distinct('student_id')
-                ->count('student_id');
-
-            $studentPresentThisMonth = AttendanceDetail::where('status', 'Hadir')
-                ->whereHas('teacherAttendance', function ($query) use ($monthStart, $monthEnd) {
-                    $query->whereBetween('tanggal', [
-                        $monthStart->toDateString(),
-                        $monthEnd->toDateString(),
-                    ]);
-                })
-                ->distinct('student_id')
-                ->count('student_id');
 
             $teacherPresencePercentWeek = $totalTeachers > 0
                 ? round(($teacherPresentThisWeek / $totalTeachers) * 100, 2)
@@ -159,6 +124,12 @@ class DashboardController extends Controller
                 'todayTeacherAttendances',
                 'todayStudentAttendanceByTeacher',
                 'todayStudentAttendanceIoT',
+                'teacherPresentToday',
+                'teacherPresentThisWeek',
+                'teacherPresentThisMonth',
+                'studentPresentToday',
+                'studentPresentThisWeek',
+                'studentPresentThisMonth',
                 'teacherPresencePercent',
                 'studentPresencePercent',
                 'teacherPresencePercentWeek',
@@ -168,22 +139,44 @@ class DashboardController extends Controller
             );
 
             if ($mode === 'detail') {
-                $dailyChartRows = TeacherAttendance::query()
-                    ->leftJoin('attendance_details', 'attendance_details.teacher_attendance_id', '=', 'teacher_attendances.id')
-                    ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal')
-                    ->selectRaw('COUNT(DISTINCT teacher_attendances.id) as total_absensi_guru')
-                    ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) as total_siswa_hadir")
-                    ->whereDate('teacher_attendances.tanggal', '>=', Carbon::today()->subDays(6))
+                $dailyTeacherCounts = TeacherAttendance::query()
+                    ->selectRaw('DATE(tanggal) as tanggal')
+                    ->selectRaw('COUNT(DISTINCT teacher_id) as total_guru_hadir')
+                    ->where('kehadiran_guru', 'Hadir')
+                    ->whereBetween('tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()])
                     ->groupBy('tanggal')
                     ->orderBy('tanggal')
                     ->get();
 
-                $dailyLabels = $dailyChartRows->pluck('tanggal')->map(function ($date) {
-                    return Carbon::parse($date)->format('d M');
-                })->values();
+                $dailySchoolAttendance = Attendance::query()
+                    ->selectRaw('DATE(tanggal) as tanggal, student_id')
+                    ->whereIn('status', ['Hadir', 'Terlambat'])
+                    ->whereBetween('tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
 
-                $dailyTeacherCounts = $dailyChartRows->pluck('total_absensi_guru')->map(fn($v) => (int) $v)->values();
-                $dailyStudentPresentCounts = $dailyChartRows->pluck('total_siswa_hadir')->map(fn($v) => (int) $v)->values();
+                $dailyClassAttendance = AttendanceDetail::query()
+                    ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                    ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal, attendance_details.student_id')
+                    ->whereIn('attendance_details.status', ['Hadir', 'Terlambat'])
+                    ->whereBetween('teacher_attendances.tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
+
+                $dailyStudentCounts = DB::query()
+                    ->fromSub($dailySchoolAttendance->union($dailyClassAttendance), 'present_students')
+                    ->select('tanggal')
+                    ->selectRaw('COUNT(DISTINCT student_id) as total_siswa_hadir')
+                    ->groupBy('tanggal')
+                    ->get()
+                    ->pluck('total_siswa_hadir', 'tanggal');
+
+                $teacherCountsByDate = $dailyTeacherCounts->pluck('total_guru_hadir', 'tanggal');
+                $dailyDates = $teacherCountsByDate->keys()
+                    ->merge($dailyStudentCounts->keys())
+                    ->unique()
+                    ->sort()
+                    ->values();
+
+                $dailyLabels = $dailyDates->map(fn($date) => Carbon::parse($date)->format('d M'));
+                $dailyTeacherCounts = $dailyDates->map(fn($date) => (int) ($teacherCountsByDate[$date] ?? 0))->values();
+                $dailyStudentPresentCounts = $dailyDates->map(fn($date) => (int) ($dailyStudentCounts[$date] ?? 0))->values();
 
                 $studentStatusToday = AttendanceDetail::query()
                     ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
@@ -207,7 +200,40 @@ class DashboardController extends Controller
             return $metrics;
         });
 
-        return view('admin.dashboard', array_merge($metrics, ['mode' => $mode]));
+        $effectiveDayCounts = SchoolCalendar::effectiveDayCounts($monthStart, $monthEnd);
+
+        return view('admin.dashboard', array_merge($metrics, $effectiveDayCounts, [
+            'mode' => $mode,
+            'dashboardMonthLabel' => $monthStart->copy()->locale('id')->translatedFormat('F Y'),
+        ]));
+    }
+
+    private function countPresentTeachers(Carbon $startDate, Carbon $endDate): int
+    {
+        return (int) TeacherAttendance::query()
+            ->where('kehadiran_guru', 'Hadir')
+            ->whereBetween('tanggal', [$startDate->toDateString(), $endDate->toDateString()])
+            ->distinct()
+            ->count('teacher_id');
+    }
+
+    private function countPresentStudents(Carbon $startDate, Carbon $endDate): int
+    {
+        $schoolAttendanceIds = Attendance::query()
+            ->select('student_id')
+            ->whereIn('status', ['Hadir', 'Terlambat'])
+            ->whereBetween('tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
+
+        $classAttendanceIds = AttendanceDetail::query()
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->select('attendance_details.student_id')
+            ->whereIn('attendance_details.status', ['Hadir', 'Terlambat'])
+            ->whereBetween('teacher_attendances.tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
+
+        return (int) DB::query()
+            ->fromSub($schoolAttendanceIds->union($classAttendanceIds), 'present_students')
+            ->distinct()
+            ->count('student_id');
     }
 
     public function siswa(Request $request)
@@ -557,13 +583,42 @@ class DashboardController extends Controller
 
         $schedulePerDay = PklMode::applyToScheduleQuery($schedulePerDayQuery)
             ->pluck('total_jadwal', 'schedules.hari');
+        $holidayDates = Holiday::query()
+            ->whereDate('tanggal', '<=', $endDate->toDateString())
+            ->where(function ($query) use ($startDate) {
+                $query->whereNull('tanggal_akhir')
+                    ->whereDate('tanggal', '>=', $startDate->toDateString())
+                    ->orWhereDate('tanggal_akhir', '>=', $startDate->toDateString());
+            })
+            ->where('is_pjj', false)
+            ->get(['tanggal', 'tanggal_akhir', 'is_pjj'])
+            ->flatMap(function (Holiday $holiday) use ($startDate, $endDate) {
+                if ($holiday->is_pjj) {
+                    return [];
+                }
+
+                $rangeStart = Carbon::parse($holiday->tanggal)->max($startDate);
+                $rangeEnd = Carbon::parse($holiday->tanggal_akhir ?? $holiday->tanggal)->min($endDate);
+                $dates = [];
+
+                for ($date = $rangeStart->copy(); $date->lte($rangeEnd); $date->addDay()) {
+                    $dates[] = $date->toDateString();
+                }
+
+                return $dates;
+            })
+            ->flip();
 
         $expected = 0;
         $cursor = $startDate->copy();
 
         while ($cursor->lte($endDate)) {
             $dayName = $dayMap[$cursor->dayOfWeekIso] ?? null;
-            if ($dayName !== null) {
+            if (
+                !$cursor->isWeekend()
+                && $dayName !== null
+                && !$holidayDates->has($cursor->toDateString())
+            ) {
                 $expected += (int) ($schedulePerDay[$dayName] ?? 0);
             }
 

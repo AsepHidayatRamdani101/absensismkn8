@@ -15,16 +15,22 @@ use App\Models\Classroom;
 use App\Models\Major;
 use App\Models\Student;
 use App\Models\StudentLeaveRequest;
+use App\Models\Schedule;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Models\TeacherSubject;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
@@ -64,6 +70,19 @@ class ReportController extends Controller
             'agenda_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_agenda_guru'])),
             'foto_belum' => $countUniqueTeachers($rows->filter(fn($row) => !$row['has_absensi_guru_siswa_kamera'])),
         ];
+        $scheduledTeacherData = $this->buildScheduledTeacherDayData($request);
+        $scheduledTeacherSummary = [
+            'date' => $scheduledTeacherData['date'],
+            'total_teachers' => $scheduledTeacherData['rows']->count(),
+            'teachers_without_activity' => $scheduledTeacherData['rows']
+                ->filter(fn($teacher) => !$teacher['has_any_activity'])
+                ->count(),
+            'is_holiday' => $scheduledTeacherData['is_holiday'],
+            'is_pjj' => SchoolCalendar::isPjj($scheduledTeacherData['date']),
+            'holiday_message' => $scheduledTeacherData['is_holiday']
+                ? SchoolCalendar::holidayMessage($scheduledTeacherData['date'])
+                : null,
+        ];
 
         $teachers = $this->getReportTeachers();
         $majors = $this->getReportMajors();
@@ -73,12 +92,308 @@ class ReportController extends Controller
             'rows' => $rows,
             'summary' => $summary,
             'missingTeacherCards' => $missingTeacherCards,
+            'scheduledTeacherSummary' => $scheduledTeacherSummary,
+            'scheduledTeacherRows' => $scheduledTeacherData['rows'],
             'teachers' => $teachers,
             'majors' => $majors,
             'classrooms' => $classrooms,
             'filters' => $request->all(),
             'periodLabel' => $this->buildPeriodLabel($request),
+            'automaticReminderMode' => (bool) config('services.fonnte.reminder_enabled', false),
+            'fonnteEnabled' => (bool) config('services.fonnte.enabled', false),
+            'fonnteReady' => (bool) config('services.fonnte.enabled', false)
+                && trim((string) config('services.fonnte.token', '')) !== '',
+            'automaticReminderStatus' => Cache::get('fonnte:reminder:last-run'),
+            'manualReminderStatus' => Cache::get('fonnte:reminder:last-manual'),
         ]);
+    }
+
+    public function sendTeacherAttendanceRecognitionReminder(Request $request, Schedule $schedule)
+    {
+        if ((bool) config('services.fonnte.reminder_enabled', false)) {
+            return back()->with('wa_notification', [
+                'status' => 'warning',
+                'message' => 'Mode otomatis sedang aktif; pengiriman manual dinonaktifkan.',
+            ]);
+        }
+
+        if (!(bool) config('services.fonnte.enabled', false)) {
+            return back()->with('wa_notification', [
+                'status' => 'error',
+                'message' => 'Integrasi WhatsApp Fonnte belum diaktifkan.',
+            ]);
+        }
+
+        $token = trim((string) config('services.fonnte.token', ''));
+        if ($token === '') {
+            return back()->with('wa_notification', [
+                'status' => 'error',
+                'message' => 'Token Fonnte belum diisi.',
+            ]);
+        }
+
+        if (today()->isWeekend() || SchoolCalendar::isHoliday(today()) || $schedule->hari !== [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ][today()->dayOfWeekIso]) {
+            return back()->with('wa_notification', [
+                'status' => 'error',
+                'message' => 'Pengingat hanya dapat dikirim untuk jadwal hari ini yang bukan hari libur.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'recipient' => 'required|in:teacher,students',
+        ]);
+
+        $schedule->load([
+            'teacherSubject.teacher:id,nama_lengkap,no_hp',
+            'teacherSubject.subject:id,nama_mapel',
+            'teacherSubject.classroom:id,nama_kelas,tingkat',
+            'teacherSubject.classroom.students:id,nama_lengkap,classroom_id,jabatan_kelas,no_hp,no_hp_orang_tua',
+            'teacherSubject.academicYear:id,is_active',
+        ]);
+        abort_unless($schedule->teacherSubject?->academicYear?->is_active, 404);
+        abort_if(PklMode::excludesClassroomLevel($schedule->teacherSubject?->classroom?->tingkat), 404);
+
+        $attendance = TeacherAttendance::query()
+            ->where('schedule_id', $schedule->id)
+            ->where('teacher_id', $schedule->teacherSubject->teacher_id)
+            ->whereDate('tanggal', today())
+            ->withCount('attendanceDetails')
+            ->first();
+        $teacher = $schedule->teacherSubject->teacher;
+        $classroom = $schedule->teacherSubject->classroom;
+        $dayLabel = today()->locale('id')->translatedFormat('l, d F Y');
+        $schoolName = (string) config('services.fonnte.school_name', 'SMKN 8 GARUT');
+        $subjectName = $schedule->teacherSubject->subject->nama_mapel ?? '-';
+        $classroomName = $classroom->nama_kelas ?? '-';
+        $teacherName = $teacher->nama_lengkap ?? 'Guru';
+        $sent = 0;
+        $failed = 0;
+        $skipped = 0;
+        $recipientResults = [];
+        $isTeacherPresent = !$attendance || $attendance->kehadiran_guru === 'Hadir';
+        $hasStudentAttendance = $attendance
+            && $attendance->kehadiran_guru === 'Hadir'
+            && (int) $attendance->attendance_details_count > 0;
+
+        if ($validated['recipient'] === 'teacher') {
+            if (!$isTeacherPresent) {
+                return back()->with('wa_notification', [
+                    'status' => 'warning',
+                    'message' => 'Pengingat tidak dikirim karena guru tercatat tidak hadir.',
+                ]);
+            }
+
+            $missing = [];
+            if (!$hasStudentAttendance) {
+                $missing[] = 'absensi siswa';
+            }
+            if (!$attendance || $attendance->status !== 'Selesai') {
+                $missing[] = 'agenda';
+            }
+
+            if ($missing === []) {
+                return back()->with('wa_notification', [
+                    'status' => 'warning',
+                    'message' => 'Tidak ada aktivitas guru yang tertunda pada sesi ini.',
+                ]);
+            }
+
+            $message = "Assalamu'alaikum Bapak/Ibu {$teacherName},\n"
+                . "Pengingat dari {$schoolName} untuk jadwal {$subjectName} ({$classroomName}) pada {$dayLabel}:\n"
+                . 'Mohon melengkapi ' . implode(' dan ', $missing)
+                . " melalui aplikasi absensi. Terima kasih.\n\nAdmin SiAbsensi";
+            $target = $this->normalizeReminderPhone($teacher?->no_hp);
+
+            if ($target === null) {
+                $failed++;
+                $recipientResults[] = [
+                    'name' => 'Bapak/Ibu ' . $teacherName,
+                    'status' => 'failed',
+                    'message' => 'Nomor WhatsApp guru tidak tersedia atau tidak valid.',
+                ];
+            } else {
+                $result = $this->sendRecognitionWhatsApp($target, $message);
+                if ($result['accepted']) {
+                    $sent++;
+                    $recipientResults[] = [
+                        'name' => 'Bapak/Ibu ' . $teacherName,
+                        'status' => 'accepted',
+                        'message' => 'Permintaan pesan diterima Fonnte.',
+                    ];
+                } else {
+                    $failed++;
+                    $recipientResults[] = [
+                        'name' => 'Bapak/Ibu ' . $teacherName,
+                        'status' => 'failed',
+                        'message' => $result['message'],
+                    ];
+                }
+            }
+        } else {
+            if (SchoolCalendar::isPjj(today())) {
+                return back()->with('wa_notification', [
+                    'status' => 'warning',
+                    'message' => 'Pengingat foto fisik tidak dikirim karena hari ini menggunakan mode belajar PJJ.',
+                ]);
+            }
+
+            if (!empty($attendance?->foto_guru_path)) {
+                return back()->with('wa_notification', [
+                    'status' => 'warning',
+                    'message' => 'Foto guru sudah dikirim untuk sesi ini; tidak ada pengingat untuk siswa.',
+                ]);
+            }
+
+            if (!$isTeacherPresent) {
+                return back()->with('wa_notification', [
+                    'status' => 'warning',
+                    'message' => 'Pengingat foto tidak dikirim karena guru tercatat tidak hadir.',
+                ]);
+            }
+
+            $officers = $classroom->students
+                ->filter(fn(Student $student) => $student->canSubmitTeacherAttendance());
+            $sentTargets = [];
+
+            foreach ($officers as $student) {
+                $target = $this->normalizeReminderPhone($student->no_hp ?: $student->no_hp_orang_tua);
+                if ($target === null) {
+                    $failed++;
+                    $recipientResults[] = [
+                        'name' => $student->nama_lengkap,
+                        'status' => 'failed',
+                        'message' => 'Nomor WhatsApp siswa dan orang tua/wali tidak tersedia atau tidak valid.',
+                    ];
+                    continue;
+                }
+
+                if (isset($sentTargets[$target])) {
+                    $skipped++;
+                    $recipientResults[] = [
+                        'name' => $student->nama_lengkap,
+                        'status' => 'skipped',
+                        'message' => 'Nomor sama dengan pengurus lain; hanya satu pesan dikirim ke nomor tersebut.',
+                    ];
+                    continue;
+                }
+                $sentTargets[$target] = true;
+
+                $message = "Assalamu'alaikum {$student->nama_lengkap},\n"
+                    . "Mohon bantu mengirim foto absensi guru {$teacherName} untuk jadwal "
+                    . "{$subjectName} ({$classroomName}) pada {$dayLabel} melalui aplikasi. Terima kasih.\n\n"
+                    . 'Admin SiAbsensi';
+
+                $result = $this->sendRecognitionWhatsApp($target, $message);
+                if ($result['accepted']) {
+                    $sent++;
+                    $recipientResults[] = [
+                        'name' => $student->nama_lengkap,
+                        'status' => 'accepted',
+                        'message' => 'Permintaan pesan diterima Fonnte.',
+                    ];
+                } else {
+                    $failed++;
+                    $recipientResults[] = [
+                        'name' => $student->nama_lengkap,
+                        'status' => 'failed',
+                        'message' => $result['message'],
+                    ];
+                }
+            }
+
+            if ($officers->isEmpty()) {
+                $skipped++;
+                $recipientResults[] = [
+                    'name' => 'Pengurus kelas',
+                    'status' => 'skipped',
+                    'message' => 'Tidak ditemukan siswa dengan hak mengirim foto absensi guru di kelas ini.',
+                ];
+            }
+        }
+
+        $status = $sent > 0 && $failed === 0 ? 'success' : ($sent > 0 ? 'warning' : 'error');
+        $message = "Fonnte menerima/antrekan: {$sent}; gagal: {$failed}; dilewati: {$skipped}.";
+        $deliveryNote = 'Status diterima berarti Fonnte menerima permintaan (masuk antrean), bukan konfirmasi pesan sudah diterima atau dibaca di ponsel.';
+
+        Cache::put('fonnte:reminder:last-manual', [
+            'at' => now()->toDateTimeString(),
+            'sent' => $sent,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'message' => $message,
+            'status' => $status,
+            'results' => $recipientResults,
+            'delivery_note' => $deliveryNote,
+        ], now()->addDays(7));
+
+        return back()->with('wa_notification', [
+            'status' => $status,
+            'message' => $message,
+            'results' => $recipientResults,
+            'delivery_note' => $deliveryNote,
+        ]);
+    }
+
+    public function teacherAttendanceRecognitionScheduledTeachers(Request $request, string $type)
+    {
+        if (!in_array($type, ['without-activity', 'expected'], true)) {
+            abort(404);
+        }
+
+        $data = $this->buildScheduledTeacherDayData($request);
+        $rows = $type === 'without-activity'
+            ? $data['rows']->filter(fn($teacher) => !$teacher['has_any_activity'])->values()
+            : $data['rows']->values();
+
+        return view('admin.reports.teacher-attendance-recognition-scheduled-teachers', [
+            'title' => $type === 'without-activity'
+                ? 'Guru Terjadwal Belum Melakukan Aktivitas Apa Pun'
+                : 'Guru Seharusnya Hadir di Kelas',
+            'rows' => $rows,
+            'date' => $data['date'],
+            'isHoliday' => $data['is_holiday'],
+            'isPjj' => SchoolCalendar::isPjj($data['date']),
+            'type' => $type,
+            'automaticReminderMode' => (bool) config('services.fonnte.reminder_enabled', false),
+            'fonnteReady' => (bool) config('services.fonnte.enabled', false)
+                && trim((string) config('services.fonnte.token', '')) !== '',
+        ]);
+    }
+
+    public function destroyScheduledTeacherAttendance(Request $request, TeacherAttendance $teacherAttendance)
+    {
+        $attendanceId = $teacherAttendance->id;
+        $photoPath = $teacherAttendance->foto_guru_path;
+        $taskPath = $teacherAttendance->tugas_file_path;
+
+        DB::transaction(function () use ($teacherAttendance) {
+            $teacherAttendance->delete();
+        });
+
+        foreach ([$photoPath, $taskPath] as $path) {
+            if ($path && Storage::disk('public')->exists($path)
+                && !Storage::disk('public')->delete($path)) {
+                Log::warning('File sesi absensi guru gagal dihapus setelah sesi dihapus.', [
+                    'teacher_attendance_id' => $attendanceId,
+                    'path' => $path,
+                ]);
+            }
+        }
+
+        return redirect()
+            ->route('reports.teacher-attendance-recognition.scheduled-teachers', array_merge(
+                ['type' => $request->input('type', 'expected')],
+                $request->except(['_token', '_method', 'type'])
+            ))
+            ->with('success', "Sesi absensi guru #{$attendanceId}, detail siswa, dan file terkait berhasil dihapus.");
     }
 
     public function teacherAttendanceRecognitionMissingTeachers(Request $request, string $type)
@@ -1110,6 +1425,7 @@ class ReportController extends Controller
             ->select([
                 'id',
                 'tanggal',
+                'schedule_id',
                 'teacher_id',
                 'subject_id',
                 'classroom_id',
@@ -1156,6 +1472,185 @@ class ReportController extends Controller
         return $query;
     }
 
+    private function buildScheduledTeacherDayData(Request $request): array
+    {
+        $date = $request->input('period_type') === 'tanggal' && $request->filled('tanggal')
+            ? Carbon::parse($request->input('tanggal'))->startOfDay()
+            : now()->startOfDay();
+
+        $dayName = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ][$date->dayOfWeekIso];
+
+        if (SchoolCalendar::isHoliday($date)) {
+            return [
+                'date' => $date,
+                'rows' => collect(),
+                'is_holiday' => true,
+            ];
+        }
+
+        $schedulesQuery = Schedule::query()
+            ->with([
+                'teacherSubject.teacher:id,nama_lengkap,no_hp',
+                'teacherSubject.subject:id,nama_mapel',
+                'teacherSubject.classroom:id,nama_kelas,major_id',
+                'teacherSubject.classroom.major:id,nama_jurusan',
+                ])
+            ->where('hari', $dayName)
+            ->whereHas('teacherSubject', function ($query) use ($request) {
+                $query->whereHas('academicYear', fn($academicYearQuery) => $academicYearQuery->where('is_active', true));
+
+                if ($request->filled('teacher_id')) {
+                    $query->where('teacher_id', $request->input('teacher_id'));
+                }
+
+                if ($request->filled('classroom_id')) {
+                    $query->where('classroom_id', $request->input('classroom_id'));
+                }
+
+                if ($request->filled('major_id')) {
+                    $query->whereHas('classroom', fn($classroomQuery) => $classroomQuery->where('major_id', $request->input('major_id')));
+                }
+
+                if (PklMode::isActive()) {
+                    $query->whereHas('classroom', fn($classroomQuery) => $classroomQuery->where('tingkat', '!=', 'XII'));
+                }
+            });
+
+        $schedules = $schedulesQuery->get();
+        $teacherBySchedule = $schedules
+            ->filter(fn(Schedule $schedule) => (int) ($schedule->teacherSubject->teacher_id ?? 0) > 0)
+            ->mapWithKeys(fn(Schedule $schedule) => [
+                (int) $schedule->id => (int) $schedule->teacherSubject->teacher_id,
+            ]);
+
+        $activityBySchedule = TeacherAttendance::query()
+            ->whereDate('tanggal', $date->toDateString())
+            ->whereIn('schedule_id', $schedules->pluck('id'))
+            ->withCount('attendanceDetails')
+            ->get(['id', 'schedule_id', 'teacher_id', 'kehadiran_guru', 'status', 'foto_guru_path', 'tugas_file_path'])
+            ->filter(fn(TeacherAttendance $attendance) => $teacherBySchedule->get((int) $attendance->schedule_id) === (int) $attendance->teacher_id)
+            ->keyBy('schedule_id');
+
+        $teacherRows = $schedules
+            ->filter(fn(Schedule $schedule) => (int) ($schedule->teacherSubject->teacher_id ?? 0) > 0)
+            ->groupBy(fn(Schedule $schedule) => (int) $schedule->teacherSubject->teacher_id)
+            ->map(function (Collection $teacherSchedules) use ($activityBySchedule) {
+                $teacher = $teacherSchedules->first()->teacherSubject->teacher;
+                $scheduleRows = $teacherSchedules->map(function (Schedule $schedule) use ($activityBySchedule) {
+                    $attendance = $activityBySchedule->get($schedule->id);
+                    $hasCameraAttendance = !empty($attendance?->foto_guru_path);
+
+                    return [
+                        'schedule' => $schedule,
+                        'attendance' => $attendance,
+                        'has_camera_attendance' => $hasCameraAttendance,
+                        'is_teacher_present' => !$attendance || $attendance->kehadiran_guru === 'Hadir',
+                        'has_agenda' => $attendance?->status === 'Selesai',
+                        'has_student_attendance' => $attendance?->kehadiran_guru === 'Hadir'
+                            && (int) ($attendance?->attendance_details_count ?? 0) > 0,
+                        'photo_url' => $hasCameraAttendance ? asset('storage/' . $attendance->foto_guru_path) : null,
+                    ];
+                })->values();
+
+                $hasCameraAttendance = $scheduleRows->contains(fn($row) => $row['has_camera_attendance']);
+                $hasAgenda = $scheduleRows->contains(fn($row) => $row['has_agenda']);
+                $hasStudentAttendance = $scheduleRows->contains(fn($row) => $row['has_student_attendance']);
+
+                return [
+                    'teacher_id' => (int) $teacher->id,
+                    'teacher_name' => $teacher->nama_lengkap,
+                    'schedules' => $scheduleRows,
+                    'has_camera_attendance' => $hasCameraAttendance,
+                    'has_agenda' => $hasAgenda,
+                    'has_student_attendance' => $hasStudentAttendance,
+                    'has_any_activity' => $hasCameraAttendance || $hasAgenda || $hasStudentAttendance,
+                ];
+            })
+            ->sortBy('teacher_name')
+            ->values();
+
+        return [
+            'date' => $date,
+            'rows' => $teacherRows,
+            'is_holiday' => false,
+        ];
+    }
+
+    private function normalizeReminderPhone(?string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        $countryCode = (string) config('services.fonnte.default_country_code', '62');
+
+        if ($digits === '' || strlen($digits) < 8 || strlen($digits) > 15) {
+            return null;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return $countryCode . substr($digits, 1);
+        }
+
+        return str_starts_with($digits, $countryCode) || str_starts_with($digits, '62')
+            ? $digits
+            : $countryCode . $digits;
+    }
+
+    private function sendRecognitionWhatsApp(string $target, string $message): array
+    {
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders(['Authorization' => (string) config('services.fonnte.token')])
+                ->asForm()
+                ->post((string) config('services.fonnte.api_url', 'https://api.fonnte.com/send'), [
+                    'target' => $target,
+                    'message' => $message,
+                    'countryCode' => (string) config('services.fonnte.default_country_code', '62'),
+                ]);
+
+            $responseStatus = $response->json('status');
+            if (
+                $response->successful()
+                && in_array($responseStatus, [true, 1, 'true'], true)
+            ) {
+                return ['accepted' => true, 'message' => 'Permintaan pesan diterima Fonnte.'];
+            }
+
+            Log::channel('security')->warning('Gagal mengirim pengingat WhatsApp dari laporan absensi guru.', [
+                'target' => $target,
+                'status' => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            $providerReason = $response->json('reason') ?? $response->json('detail');
+            $failureMessage = 'Fonnte menolak permintaan pesan (HTTP ' . $response->status() . ').';
+            if (is_string($providerReason) && trim($providerReason) !== '') {
+                $failureMessage .= ' ' . substr(trim($providerReason), 0, 180);
+            }
+
+            return [
+                'accepted' => false,
+                'message' => $failureMessage,
+            ];
+        } catch (\Throwable $exception) {
+            Log::channel('security')->error('Kesalahan mengirim pengingat WhatsApp dari laporan absensi guru.', [
+                'target' => $target,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'accepted' => false,
+                'message' => 'Koneksi ke Fonnte gagal; periksa jaringan dan konfigurasi token.',
+            ];
+        }
+    }
+
     private function buildTeacherAttendanceRecognitionRow(TeacherAttendance $item): array
     {
         $hasAbsensiGuruSiswaKamera = !empty($item->foto_guru_path);
@@ -1183,7 +1678,7 @@ class ReportController extends Controller
                 'predicate' => fn(array $row) => !$row['has_agenda_guru'],
             ],
             'foto' => [
-                'title' => 'Guru Tidak Difoto Oleh Siswa',
+                'title' => 'Guru Belum Diabsen Siswa (Kamera)',
                 'predicate' => fn(array $row) => !$row['has_absensi_guru_siswa_kamera'],
             ],
         ];
@@ -1218,6 +1713,7 @@ class ReportController extends Controller
                     'jurusan' => $row['item']->classroom->major->nama_jurusan ?? '-',
                     'kelas' => $row['item']->classroom->nama_kelas ?? '-',
                     'absensi_guru_siswa_kamera' => $row['has_absensi_guru_siswa_kamera'],
+                    'foto_guru_path' => $row['item']->foto_guru_path,
                     'agenda_guru' => $row['has_agenda_guru'],
                     'absensi_siswa_oleh_guru' => $row['has_absensi_siswa_oleh_guru'],
                 ];

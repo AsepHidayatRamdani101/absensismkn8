@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceDevice;
 use App\Models\Schedule;
 use App\Models\Student;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -49,10 +50,11 @@ class AttendanceController extends Controller
             'metode' => 'required|in:Manual,RFID,Face,QR',
         ]);
 
-        if ($this->isWeekendHoliday($validated['tanggal'])) {
+        if ($this->isWeekendHoliday($validated['tanggal']) || SchoolCalendar::isHoliday($validated['tanggal'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
+                'message' => SchoolCalendar::holidayMessage($validated['tanggal'])
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
             ], 422);
         }
 
@@ -82,10 +84,11 @@ class AttendanceController extends Controller
             'metode' => 'required|in:Manual,RFID,Face,QR',
         ]);
 
-        if ($this->isWeekendHoliday($validated['tanggal'])) {
+        if ($this->isWeekendHoliday($validated['tanggal']) || SchoolCalendar::isHoliday($validated['tanggal'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
+                'message' => SchoolCalendar::holidayMessage($validated['tanggal'])
+                    ?? 'Absensi siswa otomatis libur pada hari Sabtu dan Minggu.'
             ], 422);
         }
 

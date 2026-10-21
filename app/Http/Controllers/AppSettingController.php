@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Teacher;
+use App\Support\FonnteSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,7 @@ class AppSettingController extends Controller
             'api_url' => (string) config('services.fonnte.api_url', 'https://api.fonnte.com/send'),
             'default_country_code' => (string) config('services.fonnte.default_country_code', '62'),
             'reminder_enabled' => (bool) config('services.fonnte.reminder_enabled', false),
-            'reminder_time' => (string) config('services.fonnte.reminder_time', '14:00'),
+            'reminder_time' => '15:00',
             'school_name' => (string) config('services.fonnte.school_name', 'SMKN 8 GARUT'),
         ];
 
@@ -65,27 +66,59 @@ class AppSettingController extends Controller
             'api_url' => 'required|url|max:255',
             'default_country_code' => 'required|regex:/^\d{1,4}$/',
             'reminder_enabled' => 'nullable|boolean',
-            'reminder_time' => 'required|date_format:H:i',
             'school_name' => 'required|string|max:120',
         ]);
 
-        $updates = [
-            'FONNTE_ENABLED' => $request->boolean('enabled') ? 'true' : 'false',
-            'FONNTE_TOKEN' => (string) ($validated['token'] ?? ''),
-            'FONNTE_API_URL' => (string) $validated['api_url'],
-            'FONNTE_DEFAULT_COUNTRY_CODE' => (string) $validated['default_country_code'],
-            'FONNTE_REMINDER_ENABLED' => $request->boolean('reminder_enabled') ? 'true' : 'false',
-            'FONNTE_REMINDER_TIME' => (string) $validated['reminder_time'],
-            'FONNTE_SCHOOL_NAME' => (string) $validated['school_name'],
-        ];
-
-        foreach ($updates as $key => $value) {
-            $this->upsertEnvValue($key, $value);
+        if (
+            $request->boolean('reminder_enabled')
+            && (!$request->boolean('enabled') || trim((string) ($validated['token'] ?? '')) === '')
+        ) {
+            return redirect()->back()->withInput()->withErrors([
+                'reminder_enabled' => 'Mode otomatis memerlukan integrasi Fonnte aktif dan token yang terisi.',
+            ]);
         }
 
-        Artisan::call('config:clear');
+        FonnteSettings::save([
+            'enabled' => $request->boolean('enabled'),
+            'token' => (string) ($validated['token'] ?? ''),
+            'api_url' => (string) $validated['api_url'],
+            'default_country_code' => (string) $validated['default_country_code'],
+            'reminder_enabled' => $request->boolean('reminder_enabled'),
+            'reminder_time' => '15:00',
+            'school_name' => (string) $validated['school_name'],
+        ]);
 
         return redirect()->route('app-settings.index')->with('success', 'Konfigurasi WA Fonnte berhasil disimpan.');
+    }
+
+    public function updateFonnteReminderMode(Request $request)
+    {
+        $validated = $request->validate([
+            'mode' => 'required|in:manual,automatic',
+        ]);
+
+        if (
+            $validated['mode'] === 'automatic'
+            && (!(bool) config('services.fonnte.enabled', false) || trim((string) config('services.fonnte.token', '')) === '')
+        ) {
+            return redirect()->back()->with(
+                'error',
+                'Aktifkan integrasi Fonnte dan isi token sebelum memilih mode otomatis.'
+            );
+        }
+
+        $enabled = $validated['mode'] === 'automatic';
+        $settings = config('services.fonnte', []);
+        $settings['reminder_enabled'] = $enabled;
+        $settings['reminder_time'] = '15:00';
+        FonnteSettings::save($settings);
+
+        return redirect()->back()->with(
+            'success',
+            $enabled
+                ? 'Mode otomatis aktif. Tombol kirim manual dinonaktifkan; pengingat berjalan setiap hari efektif pukul 15.00.'
+                : 'Mode manual aktif. Pengiriman otomatis dinonaktifkan dan tombol kirim WhatsApp tersedia.'
+        );
     }
 
     public function sendFonnteTest(Request $request)
@@ -312,38 +345,6 @@ class AppSettingController extends Controller
             return number_format($bytes / 1024, 2) . ' KB';
         }
         return $bytes . ' B';
-    }
-
-    private function upsertEnvValue(string $key, string $value): void
-    {
-        $envPath = base_path('.env');
-        $content = File::exists($envPath) ? File::get($envPath) : '';
-
-        $escapedValue = $this->escapeEnvValue($value);
-        $pattern = "/^{$key}=.*$/m";
-
-        if (preg_match($pattern, $content) === 1) {
-            $content = preg_replace($pattern, "{$key}={$escapedValue}", $content) ?? $content;
-        } else {
-            $content .= (str_ends_with($content, PHP_EOL) || $content === '' ? '' : PHP_EOL) . "{$key}={$escapedValue}" . PHP_EOL;
-        }
-
-        File::put($envPath, $content);
-    }
-
-    private function escapeEnvValue(string $value): string
-    {
-        $needsQuotes = $value === ''
-            || str_contains($value, ' ')
-            || str_contains($value, '#')
-            || str_contains($value, '"')
-            || str_contains($value, "'");
-
-        if ($needsQuotes) {
-            return '"' . addcslashes($value, '"') . '"';
-        }
-
-        return $value;
     }
 
     private function normalizePhone(string $rawPhone, string $defaultCountryCode): ?string

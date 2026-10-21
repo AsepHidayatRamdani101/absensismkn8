@@ -22,8 +22,9 @@
                 <thead>
                     <tr>
                         <th width="5%">No</th>
-                        <th width="20%">Tanggal</th>
+                        <th width="25%">Rentang Tanggal</th>
                         <th>Keterangan</th>
+                        <th width="15%">Mode</th>
                         <th width="15%">Kategori</th>
                         <th width="15%">Aksi</th>
                     </tr>
@@ -32,10 +33,29 @@
                     @foreach ($holidays as $holiday)
                         <tr>
                             <td>{{ $loop->iteration }}</td>
-                            <td>{{ \Carbon\Carbon::parse($holiday->tanggal)->format('d-m-Y') }}</td>
+                            <td>
+                                @php
+                                    $startDate = \Carbon\Carbon::parse($holiday->tanggal);
+                                    $endDate = \Carbon\Carbon::parse($holiday->tanggal_akhir ?? $holiday->tanggal);
+                                @endphp
+                                @if ($startDate->isSameDay($endDate))
+                                    {{ $startDate->format('d-m-Y') }}
+                                @else
+                                    {{ $startDate->format('d-m-Y') }} s.d. {{ $endDate->format('d-m-Y') }}
+                                @endif
+                            </td>
                             <td>{{ $holiday->keterangan }}</td>
                             <td>
-                                @if ($holiday->is_national)
+                                @if ($holiday->is_pjj)
+                                    <span class="badge badge-info">Belajar PJJ</span>
+                                @else
+                                    <span class="badge badge-warning">Hari Libur</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if ($holiday->is_pjj)
+                                    <span class="text-muted">—</span>
+                                @elseif ($holiday->is_national)
                                     <span class="badge badge-success">Nasional</span>
                                 @else
                                     <span class="badge badge-secondary">Sekolah</span>

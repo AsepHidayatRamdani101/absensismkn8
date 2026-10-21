@@ -32,7 +32,8 @@
 
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
-            Hari {{ $todayDayName }} otomatis libur. Absensi siswa tidak dibuka.
+            {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
+            Absensi siswa tidak dibuka.
         </div>
     @endif
 

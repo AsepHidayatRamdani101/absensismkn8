@@ -9,7 +9,7 @@
                 @csrf
                 @method('PUT')
 
-                <input type="hidden" id="edit_id">
+                <input type="hidden" id="edit_id" name="id">
 
                 <div class="modal-header">
 
@@ -53,7 +53,7 @@
 
                         <label>Tingkat</label>
 
-                        <select id="edit_tingkat" name="tingkat" class="form-control">
+                        <select id="edit_tingkat" name="tingkat" class="form-control" required>
 
                             <option>X</option>
                             <option>XI</option>
@@ -68,7 +68,7 @@
 
                         <label>Rombel</label>
 
-                        <input id="edit_rombel" type="text" class="form-control">
+                        <input id="edit_rombel" name="rombel" type="text" class="form-control" maxlength="10" required>
 
                     </div>
 
@@ -77,7 +77,7 @@
 
                         <label>Kode Kelas</label>
 
-                        <input id="edit_kode_kelas" type="text" class="form-control">
+                        <input id="edit_kode_kelas" name="kode_kelas" type="text" class="form-control" maxlength="20" required>
 
                     </div>
 
@@ -86,7 +86,7 @@
 
                         <label>Nama Kelas</label>
 
-                        <input id="edit_nama_kelas" type="text" class="form-control">
+                        <input id="edit_nama_kelas" name="nama_kelas" type="text" class="form-control" maxlength="100" required>
 
                     </div>
 

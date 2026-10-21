@@ -7,6 +7,7 @@ use App\Models\Schedule;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Support\PklMode;
+use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -29,6 +30,8 @@ class GuruAgendaController extends Controller
         }
 
         [$today, $todayDayName, $isWeekendHoliday] = $this->resolveTodayContext();
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
+        $isWeekendHoliday = $isWeekendHoliday || $schoolHolidayMessage !== null;
 
         $todaySchedules = collect();
 
@@ -128,6 +131,7 @@ class GuruAgendaController extends Controller
             'today' => $today,
             'todayDayName' => $todayDayName,
             'isWeekendHoliday' => $isWeekendHoliday,
+            'schoolHolidayMessage' => $schoolHolidayMessage,
             'rows' => $rows,
         ]);
     }
@@ -157,6 +161,11 @@ class GuruAgendaController extends Controller
         }
 
         [$today, $todayDayName, $isWeekendHoliday] = $this->resolveTodayContext();
+
+        $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
+        if ($schoolHolidayMessage !== null) {
+            return redirect()->route('guru.agenda.index')->with('error', $schoolHolidayMessage . '. Agenda tidak dapat diisi.');
+        }
 
         if ($isWeekendHoliday || $todayDayName === null || $schedule->hari !== $todayDayName) {
             return redirect()->route('guru.agenda.index')
