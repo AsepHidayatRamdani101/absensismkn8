@@ -83,7 +83,9 @@ class DashboardDssController extends Controller
 
     public function kesiswaan(Request $request)
     {
-        return $this->render('kesiswaan', $request);
+        return $this->render('kesiswaan', $request, [
+            'todayAttendanceStatusCards' => $this->repository->todayAttendanceStatusCards(),
+        ]);
     }
 
     public function siswa(Request $request)
@@ -200,17 +202,17 @@ class DashboardDssController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    private function render(string $role, Request $request)
+    private function render(string $role, Request $request, array $additionalData = [])
     {
         $mode = $this->resolveDisplayMode($request);
 
-        return view('dashboard.dss.index', [
+        return view('dashboard.dss.index', array_merge([
             'role' => $role,
             'title' => $this->title($role),
             'mode' => $mode,
             'roleRouteName' => $this->routeNameByRole($role),
             'absensiRouteName' => $this->absensiRouteNameByRole($role),
-        ]);
+        ], $additionalData));
     }
 
     private function routeNameByRole(string $role): string

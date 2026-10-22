@@ -55,6 +55,23 @@
             font-size: 0.75rem;
             color: #6c757d;
         }
+
+        .attendance-status-card {
+            border-width: 0 0 0 4px;
+            transition: box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        .attendance-status-card:hover,
+        .attendance-status-card:focus {
+            box-shadow: var(--dss-card-shadow);
+            transform: translateY(-2px);
+        }
+
+        .attendance-status-count {
+            font-size: 1.7rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
     </style>
 @stop
 
@@ -101,6 +118,68 @@
 
     @include('components.dashboard.filter-bar')
 
+    @if ($role === 'kesiswaan')
+        <div class="card card-outline card-primary mb-3">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Absensi Siswa Hari Ini</h3>
+            </div>
+            <div class="card-body pb-2">
+                <p class="text-muted">
+                    Jumlah adalah siswa unik dari absensi sekolah dan absensi kelas oleh guru. Alpa/Bolos adalah satu
+                    kategori; siswa dapat muncul pada lebih dari satu kategori jika tercatat dengan status berbeda.
+                </p>
+                <div class="row">
+                    @foreach ($todayAttendanceStatusCards as $statusCard)
+                        <div class="col-xl-2 col-md-4 col-6 mb-3">
+                            <button type="button"
+                                class="card attendance-status-card border-{{ $statusCard['color'] }} w-100 text-left"
+                                data-status-key="{{ $statusCard['key'] }}"
+                                data-status-label="{{ $statusCard['label'] }}"
+                                aria-label="Lihat daftar siswa {{ $statusCard['label'] }}, {{ $statusCard['count'] }} siswa">
+                                <span class="card-body p-3">
+                                    <span class="d-block font-weight-bold">{{ $statusCard['label'] }}</span>
+                                    <span class="d-block attendance-status-count text-{{ $statusCard['color'] }}">
+                                        {{ $statusCard['count'] }}
+                                    </span>
+                                    <small class="text-muted">Klik untuk lihat siswa</small>
+                                </span>
+                            </button>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="todayAttendanceStudentsModal" tabindex="-1" role="dialog"
+            aria-labelledby="todayAttendanceStudentsTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="todayAttendanceStudentsTitle">Daftar Siswa</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered mb-0">
+                                <thead>
+                                    <tr>
+                                        <th width="6%">No</th>
+                                        <th>NIS</th>
+                                        <th>Nama Siswa</th>
+                                        <th>Kelas</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="todayAttendanceStudentsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="card card-outline card-secondary mb-3">
         <div class="card-header">
             <h3 class="card-title mb-0">Aksi Cepat</h3>
@@ -113,6 +192,14 @@
             @if (in_array($role, ['admin', 'wali_kelas', 'bk', 'kesiswaan'], true))
                 <a href="{{ route('pancawaluya.violation-transactions.create') }}" class="btn btn-sm btn-danger">Tambah
                     Pelanggaran</a>
+            @endif
+            @if ($role === 'kesiswaan')
+                <a href="{{ route('kesiswaan.reports.student-attendance') }}" class="btn btn-sm btn-primary">
+                    Laporan Absensi Siswa
+                </a>
+                <a href="{{ route('kesiswaan.reports.class-effectiveness') }}" class="btn btn-sm btn-outline-primary">
+                    Efektivitas Belajar Kelas
+                </a>
             @endif
             <a href="{{ route('pancawaluya.transaction-histories.index') }}" class="btn btn-sm btn-info">Buka Linimasa</a>
             @if ($role === 'siswa')
@@ -155,6 +242,39 @@
     <script>
         window.dashboardRole = @json($role);
         window.dashboardMode = @json($mode ?? 'ringkas');
+        @if ($role === 'kesiswaan')
+            window.todayAttendanceStatusLists = @json(collect($todayAttendanceStatusCards)->mapWithKeys(function ($card) {
+                    return [$card['key'] => $card['students']];
+                })->all());
+
+            $(function() {
+                $('.attendance-status-card').on('click', function() {
+                    const students = window.todayAttendanceStatusLists[this.dataset.statusKey] || [];
+                    const tableBody = document.getElementById('todayAttendanceStudentsBody');
+                    tableBody.replaceChildren();
+                    document.getElementById('todayAttendanceStudentsTitle').textContent =
+                        `Daftar Siswa ${this.dataset.statusLabel} Hari Ini (${students.length})`;
+
+                    if (students.length === 0) {
+                        const row = tableBody.insertRow();
+                        const cell = row.insertCell();
+                        cell.colSpan = 4;
+                        cell.className = 'text-center text-muted';
+                        cell.textContent = 'Tidak ada siswa dengan status ini hari ini.';
+                    } else {
+                        students.forEach((student, index) => {
+                            const row = tableBody.insertRow();
+                            row.insertCell().textContent = index + 1;
+                            row.insertCell().textContent = student.nis;
+                            row.insertCell().textContent = student.name;
+                            row.insertCell().textContent = student.classroom;
+                        });
+                    }
+
+                    $('#todayAttendanceStudentsModal').modal('show');
+                });
+            });
+        @endif
         window.dashboardEndpoints = {
             data: @json(route('dashboard.dss.data')),
             options: @json(route('dashboard.dss.options')),

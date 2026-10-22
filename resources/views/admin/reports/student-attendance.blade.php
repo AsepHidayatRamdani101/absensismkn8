@@ -8,10 +8,10 @@
     <div class="d-flex justify-content-between align-items-center">
         <h1>Laporan Absensi Siswa</h1>
         <div class="d-flex">
-            <a href="{{ route('reports.student-attendance.pdf', request()->query()) }}" class="btn btn-danger btn-sm mr-2">
+            <a href="{{ route($routePrefix . '.student-attendance.pdf', request()->query()) }}" class="btn btn-danger btn-sm mr-2">
                 <i class="fas fa-file-pdf"></i> Download PDF
             </a>
-            <a href="{{ route('reports.student-attendance.excel', request()->query()) }}" class="btn btn-success btn-sm">
+            <a href="{{ route($routePrefix . '.student-attendance.excel', request()->query()) }}" class="btn btn-success btn-sm">
                 <i class="fas fa-file-excel"></i> Download Excel
             </a>
         </div>
@@ -21,7 +21,7 @@
 @section('content')
     <div class="card">
         <div class="card-body">
-            <form method="GET" action="{{ route('reports.student-attendance') }}" class="mb-3">
+            <form method="GET" action="{{ route($routePrefix . '.student-attendance') }}" class="mb-3">
                 <div class="form-row">
                     <div class="form-group col-md-3">
                         <label>Tipe Periode</label>
@@ -118,14 +118,14 @@
                         <button type="submit" class="btn btn-primary btn-sm mr-2">
                             <i class="fas fa-filter"></i> Terapkan
                         </button>
-                        <a href="{{ route('reports.student-attendance') }}" class="btn btn-secondary btn-sm">Reset</a>
+                        <a href="{{ route($routePrefix . '.student-attendance') }}" class="btn btn-secondary btn-sm">Reset</a>
                     </div>
 
                     <div class="form-group col-md-3">
                         <label>Status</label>
                         <select name="status" class="form-control form-control-sm">
                             <option value="">Semua Status</option>
-                            @foreach (['Hadir', 'Izin', 'Sakit', 'Alpha', 'Alpa', 'Terlambat'] as $status)
+                            @foreach (['Hadir', 'Izin', 'Sakit', 'Dispen', 'Alpha', 'Alpa', 'Bolos', 'Terlambat'] as $status)
                                 <option value="{{ $status }}"
                                     {{ (string) ($filters['status'] ?? '') === (string) $status ? 'selected' : '' }}>
                                     {{ $status }}
@@ -181,7 +181,7 @@
                     serverSide: true,
                     responsive: true,
                     ajax: {
-                        url: "{{ route('reports.student-attendance.datatable') }}",
+                        url: "{{ route($routePrefix . '.student-attendance.datatable') }}",
                         data: function(d) {
                             d.period_type = "{{ $filters['period_type'] ?? '' }}";
                             d.tanggal = "{{ $filters['tanggal'] ?? '' }}";

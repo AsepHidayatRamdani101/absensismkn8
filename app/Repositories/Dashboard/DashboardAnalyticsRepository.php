@@ -131,6 +131,65 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
         ];
     }
 
+    public function todayAttendanceStatusCards(): array
+    {
+        $schoolAttendance = DB::table('attendances')
+            ->select('student_id', 'status')
+            ->whereDate('tanggal', today()->toDateString());
+
+        $classAttendance = DB::table('attendance_details')
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->select('attendance_details.student_id', 'attendance_details.status')
+            ->whereDate('teacher_attendances.tanggal', today()->toDateString());
+
+        $rows = DB::query()
+            ->fromSub($schoolAttendance->unionAll($classAttendance), 'today_attendance')
+            ->join('students', 'students.id', '=', 'today_attendance.student_id')
+            ->leftJoin('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+            ->whereIn('today_attendance.status', ['Hadir', 'Izin', 'Sakit', 'Dispen', 'Alpha', 'Alpa', 'Bolos', 'Terlambat'])
+            ->selectRaw("CASE WHEN today_attendance.status IN ('Alpha', 'Alpa') THEN 'Alpa' ELSE today_attendance.status END as normalized_status")
+            ->addSelect(
+                'today_attendance.student_id',
+                'students.nama_lengkap as name',
+                'students.nis',
+                'classrooms.nama_kelas as classroom'
+            )
+            ->distinct()
+            ->orderBy('students.nama_lengkap')
+            ->get();
+
+        $definitions = [
+            'Hadir' => ['label' => 'Hadir', 'color' => 'success'],
+            'Sakit' => ['label' => 'Sakit', 'color' => 'warning'],
+            'Izin' => ['label' => 'Izin', 'color' => 'info'],
+            'Alpa' => ['label' => 'Alpa', 'color' => 'danger'],
+            'Bolos' => ['label' => 'Bolos', 'color' => 'dark'],
+            'Terlambat' => ['label' => 'Terlambat', 'color' => 'primary'],
+            'Dispen' => ['label' => 'Dispen', 'color' => 'secondary'],
+        ];
+
+        return collect($definitions)->map(function (array $definition, string $status) use ($rows): array {
+            $students = $rows
+                ->where('normalized_status', $status)
+                ->unique('student_id')
+                ->map(fn($student): array => [
+                    'name' => (string) $student->name,
+                    'nis' => (string) ($student->nis ?? '-'),
+                    'classroom' => (string) ($student->classroom ?? '-'),
+                ])
+                ->values()
+                ->all();
+
+            return [
+                'key' => $status,
+                'label' => $definition['label'],
+                'color' => $definition['color'],
+                'count' => count($students),
+                'students' => $students,
+            ];
+        })->values()->all();
+    }
+
     public function trends(array $filters, array $scope): array
     {
         $from = $filters['date_from'] !== '' ? Carbon::parse($filters['date_from']) : now()->subMonths(5)->startOfMonth();
@@ -1316,7 +1375,7 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
             ->when(!empty($studentIds), fn(Builder $q) => $q->whereIn('attendance_details.student_id', $studentIds))
             ->when($filters['date_from'] !== '', fn(Builder $q) => $q->whereDate('teacher_attendances.tanggal', '>=', $filters['date_from']))
             ->when($filters['date_to'] !== '', fn(Builder $q) => $q->whereDate('teacher_attendances.tanggal', '<=', $filters['date_to']))
-            ->selectRaw('attendance_details.student_id as student_id, COUNT(*) as total_records, SUM(CASE WHEN attendance_details.status IN ("Hadir","Terlambat") THEN 1 ELSE 0 END) as hadir_records')
+            ->selectRaw('attendance_details.student_id as student_id, COUNT(*) as total_records, SUM(CASE WHEN attendance_details.status IN ("Hadir","Terlambat","Dispen") THEN 1 ELSE 0 END) as hadir_records')
             ->groupBy('attendance_details.student_id')
             ->get()
             ->keyBy('student_id');

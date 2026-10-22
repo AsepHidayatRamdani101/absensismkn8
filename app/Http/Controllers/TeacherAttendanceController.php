@@ -63,7 +63,7 @@ class TeacherAttendanceController extends Controller
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($selectedDate);
         $isPjj = SchoolCalendar::isPjj($selectedDate);
         $isWeekendHoliday = in_array($selectedDayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($selectedDate);
         $isSelectedDateToday = $selectedDate->isSameDay($today);
 
         $schedules = collect();
@@ -77,7 +77,10 @@ class TeacherAttendanceController extends Controller
                 })
                 ->orderBy('jam_mulai');
 
-            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)->get();
+            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($selectedDate, $schedule->jam_mulai))
+                ->values();
         }
 
         $guruMapelOptions = $schedules
@@ -320,7 +323,8 @@ class TeacherAttendanceController extends Controller
             'status' => 'required|in:Draft,Selesai',
         ]);
 
-        if (SchoolCalendar::isHoliday($validated['tanggal'])) {
+        $schedule = Schedule::findOrFail($validated['schedule_id']);
+        if (SchoolCalendar::isHolidayAt($validated['tanggal'], $schedule->jam_mulai)) {
             return response()->json([
                 'success' => false,
                 'message' => SchoolCalendar::holidayMessage($validated['tanggal']) . '. Absensi guru tidak dapat dibuat.',
@@ -355,7 +359,8 @@ class TeacherAttendanceController extends Controller
             'status' => 'required|in:Draft,Selesai',
         ]);
 
-        if (SchoolCalendar::isHoliday($validated['tanggal'])) {
+        $schedule = Schedule::findOrFail($validated['schedule_id']);
+        if (SchoolCalendar::isHolidayAt($validated['tanggal'], $schedule->jam_mulai)) {
             return response()->json([
                 'success' => false,
                 'message' => SchoolCalendar::holidayMessage($validated['tanggal']) . '. Absensi guru tidak dapat dibuat.',
@@ -433,7 +438,7 @@ class TeacherAttendanceController extends Controller
         $today = Carbon::today();
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
 
-        if (SchoolCalendar::isHoliday($today)) {
+        if (SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai)) {
             return redirect()->route('siswa.teacher-attendances.index')
                 ->with('error', SchoolCalendar::holidayMessage($today) . '. Absensi guru tidak tersedia.');
         }

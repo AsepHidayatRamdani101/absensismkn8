@@ -108,7 +108,7 @@ class AttendanceDetailController extends Controller
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($today);
 
         $leaveSchedules = collect();
 
@@ -126,7 +126,9 @@ class AttendanceDetailController extends Controller
                         });
                 })
                 ->orderBy('jam_mulai')
-                ->get();
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+                ->values();
         }
 
         $selectedScheduleId = (int) $request->query('schedule_id', 0);
@@ -236,7 +238,7 @@ class AttendanceDetailController extends Controller
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($today);
 
         $todaySchedules = collect();
 
@@ -249,7 +251,10 @@ class AttendanceDetailController extends Controller
                 })
                 ->orderBy('jam_mulai');
 
-            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+                ->values();
         }
 
         $classOptions = $todaySchedules
@@ -296,7 +301,10 @@ class AttendanceDetailController extends Controller
                         ->whereHas('teacherSubject.teacher')
                         ->orderBy('jam_mulai');
 
-                    $allTodaySchedules = PklMode::applyToScheduleQuery($allTodaySchedules)->get();
+                    $allTodaySchedules = PklMode::applyToScheduleQuery($allTodaySchedules)
+                        ->get()
+                        ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+                        ->values();
 
                     $allScheduleIds = $allTodaySchedules->pluck('id')->values();
                     $allTeacherAttendances = TeacherAttendance::query()
@@ -416,7 +424,7 @@ class AttendanceDetailController extends Controller
         $todayDayName = $dayMap[$today->dayOfWeekIso] ?? null;
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
         $isWeekendHoliday = in_array($todayDayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($today);
 
         if ($todayDayName === null || $isWeekendHoliday) {
             return response()->json([
@@ -427,6 +435,7 @@ class AttendanceDetailController extends Controller
                 'summary' => [
                     'total' => 0,
                     'hadir' => 0,
+                    'dispen' => 0,
                     'sakit' => 0,
                     'izin' => 0,
                     'alpa' => 0,
@@ -444,7 +453,10 @@ class AttendanceDetailController extends Controller
             })
             ->orderBy('jam_mulai');
 
-        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)->get();
+        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)
+            ->get()
+            ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+            ->values();
 
         $classOptions = $todaySchedules
             ->map(function ($schedule) {
@@ -470,6 +482,7 @@ class AttendanceDetailController extends Controller
                 'summary' => [
                     'total' => 0,
                     'hadir' => 0,
+                    'dispen' => 0,
                     'sakit' => 0,
                     'izin' => 0,
                     'alpa' => 0,
@@ -562,9 +575,11 @@ class AttendanceDetailController extends Controller
         $summary = [
             'total'     => (int) $filteredStudentIds->count(),
             'hadir'     => 0,
+            'dispen'    => 0,
             'sakit'     => 0,
             'izin'      => 0,
             'alpa'      => 0,
+            'bolos'     => 0,
             'terlambat' => 0,
             'belum'     => 0,
         ];
@@ -580,8 +595,11 @@ class AttendanceDetailController extends Controller
                 $summary['izin']++;
             } elseif ($status === 'Dispen') {
                 $summary['hadir']++; // Dispen dianggap Hadir
+                $summary['dispen']++;
             } elseif ($status === 'Alpha' || $status === 'Alpa') {
                 $summary['alpa']++;
+            } elseif ($status === 'Bolos') {
+                $summary['bolos']++;
             } elseif ($status === 'Terlambat') {
                 $summary['terlambat']++;
             } else {
@@ -608,6 +626,7 @@ class AttendanceDetailController extends Controller
                 'Izin' => 'btn-info',
                 'Dispen' => 'btn-primary',
                 'Alpa' => 'btn-danger',
+                'Bolos' => 'btn-dark',
                 default => 'btn-success',
             };
             $aksi = '<div class="dropdown attendance-actions">'
@@ -618,8 +637,9 @@ class AttendanceDetailController extends Controller
                 . $buildStatusOption('Hadir', 'Hadir')
                 . $buildStatusOption('Sakit', 'Sakit')
                 . $buildStatusOption('Izin', 'Izin')
-                . $buildStatusOption('Dispen', 'Dispen')
+                . $buildStatusOption('Dispen', 'Dispen (dihitung Hadir)')
                 . $buildStatusOption('Alpa', 'Alpa')
+                . $buildStatusOption('Bolos', 'Bolos')
                 . $buildStatusOption('Terlambat', 'Terlambat')
                 . '</div></div>';
 
@@ -681,7 +701,7 @@ class AttendanceDetailController extends Controller
         $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($date);
         $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($date);
 
         if ($dayName === null || $isWeekendHoliday) {
             return response()->json([
@@ -700,7 +720,10 @@ class AttendanceDetailController extends Controller
             })
             ->orderBy('jam_mulai');
 
-        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)->get();
+        $todaySchedules = PklMode::applyToScheduleQuery($todaySchedules)
+            ->get()
+            ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai))
+            ->values();
 
         $classOptions = $todaySchedules
             ->map(fn($schedule) => $schedule->teacherSubject->classroom)
@@ -765,7 +788,10 @@ class AttendanceDetailController extends Controller
                 ->whereHas('teacherSubject.teacher')
                 ->orderBy('jam_mulai');
 
-            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+                ->values();
         }
 
         // Get all teacher attendance for today's schedules
@@ -890,7 +916,7 @@ class AttendanceDetailController extends Controller
         $dayName = $dayMap[$date->dayOfWeekIso] ?? null;
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($date);
         $isWeekendHoliday = in_array($dayName, ['Sabtu', 'Minggu'], true)
-            || $schoolHolidayMessage !== null;
+            || SchoolCalendar::isHoliday($date);
 
         $schedules = collect();
         if ($dayName !== null && !$isWeekendHoliday) {
@@ -916,7 +942,10 @@ class AttendanceDetailController extends Controller
                 })
                 ->orderBy('jam_mulai');
 
-            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)->get();
+            $schedules = PklMode::applyToScheduleQuery($schedulesQuery)
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai))
+                ->values();
         }
 
         $teacherAttendances = TeacherAttendance::query()
@@ -1180,18 +1209,23 @@ class AttendanceDetailController extends Controller
                     return $query->where('teacher_attendance_id', $request->teacher_attendance_id);
                 }),
             ],
-            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Terlambat',
+            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Bolos,Terlambat',
             'keterangan' => 'nullable|string|max:255',
             'jam_absen' => 'nullable|date_format:H:i',
         ]);
 
-        $teacherAttendanceDate = TeacherAttendance::query()
+        $teacherAttendance = TeacherAttendance::query()
+            ->with('schedule')
             ->whereKey($validated['teacher_attendance_id'])
-            ->value('tanggal');
+            ->first();
+        $teacherAttendanceDate = $teacherAttendance?->tanggal;
 
         if ($teacherAttendanceDate && (
             $this->isWeekendHoliday($teacherAttendanceDate)
-            || SchoolCalendar::isHoliday($teacherAttendanceDate)
+            || SchoolCalendar::isHolidayAt(
+                $teacherAttendanceDate,
+                $teacherAttendance->schedule?->jam_mulai ?? '00:00:00'
+            )
         )) {
             return response()->json([
                 'success' => false,
@@ -1224,18 +1258,23 @@ class AttendanceDetailController extends Controller
                     return $query->where('teacher_attendance_id', $request->teacher_attendance_id);
                 })->ignore($attendanceDetail->id),
             ],
-            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Terlambat',
+            'status' => 'required|in:Hadir,Izin,Sakit,Dispen,Alpha,Bolos,Terlambat',
             'keterangan' => 'nullable|string|max:255',
             'jam_absen' => 'nullable|date_format:H:i',
         ]);
 
-        $teacherAttendanceDate = TeacherAttendance::query()
+        $teacherAttendance = TeacherAttendance::query()
+            ->with('schedule')
             ->whereKey($validated['teacher_attendance_id'])
-            ->value('tanggal');
+            ->first();
+        $teacherAttendanceDate = $teacherAttendance?->tanggal;
 
         if ($teacherAttendanceDate && (
             $this->isWeekendHoliday($teacherAttendanceDate)
-            || SchoolCalendar::isHoliday($teacherAttendanceDate)
+            || SchoolCalendar::isHolidayAt(
+                $teacherAttendanceDate,
+                $teacherAttendance->schedule?->jam_mulai ?? '00:00:00'
+            )
         )) {
             return response()->json([
                 'success' => false,
@@ -1280,7 +1319,7 @@ class AttendanceDetailController extends Controller
     public function submitForGuru(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
+            'status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Bolos,Terlambat',
             'classroom_id' => 'required|integer',
             'tanggal' => 'required|date|before_or_equal:today',
         ]);
@@ -1354,6 +1393,13 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Jadwal hari ini untuk kelas tersebut tidak ditemukan.');
         }
 
+        if (SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai)) {
+            return redirect()->route('guru.attendance-details.index', [
+                'tanggal' => $today->toDateString(),
+                'classroom_id' => $classroomId,
+            ])->with('error', SchoolCalendar::holidayMessage($today) . ' Absensi tidak tersedia untuk jadwal ini.');
+        }
+
         $teacherAttendance = TeacherAttendance::query()
             ->where('schedule_id', $schedule->id)
             ->whereDate('tanggal', $today->toDateString())
@@ -1410,7 +1456,7 @@ class AttendanceDetailController extends Controller
             'tanggal' => 'required|date|before_or_equal:today',
             'attendances' => 'required|array|min:1|max:50',
             'attendances.*.student_id' => 'required|integer|distinct|exists:students,id',
-            'attendances.*.status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
+            'attendances.*.status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Bolos,Terlambat',
         ]);
 
         $user = auth()->user();
@@ -1463,6 +1509,12 @@ class AttendanceDetailController extends Controller
         if (!$schedule || !$schedule->teacherSubject) {
             return response()->json([
                 'message' => 'Jadwal guru untuk kelas dan tanggal tersebut tidak ditemukan.',
+            ], 422);
+        }
+
+        if (SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai)) {
+            return response()->json([
+                'message' => SchoolCalendar::holidayMessage($date) . ' Absensi tidak tersedia untuk jadwal ini.',
             ], 422);
         }
 
@@ -1604,6 +1656,11 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Jadwal tidak valid untuk kelas Anda hari ini.');
         }
 
+        if (SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai)) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+                ->with('error', SchoolCalendar::holidayMessage($today) . ' Absensi tidak tersedia untuk jadwal ini.');
+        }
+
         $leaveRequest = TeacherLeaveRequest::query()
             ->where('teacher_id', $schedule->teacherSubject->teacher_id)
             ->where('status_pengajuan', 'Disetujui')
@@ -1678,7 +1735,7 @@ class AttendanceDetailController extends Controller
     {
         $validated = $request->validate([
             'classroom_id' => 'nullable|integer',
-            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Terlambat',
+            'bulk_status' => 'required|in:Hadir,Sakit,Izin,Dispen,Alpa,Bolos,Terlambat',
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'required|integer|exists:students,id',
             'tanggal' => 'required|date|before_or_equal:today',
@@ -1739,7 +1796,9 @@ class AttendanceDetailController extends Controller
             });
         }
 
-        $todaySchedules = $todaySchedulesQuery->get();
+        $todaySchedules = $todaySchedulesQuery->get()
+            ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+            ->values();
 
         if ($todaySchedules->isEmpty()) {
             return redirect()->route('guru.attendance-details.index', [
@@ -1783,11 +1842,8 @@ class AttendanceDetailController extends Controller
         $teacherAttendanceBySchedule = [];
         $savedCount = 0;
         $skippedCount = 0;
-        // Dispen dianggap Hadir dalam bulk
-        $isDispenBulk = $validated['bulk_status'] === 'Dispen';
         $status = match ($validated['bulk_status']) {
             'Alpa', 'Alpha' => 'Alpha',
-            'Dispen'        => 'Hadir',
             default         => $validated['bulk_status'],
         };
 
@@ -1882,7 +1938,7 @@ class AttendanceDetailController extends Controller
                 'teacher_attendance_id' => $teacherAttendance->id,
                 'student_id' => $pair['student_id'],
                 'status' => $status,
-                'keterangan' => $isDispenBulk ? 'Dispen' : null,
+                'keterangan' => null,
                 'jam_absen' => $nowTime,
                 'created_at' => $nowStamp,
                 'updated_at' => $nowStamp,
@@ -1984,7 +2040,9 @@ class AttendanceDetailController extends Controller
             });
         }
 
-        $schedules = $schedulesQuery->get();
+        $schedules = $schedulesQuery->get()
+            ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($targetDate, $schedule->jam_mulai))
+            ->values();
 
         if ($schedules->isEmpty()) {
             return redirect()->route('guru.attendance-details.index', [
@@ -2230,6 +2288,11 @@ class AttendanceDetailController extends Controller
                 ->with('error', 'Jadwal tidak valid untuk kelas Anda hari ini.');
         }
 
+        if (SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai)) {
+            return redirect()->route('siswa.attendance-details.index', ['schedule_id' => $schedule->id])
+                ->with('error', SchoolCalendar::holidayMessage($today) . ' Absensi tidak tersedia untuk jadwal ini.');
+        }
+
         $leaveRequest = TeacherLeaveRequest::query()
             ->where('teacher_id', $schedule->teacherSubject->teacher_id)
             ->where('status_pengajuan', 'Disetujui')
@@ -2413,7 +2476,7 @@ class AttendanceDetailController extends Controller
 
         $statusSummary = [
             'total' => (int) $histories->count(),
-            'hadir' => (int) $histories->where('status', 'Hadir')->count(),
+            'hadir' => (int) $histories->whereIn('status', ['Hadir', 'Dispen'])->count(),
             'sakit' => (int) $histories->where('status', 'Sakit')->count(),
             'izin' => (int) $histories->where('status', 'Izin')->count(),
             'alpa' => (int) $histories->filter(fn($item) => in_array($item->status, ['Alpha', 'Alpa'], true))->count(),

@@ -9,6 +9,7 @@ class Holiday extends Model
     protected $fillable = [
         'tanggal',
         'tanggal_akhir',
+        'jam_mulai_libur',
         'keterangan',
         'is_national',
         'is_pjj',

@@ -67,6 +67,10 @@
             {{ $schoolHolidayMessage ?? "Hari {$todayDayName} adalah hari libur." }}
             Agenda guru tidak tersedia.
         </div>
+    @elseif ($schoolHolidayMessage)
+        <div class="alert alert-warning">
+            {{ $schoolHolidayMessage }} Agenda hanya tersedia untuk jadwal sebelum jam tersebut.
+        </div>
     @endif
 
     <div class="card">

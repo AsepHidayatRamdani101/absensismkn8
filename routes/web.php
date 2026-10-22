@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Dashboard\DashboardDssController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EarlyWarningReportController;
 use App\Http\Controllers\ClassroomController;
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\AttendanceController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\AttendanceDeviceController;
 use App\Http\Controllers\GuruAgendaController;
 use App\Http\Controllers\MajorController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\KesiswaanReportController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SchoolSettingController;
 use App\Http\Controllers\StudentController;
@@ -56,6 +58,12 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('admin')->group(function () {
         Route::get('/admin', [DashboardController::class, 'admin'])->name('admin.dashboard');
         Route::get('/admin/dss', [DashboardDssController::class, 'admin'])->name('admin.dashboard.dss');
+        Route::get('/admin/reports/early-warning', [EarlyWarningReportController::class, 'index'])
+            ->name('admin.reports.early-warning');
+        Route::get('/admin/reports/early-warning/students', [EarlyWarningReportController::class, 'studentData'])
+            ->name('admin.reports.early-warning.students');
+        Route::get('/admin/reports/early-warning/teachers', [EarlyWarningReportController::class, 'teacherData'])
+            ->name('admin.reports.early-warning.teachers');
         Route::get('/admin/pjj', [PjjController::class, 'adminIndex'])->defaults('section', 'dashboard')->name('admin.pjj.dashboard');
         Route::get('/admin/pjj/tasks', [PjjController::class, 'adminIndex'])->defaults('section', 'tasks')->name('admin.pjj.tasks');
         Route::get('/admin/pjj/teacher-attendance', [PjjController::class, 'adminIndex'])->defaults('section', 'teacher-attendance')->name('admin.pjj.teacher-attendance');
@@ -551,6 +559,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('reports.student-attendance.pdf');
         Route::get('reports/student-attendance/excel', [ReportController::class, 'studentAttendanceExcel'])
             ->name('reports.student-attendance.excel');
+        Route::get('reports/class-effectiveness', [KesiswaanReportController::class, 'index'])
+            ->name('admin.reports.class-effectiveness');
+        Route::get('reports/class-effectiveness/students', [KesiswaanReportController::class, 'studentData'])
+            ->name('admin.reports.class-effectiveness.students');
+        Route::get('reports/class-effectiveness/teachers', [KesiswaanReportController::class, 'teacherData'])
+            ->name('admin.reports.class-effectiveness.teachers');
+        Route::get('reports/class-effectiveness/pdf', [KesiswaanReportController::class, 'pdf'])
+            ->name('admin.reports.class-effectiveness.pdf');
+        Route::get('reports/class-effectiveness/excel', [KesiswaanReportController::class, 'excel'])
+            ->name('admin.reports.class-effectiveness.excel');
         Route::get('reports/teacher-agenda', [ReportController::class, 'teacherAgenda'])
             ->name('reports.teacher-agenda');
         Route::get('reports/teacher-agenda/datatable', [ReportController::class, 'teacherAgendaDatatable'])
@@ -726,6 +744,34 @@ Route::middleware(['auth', 'role:bk'])->group(function () {
 Route::middleware(['auth', 'role:kesiswaan'])->group(function () {
     Route::get('/kesiswaan', [DashboardDssController::class, 'kesiswaan'])->name('kesiswaan.dashboard');
     Route::get('/kesiswaan/dss', [DashboardDssController::class, 'kesiswaan'])->name('kesiswaan.dashboard.dss');
+    Route::get('/kesiswaan/laporan/early-warning', [EarlyWarningReportController::class, 'index'])
+        ->name('kesiswaan.reports.early-warning');
+    Route::get('/kesiswaan/laporan/early-warning/students', [EarlyWarningReportController::class, 'studentData'])
+        ->name('kesiswaan.reports.early-warning.students');
+    Route::get('/kesiswaan/laporan/early-warning/teachers', [EarlyWarningReportController::class, 'teacherData'])
+        ->name('kesiswaan.reports.early-warning.teachers');
+
+    Route::get('/kesiswaan/laporan/efektivitas-belajar', [KesiswaanReportController::class, 'index'])
+        ->name('kesiswaan.reports.class-effectiveness');
+    Route::get('/kesiswaan/laporan/efektivitas-belajar/students', [KesiswaanReportController::class, 'studentData'])
+        ->name('kesiswaan.reports.class-effectiveness.students');
+    Route::get('/kesiswaan/laporan/efektivitas-belajar/teachers', [KesiswaanReportController::class, 'teacherData'])
+        ->name('kesiswaan.reports.class-effectiveness.teachers');
+    Route::get('/kesiswaan/laporan/efektivitas-belajar/pdf', [KesiswaanReportController::class, 'pdf'])
+        ->name('kesiswaan.reports.class-effectiveness.pdf');
+    Route::get('/kesiswaan/laporan/efektivitas-belajar/excel', [KesiswaanReportController::class, 'excel'])
+        ->name('kesiswaan.reports.class-effectiveness.excel');
+
+    Route::prefix('kesiswaan/laporan')->name('kesiswaan.reports.')->group(function () {
+        Route::get('absensi-siswa', [ReportController::class, 'studentAttendance'])
+            ->name('student-attendance');
+        Route::get('absensi-siswa/datatable', [ReportController::class, 'studentAttendanceDatatable'])
+            ->name('student-attendance.datatable');
+        Route::get('absensi-siswa/pdf', [ReportController::class, 'studentAttendancePdf'])
+            ->name('student-attendance.pdf');
+        Route::get('absensi-siswa/excel', [ReportController::class, 'studentAttendanceExcel'])
+            ->name('student-attendance.excel');
+    });
 });
 
 Route::get('/home', function () {

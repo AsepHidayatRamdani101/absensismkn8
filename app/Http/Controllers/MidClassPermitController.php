@@ -262,7 +262,10 @@ class MidClassPermitController extends Controller
             : 'Izin pulang jam ' . substr($permit->jam_keluar, 0, 5);
 
         foreach ($schedules as $schedule) {
-            if (!$schedule->teacherSubject) {
+            if (
+                !$schedule->teacherSubject
+                || SchoolCalendar::isHolidayAt($tanggal, $schedule->jam_mulai)
+            ) {
                 continue;
             }
 

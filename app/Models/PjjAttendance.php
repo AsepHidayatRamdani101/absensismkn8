@@ -10,10 +10,14 @@ class PjjAttendance extends Model
         'student_id',
         'attendance_date',
         'selfie_path',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [
         'attendance_date' => 'date',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
     ];
 
     public function student()

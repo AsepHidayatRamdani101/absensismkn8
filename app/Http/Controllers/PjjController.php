@@ -10,12 +10,15 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherSubject;
 use App\Models\Subject;
+use App\Models\Holiday;
 use App\Support\SchoolCalendar;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class PjjController extends Controller
@@ -24,7 +27,8 @@ class PjjController extends Controller
     {
         abort_unless(in_array($section, ['dashboard', 'tasks', 'teacher-attendance', 'student-attendance', 'effectiveness'], true), 404);
 
-        $filters = $this->periodFilter($request);
+        $pjjDates = $this->configuredPjjDates();
+        $filters = $this->periodFilter($request, $pjjDates);
         $assignmentQuery = PjjAssignment::query()
             ->whereBetween('created_at', [$filters['start']->copy()->startOfDay(), $filters['end']->copy()->endOfDay()]);
         $this->applyAssignmentFilters($assignmentQuery, $request);
@@ -68,6 +72,7 @@ class PjjController extends Controller
             'submittedTaskCount',
             'effectiveness',
             'isPjjActiveToday',
+            'pjjDates',
             'teachers',
             'classrooms',
             'subjects'
@@ -87,8 +92,9 @@ class PjjController extends Controller
             ->orderBy('classroom_id')
             ->get();
         $isPjjActiveToday = SchoolCalendar::isPjj(Carbon::today());
+        $pjjDates = $this->configuredPjjDates();
 
-        return view('guru.pjj.index', compact('teacher', 'teacherSubjects', 'isPjjActiveToday'));
+        return view('guru.pjj.index', compact('teacher', 'teacherSubjects', 'isPjjActiveToday', 'pjjDates'));
     }
 
     public function teacherStoreAssignment(Request $request)
@@ -132,7 +138,9 @@ class PjjController extends Controller
             return $this->teacherSubmissionsDataTable($request, $assignment);
         }
 
-        return view('guru.pjj.assignment', compact('assignment'));
+        $pjjDates = $this->configuredPjjDates();
+
+        return view('guru.pjj.assignment', compact('assignment', 'pjjDates'));
     }
 
     public function teacherGradeSubmission(Request $request, PjjSubmission $submission)
@@ -175,7 +183,9 @@ class PjjController extends Controller
             ->orderBy('nama_mapel')
             ->get(['id', 'nama_mapel']);
 
-        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'subjects'));
+        $pjjDates = $this->configuredPjjDates();
+
+        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'subjects', 'pjjDates'));
     }
 
     public function studentSubmitAssignment(Request $request, PjjAssignment $assignment)
@@ -234,12 +244,28 @@ class PjjController extends Controller
         }
 
         $data = $request->validate([
-            'selfie' => ['required', 'image', 'mimes:jpg,jpeg', 'max:1536'],
+            'selfie_data' => ['required', 'string', 'max:2200000'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
-        $image = @imagecreatefromstring(file_get_contents($data['selfie']->getRealPath()));
+        if (!preg_match('/\Adata:image\/jpeg;base64,([A-Za-z0-9+\/=]+)\z/', $data['selfie_data'], $matches)) {
+            throw ValidationException::withMessages(['selfie_data' => 'Selfie harus diambil langsung menggunakan kamera.']);
+        }
+
+        $imageBytes = base64_decode($matches[1], true);
+        if ($imageBytes === false || strlen($imageBytes) > 1536 * 1024) {
+            throw ValidationException::withMessages(['selfie_data' => 'Ukuran selfie melebihi batas. Silakan ambil ulang.']);
+        }
+
+        $imageInfo = getimagesizefromstring($imageBytes);
+        if ($imageInfo === false || $imageInfo[2] !== IMAGETYPE_JPEG) {
+            throw ValidationException::withMessages(['selfie_data' => 'Selfie harus berupa foto JPEG yang diambil langsung dari kamera.']);
+        }
+
+        $image = @imagecreatefromstring($imageBytes);
         if (!$image) {
-            throw ValidationException::withMessages(['selfie' => 'Foto selfie tidak dapat dibaca. Silakan ambil ulang.']);
+            throw ValidationException::withMessages(['selfie_data' => 'Foto selfie tidak dapat dibaca. Silakan ambil ulang.']);
         }
 
         $width = imagesx($image);
@@ -257,11 +283,11 @@ class PjjController extends Controller
         imagedestroy($compressed);
 
         if ($jpeg === false || $jpeg === '') {
-            throw ValidationException::withMessages(['selfie' => 'Foto selfie gagal diproses. Silakan coba lagi.']);
+            throw ValidationException::withMessages(['selfie_data' => 'Foto selfie gagal diproses. Silakan coba lagi.']);
         }
 
         $path = 'pjj/attendances/' . Carbon::today()->toDateString() . '/' . $student->id . '-' . bin2hex(random_bytes(8)) . '.jpg';
-        $attendanceCreated = DB::transaction(function () use ($student, $path, $jpeg) {
+        $attendanceCreated = DB::transaction(function () use ($student, $path, $jpeg, $data) {
             Student::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
 
             if (PjjAttendance::query()
@@ -279,6 +305,8 @@ class PjjController extends Controller
                 'student_id' => $student->id,
                 'attendance_date' => Carbon::today()->toDateString(),
                 'selfie_path' => $path,
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
             ]);
 
             return true;
@@ -425,15 +453,22 @@ class PjjController extends Controller
                 'nis' => e($attendance->student->nis),
                 'classroom' => e($attendance->student->classroom->nama_kelas),
                 'photo' => '<a class="btn btn-xs btn-outline-primary" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance)) . '"><i class="fas fa-camera"></i> Lihat foto</a>',
+                'location' => $attendance->latitude !== null && $attendance->longitude !== null
+                    ? e($attendance->latitude . ', ' . $attendance->longitude)
+                        . ' <a class="btn btn-xs btn-outline-success" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q='
+                        . e($attendance->latitude . ',' . $attendance->longitude)
+                        . '"><i class="fas fa-map-marker-alt"></i> Peta</a>'
+                    : '<span class="text-muted">Tidak tersedia</span>',
             ]
         );
     }
 
     private function teacherAssignmentsDataTable(Request $request, Teacher $teacher)
     {
+        $pjjDates = $this->configuredPjjDates();
         $request->validate([
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
+            'date_to' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
             'teacher_subject_id' => ['nullable', 'integer'],
             'submission_status' => ['nullable', 'in:submitted,pending'],
         ]);
@@ -482,9 +517,10 @@ class PjjController extends Controller
 
     private function teacherSubmissionsDataTable(Request $request, PjjAssignment $assignment)
     {
+        $pjjDates = $this->configuredPjjDates();
         $request->validate([
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
+            'date_to' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
             'grading_status' => ['nullable', 'in:graded,pending'],
         ]);
         $query = $assignment->submissions()->with('student');
@@ -534,9 +570,10 @@ class PjjController extends Controller
 
     private function studentAssignmentsDataTable(Request $request, Student $student)
     {
+        $pjjDates = $this->configuredPjjDates();
         $request->validate([
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
+            'date_to' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
             'subject_id' => ['nullable', 'integer'],
             'submission_status' => ['nullable', 'in:pending,submitted,graded'],
         ]);
@@ -695,14 +732,19 @@ class PjjController extends Controller
         abort_unless(SchoolCalendar::isPjj(Carbon::today()), 403, 'Fitur ini hanya aktif pada tanggal yang ditetapkan sebagai mode PJJ.');
     }
 
-    private function periodFilter(Request $request): array
+    private function periodFilter(Request $request, array $pjjDates): array
     {
         $data = $request->validate([
             'period' => ['nullable', 'in:day,week,month'],
-            'date' => ['nullable', 'date'],
+            'date' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
         ]);
         $period = $data['period'] ?? 'day';
-        $date = Carbon::parse($data['date'] ?? Carbon::today()->toDateString());
+        $today = Carbon::today()->toDateString();
+        $defaultDate = in_array($today, $pjjDates, true)
+            ? $today
+            : (collect($pjjDates)->filter(fn($pjjDate) => $pjjDate <= $today)->last()
+                ?? ($pjjDates[0] ?? $today));
+        $date = Carbon::parse($data['date'] ?? $defaultDate);
 
         [$start, $end] = match ($period) {
             'week' => [$date->copy()->startOfWeek(), $date->copy()->endOfWeek()],
@@ -711,5 +753,24 @@ class PjjController extends Controller
         };
 
         return compact('period', 'date', 'start', 'end');
+    }
+
+    private function configuredPjjDates(): array
+    {
+        return Holiday::query()
+            ->where('is_pjj', true)
+            ->get(['tanggal', 'tanggal_akhir'])
+            ->flatMap(function (Holiday $holiday): array {
+                $start = Carbon::parse($holiday->tanggal)->startOfDay();
+                $end = Carbon::parse($holiday->tanggal_akhir ?? $holiday->tanggal)->startOfDay();
+
+                return collect(CarbonPeriod::create($start, $end))
+                    ->map(fn(Carbon $date) => $date->toDateString())
+                    ->all();
+            })
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 }

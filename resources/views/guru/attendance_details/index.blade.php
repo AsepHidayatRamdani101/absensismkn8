@@ -71,6 +71,12 @@
             border-color: #fecaca;
         }
 
+        #statusSummaryBar .summary-bolos {
+            color: #334155;
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
         #statusSummaryBar .summary-terlambat {
             color: #9a3412;
             background: #fff7ed;
@@ -295,6 +301,10 @@
             {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
             Absensi siswa tidak dibuka.
         </div>
+    @elseif ($schoolHolidayMessage)
+        <div class="alert alert-warning">
+            {{ $schoolHolidayMessage }} Jadwal sebelum jam tersebut tetap berlangsung.
+        </div>
     @endif
 
     <div id="guruAttendancePage">
@@ -352,10 +362,12 @@
                         </div>
                     </div>
                     <div class="d-flex flex-wrap mt-2" style="gap:.4rem;">
-                        <span class="summary-chip summary-hadir">Hadir <strong id="summaryHadir">0</strong></span>
+                        <span class="summary-chip summary-hadir">Hadir (termasuk Dispen) <strong id="summaryHadir">0</strong></span>
+                        <span class="summary-chip summary-dispen">Dispen <strong id="summaryDispen">0</strong></span>
                         <span class="summary-chip summary-sakit">Sakit <strong id="summarySakit">0</strong></span>
                         <span class="summary-chip summary-izin">Izin <strong id="summaryIzin">0</strong></span>
                         <span class="summary-chip summary-alpa">Alpa <strong id="summaryAlpa">0</strong></span>
+                        <span class="summary-chip summary-bolos">Bolos <strong id="summaryBolos">0</strong></span>
                         <span class="summary-chip summary-terlambat">Terlambat <strong
                                 id="summaryTerlambat">0</strong></span>
                         <span class="summary-chip summary-belum">Belum <strong id="summaryBelum">0</strong></span>
@@ -364,7 +376,7 @@
 
                 <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center flex-wrap"
                     id="selectionQuickTools" style="gap:.5rem; display:none;">
-                    <small class="text-muted mb-0">Pilih status setiap siswa, lalu simpan perubahan.</small>
+                    <small class="text-muted mb-0">Status awal setiap siswa Hadir. Ubah status yang diperlukan, lalu simpan.</small>
                     <button type="button" id="btnSaveAttendance" class="btn btn-success btn-sm js-attendance-action" disabled>
                         <i class="fas fa-save mr-1"></i> Simpan
                     </button>
@@ -503,13 +515,17 @@
                         const rows = (json && json.data) ? json.data : [];
                         rows.forEach((row) => {
                             const studentId = String(row.student_id);
+                            const rawStatus = row.raw_status
+                                ? normalizeAttendanceStatus(row.raw_status)
+                                : null;
                             if (!originalStatuses.has(studentId)) {
-                                originalStatuses.set(studentId, row.raw_status
-                                    ? normalizeAttendanceStatus(row.raw_status)
-                                    : 'Belum');
+                                originalStatuses.set(studentId, rawStatus || 'Belum');
                             }
                             if (!stagedStatuses.has(studentId)) {
-                                stagedStatuses.set(studentId, normalizeAttendanceStatus(row.raw_status));
+                                stagedStatuses.set(studentId, rawStatus || 'Hadir');
+                                if (rawStatus === null) {
+                                    dirtyStudentIds.add(studentId);
+                                }
                             }
                         });
                         updateSaveButtonState();
@@ -605,11 +621,12 @@
                     Izin: 'btn-info',
                     Dispen: 'btn-primary',
                     Alpa: 'btn-danger',
+                    Bolos: 'btn-dark',
                     Terlambat: 'btn-warning',
                 }[label] || 'btn-success';
 
                 $button
-                    .removeClass('btn-success btn-warning btn-info btn-primary btn-danger')
+                    .removeClass('btn-success btn-warning btn-info btn-primary btn-danger btn-dark')
                     .addClass(statusClass)
                     .text(label);
             }
@@ -644,9 +661,11 @@
             function resetStatusSummary() {
                 $('#summaryTotalRows').text('0');
                 $('#summaryHadir').text('0');
+                $('#summaryDispen').text('0');
                 $('#summarySakit').text('0');
                 $('#summaryIzin').text('0');
                 $('#summaryAlpa').text('0');
+                $('#summaryBolos').text('0');
                 $('#summaryTerlambat').text('0');
                 $('#summaryBelum').text('0');
             }
@@ -663,9 +682,11 @@
                 if (latestServerSummary) {
                     $('#summaryTotalRows').text(String(latestServerSummary.total ?? 0));
                     $('#summaryHadir').text(String(latestServerSummary.hadir ?? 0));
+                    $('#summaryDispen').text(String(latestServerSummary.dispen ?? 0));
                     $('#summarySakit').text(String(latestServerSummary.sakit ?? 0));
                     $('#summaryIzin').text(String(latestServerSummary.izin ?? 0));
                     $('#summaryAlpa').text(String(latestServerSummary.alpa ?? 0));
+                    $('#summaryBolos').text(String(latestServerSummary.bolos ?? 0));
                     $('#summaryTerlambat').text(String(latestServerSummary.terlambat ?? 0));
                     $('#summaryBelum').text(String(latestServerSummary.belum ?? 0));
                     return;
@@ -677,9 +698,11 @@
 
                 const counts = {
                     Hadir: 0,
+                    Dispen: 0,
                     Sakit: 0,
                     Izin: 0,
                     Alpa: 0,
+                    Bolos: 0,
                     Terlambat: 0,
                     Belum: 0,
                 };
@@ -695,8 +718,11 @@
                         counts.Izin++;
                     } else if (rawStatus === 'Dispen') {
                         counts.Hadir++; // Dispen dianggap Hadir
+                        counts.Dispen++;
                     } else if (rawStatus === 'Alpha' || rawStatus === 'Alpa') {
                         counts.Alpa++;
+                    } else if (rawStatus === 'Bolos') {
+                        counts.Bolos++;
                     } else if (rawStatus === 'Terlambat') {
                         counts.Terlambat++;
                     } else {
@@ -706,9 +732,11 @@
 
                 $('#summaryTotalRows').text(String(rows.length));
                 $('#summaryHadir').text(String(counts.Hadir));
+                $('#summaryDispen').text(String(counts.Dispen));
                 $('#summarySakit').text(String(counts.Sakit));
                 $('#summaryIzin').text(String(counts.Izin));
                 $('#summaryAlpa').text(String(counts.Alpa));
+                $('#summaryBolos').text(String(counts.Bolos));
                 $('#summaryTerlambat').text(String(counts.Terlambat));
                 $('#summaryBelum').text(String(counts.Belum));
             }

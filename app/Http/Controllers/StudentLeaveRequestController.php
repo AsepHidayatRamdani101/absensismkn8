@@ -502,7 +502,10 @@ class StudentLeaveRequestController extends Controller
                 ->get();
 
             foreach ($schedules as $schedule) {
-                if (!$schedule->teacherSubject) {
+                if (
+                    !$schedule->teacherSubject
+                    || SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai)
+                ) {
                     continue;
                 }
 

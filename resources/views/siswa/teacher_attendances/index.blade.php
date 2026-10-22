@@ -38,6 +38,10 @@
             {{ $schoolHolidayMessage ?? "Hari {$selectedDayName} otomatis libur." }}
             Absensi guru tidak dibuka.
         </div>
+    @elseif ($schoolHolidayMessage)
+        <div class="alert alert-warning">
+            {{ $schoolHolidayMessage }} Absensi guru hanya dibuka untuk jadwal sebelum jam tersebut.
+        </div>
     @endif
     @if ($isPjj)
         <div class="alert alert-info">

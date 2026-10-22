@@ -21,6 +21,7 @@ class HolidayController extends Controller
         $validated = $request->validate([
             'tanggal' => 'required|date',
             'tanggal_akhir' => 'nullable|date|after_or_equal:tanggal',
+            'jam_mulai_libur' => 'required|date_format:H:i',
             'keterangan' => 'required|string|max:255',
             'is_national' => 'nullable|boolean',
             'is_pjj' => 'nullable|boolean',
@@ -55,6 +56,7 @@ class HolidayController extends Controller
         $validated = $request->validate([
             'tanggal' => 'required|date',
             'tanggal_akhir' => 'nullable|date|after_or_equal:tanggal',
+            'jam_mulai_libur' => 'required|date_format:H:i',
             'keterangan' => 'required|string|max:255',
             'is_national' => 'nullable|boolean',
             'is_pjj' => 'nullable|boolean',

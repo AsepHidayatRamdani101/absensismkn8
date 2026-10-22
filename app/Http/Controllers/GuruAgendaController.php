@@ -31,7 +31,7 @@ class GuruAgendaController extends Controller
 
         [$today, $todayDayName, $isWeekendHoliday] = $this->resolveTodayContext();
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
-        $isWeekendHoliday = $isWeekendHoliday || $schoolHolidayMessage !== null;
+        $isWeekendHoliday = $isWeekendHoliday || SchoolCalendar::isHoliday($today);
 
         $todaySchedules = collect();
 
@@ -44,7 +44,10 @@ class GuruAgendaController extends Controller
                 })
                 ->orderBy('jam_mulai');
 
-            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)->get();
+            $todaySchedules = PklMode::applyToScheduleQuery($todaySchedulesQuery)
+                ->get()
+                ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai))
+                ->values();
         }
 
         // Load semua jadwal dari kelas yang diajar guru hari ini untuk menghitung jam ke yang akurat
@@ -163,7 +166,7 @@ class GuruAgendaController extends Controller
         [$today, $todayDayName, $isWeekendHoliday] = $this->resolveTodayContext();
 
         $schoolHolidayMessage = SchoolCalendar::holidayMessage($today);
-        if ($schoolHolidayMessage !== null) {
+        if (SchoolCalendar::isHolidayAt($today, $schedule->jam_mulai)) {
             return redirect()->route('guru.agenda.index')->with('error', $schoolHolidayMessage . '. Agenda tidak dapat diisi.');
         }
 

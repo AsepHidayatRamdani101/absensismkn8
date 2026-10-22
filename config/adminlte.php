@@ -396,11 +396,33 @@ return [
             'icon' => 'fas fa-fw fa-chart-line',
             'can' => 'bk',
         ],
+        
         [
-            'text' => 'Dasbor Pancawaluya',
-            'route' => 'kesiswaan.dashboard.dss',
-            'icon' => 'fas fa-fw fa-chart-line',
+            'text' => 'Kesiswaan',
+            'icon' => 'fas fa-user-graduate',
             'can' => 'kesiswaan',
+            'submenu' => [
+                [
+                    'text' => 'Aktivitas Siswa',
+                    'route' => 'kesiswaan.dashboard.dss',
+                    'icon' => 'fas fa-chart-line',
+                ],
+                [
+                    'text' => 'Laporan Absensi Siswa',
+                    'route' => 'kesiswaan.reports.student-attendance',
+                    'icon' => 'fas fa-file-alt',
+                ],
+                [
+                    'text' => 'Efektivitas Belajar Kelas',
+                    'route' => 'kesiswaan.reports.class-effectiveness',
+                    'icon' => 'fas fa-chart-pie',
+                ],
+                [
+                    'text' => 'Early Warning Siswa dan Guru',
+                    'route' => 'kesiswaan.reports.early-warning',
+                    'icon' => 'fas fa-exclamation-triangle',
+                ],
+            ],
         ],
         [
             'text' => 'Pengaturan Sekolah',
@@ -781,6 +803,18 @@ return [
                     'text' => 'Absensi Siswa',
                     'route' => 'reports.student-attendance',
                     'icon' => 'fas fa-user-graduate',
+                ],
+                [
+                    'text' => 'Efektivitas Belajar Kelas',
+                    'route' => 'admin.reports.class-effectiveness',
+                    'icon' => 'fas fa-chart-pie',
+                    'can' => 'admin',
+                ],
+                [
+                    'text' => 'Early Warning Siswa dan Guru',
+                    'route' => 'admin.reports.early-warning',
+                    'icon' => 'fas fa-exclamation-triangle',
+                    'can' => 'admin',
                 ],
             ],
         ],

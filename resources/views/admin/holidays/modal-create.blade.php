@@ -23,7 +23,13 @@
                     <div class="form-group">
                         <label>Tanggal Selesai</label>
                         <input type="date" name="tanggal_akhir" class="form-control" required>
-                        <small class="form-text text-muted">Semua tanggal dalam rentang ini menerapkan mode libur atau PJJ yang dipilih.</small>
+                        <small class="form-text text-muted">Jam mulai libur hanya berlaku pada tanggal mulai. Tanggal berikutnya dalam rentang ini libur sehari penuh.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Jam Mulai Libur</label>
+                        <input type="time" name="jam_mulai_libur" class="form-control" value="00:00" required>
+                        <small class="form-text text-muted">Pukul 00:00 berarti libur sehari penuh. Jadwal yang mulai sebelum jam ini tetap berjalan.</small>
                     </div>
 
                     <div class="form-group">

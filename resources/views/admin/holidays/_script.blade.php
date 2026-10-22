@@ -88,6 +88,7 @@
                 $('#edit_id').val(data.id);
                 $('#edit_tanggal').val(String(data.tanggal).substring(0, 10));
                 $('#edit_tanggal_akhir').val(String(data.tanggal_akhir || data.tanggal).substring(0, 10));
+                $('#edit_jam_mulai_libur').val(String(data.jam_mulai_libur || '00:00').substring(0, 5));
                 $('#edit_keterangan').val(data.keterangan);
                 $('#edit_is_national').prop('checked', !!data.is_national);
                 $('#edit_is_pjj').prop('checked', !!data.is_pjj);
@@ -115,6 +116,7 @@
                     _method: 'PUT',
                     tanggal: $('#edit_tanggal').val(),
                     tanggal_akhir: $('#edit_tanggal_akhir').val(),
+                    jam_mulai_libur: $('#edit_jam_mulai_libur').val(),
                     keterangan: $('#edit_keterangan').val(),
                     is_national: $('#edit_is_national').is(':checked') ? 1 : 0,
                     is_pjj: $('#edit_is_pjj').is(':checked') ? 1 : 0,

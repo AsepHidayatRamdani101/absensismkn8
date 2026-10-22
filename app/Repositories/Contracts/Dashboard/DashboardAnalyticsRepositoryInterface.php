@@ -10,6 +10,8 @@ interface DashboardAnalyticsRepositoryInterface
 
     public function kpi(array $filters, array $scope): array;
 
+    public function todayAttendanceStatusCards(): array;
+
     public function trends(array $filters, array $scope): array;
 
     public function radar(array $filters, array $scope): array;

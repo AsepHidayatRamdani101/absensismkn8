@@ -27,10 +27,11 @@ class ReportApiController extends Controller
             'message' => 'Laporan harian berhasil dimuat',
             'data' => [
                 'tanggal' => $today->toDateString(),
-                'hadir' => AttendanceDetail::whereDate('created_at', $today)->where('status', 'Hadir')->count(),
+                'hadir' => AttendanceDetail::whereDate('created_at', $today)->whereIn('status', ['Hadir', 'Dispen'])->count(),
                 'izin' => AttendanceDetail::whereDate('created_at', $today)->where('status', 'Izin')->count(),
                 'sakit' => AttendanceDetail::whereDate('created_at', $today)->where('status', 'Sakit')->count(),
                 'alpha' => AttendanceDetail::whereDate('created_at', $today)->where('status', 'Alpha')->count(),
+                'bolos' => AttendanceDetail::whereDate('created_at', $today)->where('status', 'Bolos')->count(),
             ],
             'meta' => [
                 'scope' => 'daily',
@@ -53,10 +54,11 @@ class ReportApiController extends Controller
             'success' => true,
             'message' => 'Laporan bulanan berhasil dimuat',
             'data' => [
-                'hadir' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->where('status', 'Hadir')->count(),
+                'hadir' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->whereIn('status', ['Hadir', 'Dispen'])->count(),
                 'izin' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->where('status', 'Izin')->count(),
                 'sakit' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->where('status', 'Sakit')->count(),
                 'alpha' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->where('status', 'Alpha')->count(),
+                'bolos' => AttendanceDetail::whereYear('created_at', $year)->whereMonth('created_at', $month)->where('status', 'Bolos')->count(),
             ],
             'meta' => [
                 'scope' => 'monthly',
@@ -85,10 +87,11 @@ class ReportApiController extends Controller
             'message' => 'Laporan siswa berhasil dimuat',
             'data' => [
                 'student' => new StudentResource($student->loadMissing('classroom.major')),
-                'hadir' => AttendanceDetail::where('student_id', $student->id)->where('status', 'Hadir')->count(),
+                'hadir' => AttendanceDetail::where('student_id', $student->id)->whereIn('status', ['Hadir', 'Dispen'])->count(),
                 'izin' => AttendanceDetail::where('student_id', $student->id)->where('status', 'Izin')->count(),
                 'sakit' => AttendanceDetail::where('student_id', $student->id)->where('status', 'Sakit')->count(),
                 'alpha' => AttendanceDetail::where('student_id', $student->id)->where('status', 'Alpha')->count(),
+                'bolos' => AttendanceDetail::where('student_id', $student->id)->where('status', 'Bolos')->count(),
             ],
             'meta' => [
                 'scope' => 'student',

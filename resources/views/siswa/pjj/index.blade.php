@@ -32,15 +32,24 @@
                     <div><strong>Absensi hari ini sudah tercatat.</strong><div class="text-muted">Waktu {{ $todayAttendance->created_at->format('H:i') }} · Maksimal satu kali per hari.</div></div>
                 </div>
             @else
-                <form id="pjj-attendance-form" method="POST" action="{{ route('siswa.pjj.attendance') }}" enctype="multipart/form-data" class="form-row align-items-end">
+                <form id="pjj-attendance-form" method="POST" action="{{ route('siswa.pjj.attendance') }}">
                     @csrf
-                    <div class="form-group col-lg-6 mb-lg-0">
-                        <label for="selfie">Ambil foto selfie</label>
-                        <input id="selfie" type="file" name="selfie" class="form-control-file" accept="image/*" capture="user" required>
-                        <small id="compression-status" class="form-text text-muted">Foto akan dikompresi menjadi JPEG maksimal 1280 piksel sebelum dikirim.</small>
+                    <div class="form-group">
+                        <label for="pjj-camera">Kamera selfie (wajib kamera langsung)</label>
+                        <video id="pjj-camera" class="d-block w-100 bg-dark rounded" autoplay muted playsinline style="max-width:480px; min-height:180px;"></video>
+                        <canvas id="pjj-camera-canvas" class="d-none"></canvas>
+                        <img id="pjj-selfie-preview" class="d-none img-thumbnail mt-2" alt="Pratinjau selfie" style="max-width:240px;">
+                        <input id="selfie-data" type="hidden" name="selfie_data">
+                        <input id="pjj-latitude" type="hidden" name="latitude">
+                        <input id="pjj-longitude" type="hidden" name="longitude">
+                        <small id="compression-status" class="form-text text-muted">Izinkan akses kamera dan lokasi. Foto dari galeri tidak dapat digunakan.</small>
                     </div>
-                    <div class="form-group col-lg-3 mb-lg-0"><button id="attendance-submit" class="btn btn-primary btn-sm"><i class="fas fa-camera mr-1"></i> Kirim absensi</button></div>
-                    <div class="col-lg-3 text-muted small">Absensi selfie hanya dapat dikirim satu kali sehari.</div>
+                    <div class="form-group">
+                        <button type="button" id="capture-selfie" class="btn btn-outline-primary btn-sm" disabled><i class="fas fa-camera mr-1"></i> Ambil selfie</button>
+                        <button type="button" id="retake-selfie" class="btn btn-outline-secondary btn-sm d-none"><i class="fas fa-redo mr-1"></i> Ulangi</button>
+                        <button type="submit" id="attendance-submit" class="btn btn-primary btn-sm" disabled><i class="fas fa-paper-plane mr-1"></i> Kirim absensi</button>
+                    </div>
+                    <div class="text-muted small">Absensi hanya dapat dikirim satu kali sehari dan memerlukan lokasi perangkat.</div>
                 </form>
             @endif
         </div>
@@ -52,11 +61,21 @@
             <form id="pjj-student-filter-form" class="form-row align-items-end">
                 <div class="form-group col-lg-2 col-md-4">
                     <label for="student-date-from">Dibuat dari</label>
-                    <input id="student-date-from" type="date" name="date_from" class="form-control form-control-sm">
+                    <select id="student-date-from" name="date_from" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-lg-2 col-md-4">
                     <label for="student-date-to">Sampai</label>
-                    <input id="student-date-to" type="date" name="date_to" class="form-control form-control-sm">
+                    <select id="student-date-to" name="date_to" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-lg-3 col-md-4">
                     <label for="student-subject">Mata pelajaran</label>
@@ -191,43 +210,114 @@
 
             const attendanceForm = document.getElementById('pjj-attendance-form');
             if (!attendanceForm) return;
-            const input = document.getElementById('selfie');
+            const video = document.getElementById('pjj-camera');
+            const canvas = document.getElementById('pjj-camera-canvas');
+            const selfieData = document.getElementById('selfie-data');
+            const latitudeInput = document.getElementById('pjj-latitude');
+            const longitudeInput = document.getElementById('pjj-longitude');
+            const preview = document.getElementById('pjj-selfie-preview');
+            const captureButton = document.getElementById('capture-selfie');
+            const retakeButton = document.getElementById('retake-selfie');
             const button = document.getElementById('attendance-submit');
             const status = document.getElementById('compression-status');
-            let isPreparing = false;
+            let cameraStream = null;
 
-            attendanceForm.addEventListener('submit', async function (event) {
-                if (isPreparing) return;
-                const file = input.files && input.files[0];
-                if (!file) return;
-                event.preventDefault();
-                isPreparing = true;
-                button.disabled = true;
-                status.textContent = 'Mengompresi foto di perangkat...';
+            async function startCamera() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    status.textContent = 'Kamera langsung memerlukan browser yang mendukung akses kamera melalui HTTPS.';
+                    return;
+                }
+
                 try {
-                    const image = await createImageBitmap(file);
-                    const scale = Math.min(1, 1280 / Math.max(image.width, image.height));
-                    const canvas = document.createElement('canvas');
-                    canvas.width = Math.max(1, Math.round(image.width * scale));
-                    canvas.height = Math.max(1, Math.round(image.height * scale));
-                    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-                    image.close();
-                    const blob = await new Promise(function (resolve, reject) {
-                        canvas.toBlob(function (result) { result ? resolve(result) : reject(new Error('Kompresi foto gagal.')); }, 'image/jpeg', 0.72);
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: { facingMode: 'user' }
                     });
-                    const compressedFile = new File([blob], 'selfie-pjj.jpg', { type: 'image/jpeg' });
-                    const transfer = new DataTransfer();
-                    transfer.items.add(compressedFile);
-                    input.files = transfer.files;
-                    status.textContent = 'Foto siap dikirim (' + (compressedFile.size / 1024).toFixed(0) + ' KB).';
-                    isPreparing = false;
-                    attendanceForm.submit();
+                    video.srcObject = cameraStream;
+                    await video.play();
+                    captureButton.disabled = false;
+                    status.textContent = 'Kamera aktif. Ambil foto langsung untuk melanjutkan.';
                 } catch (error) {
-                    isPreparing = false;
+                    status.textContent = error.name === 'NotAllowedError'
+                        ? 'Izin kamera ditolak. Izinkan akses kamera lalu muat ulang halaman.'
+                        : 'Kamera tidak dapat diakses. Pastikan kamera tersedia dan halaman dibuka melalui HTTPS.';
+                }
+            }
+
+            captureButton.addEventListener('click', function () {
+                if (!cameraStream || !video.videoWidth || !video.videoHeight) {
+                    status.textContent = 'Kamera belum siap. Tunggu sebentar lalu coba lagi.';
+                    return;
+                }
+
+                const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+                canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+                canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+                const context = canvas.getContext('2d');
+                if (!context) {
+                    status.textContent = 'Kamera tidak dapat mengambil foto. Muat ulang halaman dan coba lagi.';
+                    return;
+                }
+
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                selfieData.value = canvas.toDataURL('image/jpeg', 0.82);
+                preview.src = selfieData.value;
+                preview.classList.remove('d-none');
+                captureButton.classList.add('d-none');
+                retakeButton.classList.remove('d-none');
+                button.disabled = false;
+                status.textContent = 'Foto diambil langsung dari kamera. Ambil ulang jika wajah belum terlihat jelas.';
+            });
+
+            retakeButton.addEventListener('click', function () {
+                selfieData.value = '';
+                latitudeInput.value = '';
+                longitudeInput.value = '';
+                preview.removeAttribute('src');
+                preview.classList.add('d-none');
+                retakeButton.classList.add('d-none');
+                captureButton.classList.remove('d-none');
+                button.disabled = true;
+                status.textContent = 'Ambil selfie langsung dari kamera untuk melanjutkan.';
+            });
+
+            attendanceForm.addEventListener('submit', function (event) {
+                if (!selfieData.value) {
+                    event.preventDefault();
+                    status.textContent = 'Ambil selfie langsung dari kamera sebelum mengirim absensi.';
+                    return;
+                }
+
+                event.preventDefault();
+                if (!navigator.geolocation) {
+                    status.textContent = 'Browser tidak mendukung lokasi. Izinkan lokasi atau gunakan browser lain.';
+                    return;
+                }
+
+                button.disabled = true;
+                status.textContent = 'Meminta lokasi perangkat...';
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    latitudeInput.value = String(position.coords.latitude);
+                    longitudeInput.value = String(position.coords.longitude);
+                    status.textContent = 'Lokasi berhasil diperoleh. Mengirim absensi...';
+                    HTMLFormElement.prototype.submit.call(attendanceForm);
+                }, function () {
                     button.disabled = false;
-                    status.textContent = 'Foto tidak dapat dikompresi. Silakan pilih atau ambil foto lain.';
+                    status.textContent = 'Lokasi tidak berhasil diperoleh. Izinkan akses lokasi lalu kirim kembali.';
+                }, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 15000
+                });
+            });
+
+            window.addEventListener('beforeunload', function () {
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(function (track) { track.stop(); });
                 }
             });
+
+            startCamera();
         });
     </script>
 @stop

@@ -41,11 +41,21 @@
             <form id="pjj-submission-filter-form" class="form-row align-items-end">
                 <div class="form-group col-md-3">
                     <label for="submission-date-from">Dikirim dari</label>
-                    <input id="submission-date-from" type="date" name="date_from" class="form-control form-control-sm">
+                    <select id="submission-date-from" name="date_from" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-md-3">
                     <label for="submission-date-to">Sampai</label>
-                    <input id="submission-date-to" type="date" name="date_to" class="form-control form-control-sm">
+                    <select id="submission-date-to" name="date_to" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-md-3">
                     <label for="grading-status">Status penilaian</label>

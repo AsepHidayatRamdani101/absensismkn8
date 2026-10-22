@@ -102,6 +102,12 @@
 @stop
 
 @section('content')
+    @if (!$isWeekendHoliday && $schoolHolidayMessage)
+        <div class="alert alert-warning">
+            {{ $schoolHolidayMessage }} Hanya jadwal sebelum jam tersebut yang ditampilkan.
+        </div>
+    @endif
+
     @if ($isWeekendHoliday)
         <div class="alert alert-info">
             {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}

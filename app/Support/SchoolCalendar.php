@@ -45,7 +45,20 @@ class SchoolCalendar
 
     public static function isHoliday(CarbonInterface|string $date): bool
     {
-        return self::holidayOn($date) !== null;
+        $holiday = self::holidayOn($date);
+
+        return $holiday !== null && self::holidayStartTime($holiday, $date) === '00:00:00';
+    }
+
+    public static function isHolidayAt(CarbonInterface|string $date, string $time): bool
+    {
+        $holiday = self::holidayOn($date);
+
+        if (!$holiday) {
+            return false;
+        }
+
+        return $time >= self::holidayStartTime($holiday, $date);
     }
 
     public static function holidayMessage(CarbonInterface|string $date): ?string
@@ -58,6 +71,12 @@ class SchoolCalendar
 
         $message = 'Tanggal ini ditetapkan sebagai hari libur'
             . ($holiday->keterangan ? ': ' . $holiday->keterangan : '');
+        $holidayStartTime = self::holidayStartTime($holiday, $date);
+
+        if ($holidayStartTime !== '00:00:00') {
+            $message .= ' mulai pukul ' . substr($holidayStartTime, 0, 5);
+        }
+
         $endDate = $holiday->tanggal_akhir ?? $holiday->tanggal;
 
         if ($holiday->tanggal->toDateString() !== $endDate->toDateString()) {
@@ -66,6 +85,17 @@ class SchoolCalendar
         }
 
         return $message . '.';
+    }
+
+    private static function holidayStartTime(Holiday $holiday, CarbonInterface|string $date): string
+    {
+        $dateString = Carbon::parse($date)->toDateString();
+
+        if ($dateString !== Carbon::parse($holiday->tanggal)->toDateString()) {
+            return '00:00:00';
+        }
+
+        return (string) ($holiday->jam_mulai_libur ?? '00:00:00');
     }
 
     public static function effectiveDayCounts(CarbonInterface $startDate, CarbonInterface $endDate): array
@@ -79,7 +109,7 @@ class SchoolCalendar
                     ->whereDate('tanggal', '>=', $start->toDateString())
                     ->orWhereDate('tanggal_akhir', '>=', $start->toDateString());
             })
-            ->get(['tanggal', 'tanggal_akhir', 'keterangan', 'is_pjj']);
+            ->get(['tanggal', 'tanggal_akhir', 'jam_mulai_libur', 'keterangan', 'is_pjj']);
 
         $effectiveDays = 0;
         $holidayWeekdays = 0;
@@ -97,7 +127,11 @@ class SchoolCalendar
                 $holidayStart = Carbon::parse($holiday->tanggal)->startOfDay();
                 $holidayEnd = Carbon::parse($holiday->tanggal_akhir ?? $holiday->tanggal)->startOfDay();
 
-                return $date->betweenIncluded($holidayStart, $holidayEnd);
+                return $date->betweenIncluded($holidayStart, $holidayEnd)
+                    && (
+                        !$date->isSameDay($holidayStart)
+                        || ($holiday->jam_mulai_libur ?? '00:00:00') === '00:00:00'
+                    );
             });
 
             if ($isHoliday) {

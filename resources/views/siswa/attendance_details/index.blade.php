@@ -35,6 +35,10 @@
             {{ $schoolHolidayMessage ?? "Hari {$todayDayName} otomatis libur." }}
             Absensi siswa tidak dibuka.
         </div>
+    @elseif ($schoolHolidayMessage)
+        <div class="alert alert-warning">
+            {{ $schoolHolidayMessage }} Hanya jadwal sebelum jam tersebut yang dapat diabsen.
+        </div>
     @endif
 
     <div class="card mb-3">

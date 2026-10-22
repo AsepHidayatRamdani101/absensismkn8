@@ -4,6 +4,57 @@
 
 @section('plugins.Datatables', true)
 
+@section('css')
+    <style>
+        .pjj-stat-row > [class*="col-"] {
+            display: flex;
+        }
+
+        .pjj-stat-card {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 150px;
+            width: 100%;
+        }
+
+        .pjj-stat-card .inner {
+            flex: 1 1 auto;
+            padding-right: 64px;
+        }
+
+        .pjj-stat-card .inner h3 {
+            font-size: clamp(1.25rem, 1.7vw, 2rem);
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .pjj-stat-card .inner p {
+            display: flex;
+            align-items: flex-start;
+            font-size: clamp(.72rem, .85vw, .88rem);
+            line-height: 1.25;
+            min-height: 2.5em;
+        }
+
+        .pjj-stat-card .icon {
+            font-size: clamp(2.5rem, 4vw, 3.5rem);
+            right: .65rem;
+            top: .75rem;
+        }
+
+        .pjj-stat-card .small-box-footer {
+            align-items: center;
+            display: flex;
+            justify-content: center;
+            line-height: 1.2;
+            min-height: 2.6rem;
+            padding: .4rem .5rem;
+            text-align: center;
+        }
+    </style>
+@stop
+
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <div>
@@ -40,7 +91,13 @@
                 </div>
                 <div class="form-group col-md-3 mb-2">
                     <label for="date">Tanggal acuan</label>
-                    <input id="date" type="date" name="date" class="form-control form-control-sm" value="{{ $filters['date']->toDateString() }}">
+                    <select id="date" name="date" class="form-control form-control-sm" @disabled(empty($pjjDates)) required>
+                        @forelse ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}" @selected($filters['date']->toDateString() === $pjjDate)>{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @empty
+                            <option value="">Belum ada tanggal PJJ yang diatur</option>
+                        @endforelse
+                    </select>
                 </div>
                 <div class="form-group col-md-3 mb-2">
                     <button class="btn btn-primary btn-sm"><i class="fas fa-search mr-1"></i> Tampilkan</button>
@@ -51,21 +108,21 @@
         </div>
     </div>
 
-    <div class="row">
+    <div class="row pjj-stat-row">
         <div class="col-xl col-md-4 col-sm-6">
-            <div class="small-box bg-info"><div class="inner"><h3>{{ $assignmentsCount }}</h3><p>Tugas guru diunggah</p></div><div class="icon"><i class="fas fa-book"></i></div><a href="{{ route('admin.pjj.tasks', request()->query()) }}" class="small-box-footer">Data tugas <i class="fas fa-arrow-circle-right"></i></a></div>
+            <div class="small-box pjj-stat-card bg-info"><div class="inner"><h3>{{ $assignmentsCount }}</h3><p>Tugas guru diunggah</p></div><div class="icon"><i class="fas fa-book"></i></div><a href="{{ route('admin.pjj.tasks', request()->query()) }}" class="small-box-footer">Data tugas <i class="fas fa-arrow-circle-right"></i></a></div>
         </div>
         <div class="col-xl col-md-4 col-sm-6">
-            <div class="small-box bg-success"><div class="inner"><h3>{{ $teacherAttendanceCount }}</h3><p>Guru hadir melalui upload tugas</p></div><div class="icon"><i class="fas fa-chalkboard-teacher"></i></div><a href="{{ route('admin.pjj.teacher-attendance', request()->query()) }}" class="small-box-footer">Lihat guru <i class="fas fa-arrow-circle-right"></i></a></div>
+            <div class="small-box pjj-stat-card bg-success"><div class="inner"><h3>{{ $teacherAttendanceCount }}</h3><p>Guru hadir melalui upload tugas</p></div><div class="icon"><i class="fas fa-chalkboard-teacher"></i></div><a href="{{ route('admin.pjj.teacher-attendance', request()->query()) }}" class="small-box-footer">Lihat guru <i class="fas fa-arrow-circle-right"></i></a></div>
         </div>
         <div class="col-xl col-md-4 col-sm-6">
-            <div class="small-box bg-primary"><div class="inner"><h3>{{ $studentAttendanceCount }}</h3><p>Siswa hadir selfie (unik)</p></div><div class="icon"><i class="fas fa-camera"></i></div><a href="{{ route('admin.pjj.student-attendance', request()->query()) }}" class="small-box-footer">Lihat absensi <i class="fas fa-arrow-circle-right"></i></a></div>
+            <div class="small-box pjj-stat-card bg-primary"><div class="inner"><h3>{{ $studentAttendanceCount }}</h3><p>Siswa hadir selfie (unik)</p></div><div class="icon"><i class="fas fa-camera"></i></div><a href="{{ route('admin.pjj.student-attendance', request()->query()) }}" class="small-box-footer">Lihat absensi <i class="fas fa-arrow-circle-right"></i></a></div>
         </div>
         <div class="col-xl col-md-4 col-sm-6">
-            <div class="small-box bg-warning"><div class="inner"><h3>{{ $submittedTaskCount }} / {{ $studentTaskCount }}</h3><p>Tugas terkumpul / target</p></div><div class="icon"><i class="fas fa-user-graduate"></i></div><a href="{{ route('admin.pjj.effectiveness', request()->query()) }}" class="small-box-footer">Efektivitas <i class="fas fa-arrow-circle-right"></i></a></div>
+            <div class="small-box pjj-stat-card bg-warning"><div class="inner"><h3>{{ $submittedTaskCount }} / {{ $studentTaskCount }}</h3><p>Tugas terkumpul / target</p></div><div class="icon"><i class="fas fa-user-graduate"></i></div><a href="{{ route('admin.pjj.effectiveness', request()->query()) }}" class="small-box-footer">Efektivitas <i class="fas fa-arrow-circle-right"></i></a></div>
         </div>
         <div class="col-xl col-md-4 col-sm-6">
-            <div class="small-box bg-purple"><div class="inner"><h3>{{ number_format($effectiveness, 2) }}%</h3><p>Efektivitas pengumpulan</p></div><div class="icon"><i class="fas fa-chart-line"></i></div><a href="{{ route('admin.pjj.effectiveness', request()->query()) }}" class="small-box-footer">Lihat perhitungan <i class="fas fa-arrow-circle-right"></i></a></div>
+            <div class="small-box pjj-stat-card bg-purple"><div class="inner"><h3>{{ number_format($effectiveness, 2) }}%</h3><p>Efektivitas pengumpulan</p></div><div class="icon"><i class="fas fa-chart-line"></i></div><a href="{{ route('admin.pjj.effectiveness', request()->query()) }}" class="small-box-footer">Lihat perhitungan <i class="fas fa-arrow-circle-right"></i></a></div>
         </div>
     </div>
 
@@ -105,6 +162,7 @@
                     ['data' => 'nis', 'name' => 'nis'],
                     ['data' => 'classroom', 'name' => 'classroom'],
                     ['data' => 'photo', 'name' => 'photo', 'orderable' => false, 'searchable' => false],
+                    ['data' => 'location', 'name' => 'location', 'orderable' => false, 'searchable' => false],
                 ],
             };
         @endphp
@@ -127,7 +185,13 @@
                         </div>
                         <div class="form-group col-md-3 mb-2">
                             <label for="effectiveness-date">Tanggal acuan</label>
-                            <input id="effectiveness-date" type="date" name="date" class="form-control form-control-sm" value="{{ $filters['date']->toDateString() }}">
+                            <select id="effectiveness-date" name="date" class="form-control form-control-sm" @disabled(empty($pjjDates)) required>
+                                @forelse ($pjjDates as $pjjDate)
+                                    <option value="{{ $pjjDate }}" @selected($filters['date']->toDateString() === $pjjDate)>{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                                @empty
+                                    <option value="">Belum ada tanggal PJJ yang diatur</option>
+                                @endforelse
+                            </select>
                         </div>
                         <div class="form-group col-md-3 mb-2">
                             <button class="btn btn-primary btn-sm"><i class="fas fa-filter mr-1"></i> Terapkan</button>
@@ -151,7 +215,13 @@
                         </div>
                         <div class="form-group col-xl-2 col-md-4 mb-2">
                             <label for="admin-date">Tanggal acuan</label>
-                            <input id="admin-date" name="date" type="date" class="form-control form-control-sm" value="{{ $filters['date']->toDateString() }}">
+                            <select id="admin-date" name="date" class="form-control form-control-sm" @disabled(empty($pjjDates)) required>
+                                @forelse ($pjjDates as $pjjDate)
+                                    <option value="{{ $pjjDate }}" @selected($filters['date']->toDateString() === $pjjDate)>{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                                @empty
+                                    <option value="">Belum ada tanggal PJJ yang diatur</option>
+                                @endforelse
+                            </select>
                         </div>
                         @if (in_array($section, ['tasks', 'teacher-attendance'], true))
                             <div class="form-group col-xl-3 col-md-4 mb-2">
@@ -204,7 +274,7 @@
                         </table></div>
                     @elseif ($section === 'student-attendance')
                         <div class="table-responsive"><table id="pjj-admin-table" class="table table-bordered table-striped table-hover w-100">
-                            <thead><tr><th>Tanggal</th><th>Nama Siswa</th><th>NIS</th><th>Kelas</th><th>Bukti Selfie</th></tr></thead>
+                            <thead><tr><th>Tanggal</th><th>Nama Siswa</th><th>NIS</th><th>Kelas</th><th>Bukti Selfie</th><th>Lokasi Foto</th></tr></thead>
                         </table></div>
                     @endif
                 </div>
@@ -246,7 +316,7 @@
                 $('#apply-pjj-admin-filters').on('click', function () { table.ajax.reload(); });
                 $('#reset-pjj-admin-filters').on('click', function () {
                     form.find('select').val('');
-                    form.find('input[type="date"]').val(@json($filters['date']->toDateString()));
+                    form.find('select[name="date"]').val(@json($filters['date']->toDateString()));
                     form.find('select[name="period"]').val(@json($filters['period']));
                     table.ajax.reload();
                 });

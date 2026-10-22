@@ -123,7 +123,7 @@
                         <label for="status" class="mb-1">Status</label>
                         <select class="form-control" id="status" name="status">
                             <option value="">Semua Status</option>
-                            @foreach (['Hadir', 'Sakit', 'Izin', 'Alpha', 'Terlambat'] as $statusOption)
+                            @foreach (['Hadir', 'Sakit', 'Izin', 'Dispen', 'Alpha', 'Bolos', 'Terlambat'] as $statusOption)
                                 <option value="{{ $statusOption }}" @selected($statusFilter === $statusOption)>
                                     {{ $statusOption === 'Alpha' ? 'Alpa' : $statusOption }}
                                 </option>
@@ -240,6 +240,8 @@
                                         <span class="badge badge-info">Izin</span>
                                     @elseif ($status === 'Alpa')
                                         <span class="badge badge-danger">Alpa</span>
+                                    @elseif ($status === 'Bolos')
+                                        <span class="badge badge-dark">Bolos</span>
                                     @elseif ($status === 'Terlambat')
                                         <span class="badge badge-primary">Terlambat</span>
                                     @else

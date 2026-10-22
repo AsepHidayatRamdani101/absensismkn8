@@ -43,6 +43,9 @@
                                 @else
                                     {{ $startDate->format('d-m-Y') }} s.d. {{ $endDate->format('d-m-Y') }}
                                 @endif
+                                @if (!$holiday->is_pjj && ($holiday->jam_mulai_libur ?? '00:00:00') !== '00:00:00')
+                                    <br><small class="text-muted">Mulai libur {{ substr($holiday->jam_mulai_libur, 0, 5) }}</small>
+                                @endif
                             </td>
                             <td>{{ $holiday->keterangan }}</td>
                             <td>

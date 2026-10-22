@@ -80,11 +80,21 @@
             <form id="pjj-teacher-filter-form" class="form-row align-items-end">
                 <div class="form-group col-md-2">
                     <label for="teacher-date-from">Dibuat dari</label>
-                    <input id="teacher-date-from" type="date" name="date_from" class="form-control form-control-sm">
+                    <select id="teacher-date-from" name="date_from" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-md-2">
                     <label for="teacher-date-to">Sampai</label>
-                    <input id="teacher-date-to" type="date" name="date_to" class="form-control form-control-sm">
+                    <select id="teacher-date-to" name="date_to" class="form-control form-control-sm">
+                        <option value="">Semua tanggal PJJ</option>
+                        @foreach ($pjjDates as $pjjDate)
+                            <option value="{{ $pjjDate }}">{{ \Carbon\Carbon::parse($pjjDate)->format('d-m-Y') }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group col-md-3">
                     <label for="teacher-subject-filter">Kelas & mata pelajaran</label>

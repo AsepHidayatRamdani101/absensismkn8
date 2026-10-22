@@ -50,7 +50,11 @@ class AttendanceController extends Controller
             'metode' => 'required|in:Manual,RFID,Face,QR',
         ]);
 
-        if ($this->isWeekendHoliday($validated['tanggal']) || SchoolCalendar::isHoliday($validated['tanggal'])) {
+        $schedule = isset($validated['schedule_id']) ? Schedule::findOrFail($validated['schedule_id']) : null;
+        if (
+            $this->isWeekendHoliday($validated['tanggal'])
+            || SchoolCalendar::isHolidayAt($validated['tanggal'], $schedule?->jam_mulai ?? '00:00:00')
+        ) {
             return response()->json([
                 'success' => false,
                 'message' => SchoolCalendar::holidayMessage($validated['tanggal'])
@@ -84,7 +88,11 @@ class AttendanceController extends Controller
             'metode' => 'required|in:Manual,RFID,Face,QR',
         ]);
 
-        if ($this->isWeekendHoliday($validated['tanggal']) || SchoolCalendar::isHoliday($validated['tanggal'])) {
+        $schedule = isset($validated['schedule_id']) ? Schedule::findOrFail($validated['schedule_id']) : null;
+        if (
+            $this->isWeekendHoliday($validated['tanggal'])
+            || SchoolCalendar::isHolidayAt($validated['tanggal'], $schedule?->jam_mulai ?? '00:00:00')
+        ) {
             return response()->json([
                 'success' => false,
                 'message' => SchoolCalendar::holidayMessage($validated['tanggal'])

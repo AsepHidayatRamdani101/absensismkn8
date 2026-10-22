@@ -42,6 +42,10 @@ class DashboardController extends Controller
             return redirect()->route('kurikulum.dashboard');
         }
 
+        if (method_exists($user, 'hasRole') && $user->hasRole('kesiswaan')) {
+            return redirect()->route('kesiswaan.dashboard');
+        }
+
         if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
             return redirect()->route('guru.dashboard');
         }
@@ -82,6 +86,53 @@ class DashboardController extends Controller
                 $query->whereDate('tanggal', $today);
             })->count();
             $todayStudentAttendanceIoT = Attendance::whereDate('tanggal', $today)->count();
+
+            $studentStatusRows = AttendanceDetail::query()
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->join('students', 'students.id', '=', 'attendance_details.student_id')
+                ->leftJoin('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+                ->whereDate('teacher_attendances.tanggal', $today)
+                ->whereIn('attendance_details.status', ['Hadir', 'Izin', 'Sakit', 'Dispen', 'Alpha', 'Alpa', 'Bolos', 'Terlambat'])
+                ->selectRaw("CASE WHEN attendance_details.status IN ('Alpha', 'Alpa') THEN 'Alpa' ELSE attendance_details.status END as status")
+                ->addSelect(
+                    'students.id as student_id',
+                    'students.nama_lengkap as name',
+                    'students.nis',
+                    'classrooms.nama_kelas as classroom'
+                )
+                ->distinct()
+                ->orderBy('students.nama_lengkap')
+                ->get();
+
+            $statusDefinitions = [
+                'Hadir' => ['label' => 'Hadir', 'color' => 'success'],
+                'Izin' => ['label' => 'Izin', 'color' => 'info'],
+                'Sakit' => ['label' => 'Sakit', 'color' => 'warning'],
+                'Alpa' => ['label' => 'Alpa', 'color' => 'danger'],
+                'Bolos' => ['label' => 'Bolos', 'color' => 'dark'],
+                'Terlambat' => ['label' => 'Terlambat', 'color' => 'indigo'],
+                'Dispen' => ['label' => 'Dispen', 'color' => 'secondary'],
+            ];
+            $studentStatusCards = collect($statusDefinitions)->map(function ($definition, $status) use ($studentStatusRows) {
+                $students = $studentStatusRows
+                    ->where('status', $status)
+                    ->unique('student_id')
+                    ->map(fn($student) => [
+                        'name' => (string) $student->name,
+                        'nis' => (string) ($student->nis ?? '-'),
+                        'classroom' => (string) ($student->classroom ?? '-'),
+                    ])
+                    ->values()
+                    ->all();
+
+                return [
+                    'key' => $status,
+                    'label' => $definition['label'],
+                    'color' => $definition['color'],
+                    'count' => count($students),
+                    'students' => $students,
+                ];
+            })->values()->all();
 
             $teacherPresentToday = $this->countPresentTeachers($today, $today);
             $teacherPresentThisWeek = $this->countPresentTeachers($weekStart, $weekEnd);
@@ -124,6 +175,7 @@ class DashboardController extends Controller
                 'todayTeacherAttendances',
                 'todayStudentAttendanceByTeacher',
                 'todayStudentAttendanceIoT',
+                'studentStatusCards',
                 'teacherPresentToday',
                 'teacherPresentThisWeek',
                 'teacherPresentThisMonth',
@@ -150,13 +202,13 @@ class DashboardController extends Controller
 
                 $dailySchoolAttendance = Attendance::query()
                     ->selectRaw('DATE(tanggal) as tanggal, student_id')
-                    ->whereIn('status', ['Hadir', 'Terlambat'])
+                    ->whereIn('status', ['Hadir', 'Terlambat', 'Dispen'])
                     ->whereBetween('tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
 
                 $dailyClassAttendance = AttendanceDetail::query()
                     ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
                     ->selectRaw('DATE(teacher_attendances.tanggal) as tanggal, attendance_details.student_id')
-                    ->whereIn('attendance_details.status', ['Hadir', 'Terlambat'])
+                    ->whereIn('attendance_details.status', ['Hadir', 'Terlambat', 'Dispen'])
                     ->whereBetween('teacher_attendances.tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
 
                 $dailyStudentCounts = DB::query()
@@ -178,23 +230,11 @@ class DashboardController extends Controller
                 $dailyTeacherCounts = $dailyDates->map(fn($date) => (int) ($teacherCountsByDate[$date] ?? 0))->values();
                 $dailyStudentPresentCounts = $dailyDates->map(fn($date) => (int) ($dailyStudentCounts[$date] ?? 0))->values();
 
-                $studentStatusToday = AttendanceDetail::query()
-                    ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                    ->select('attendance_details.status', DB::raw('COUNT(*) as total'))
-                    ->whereDate('teacher_attendances.tanggal', $today)
-                    ->groupBy('attendance_details.status')
-                    ->pluck('total', 'attendance_details.status');
-
-                $statusLabels = ['Hadir', 'Izin', 'Sakit', 'Alpha', 'Terlambat'];
-                $statusData = collect($statusLabels)->map(function ($status) use ($studentStatusToday) {
-                    return (int) ($studentStatusToday[$status] ?? 0);
-                })->values();
-
                 $metrics['dailyLabels'] = $dailyLabels;
                 $metrics['dailyTeacherCounts'] = $dailyTeacherCounts;
                 $metrics['dailyStudentPresentCounts'] = $dailyStudentPresentCounts;
-                $metrics['statusLabels'] = $statusLabels;
-                $metrics['statusData'] = $statusData;
+                $metrics['statusLabels'] = collect($studentStatusCards)->pluck('label');
+                $metrics['statusData'] = collect($studentStatusCards)->pluck('count');
             }
 
             return $metrics;
@@ -221,13 +261,13 @@ class DashboardController extends Controller
     {
         $schoolAttendanceIds = Attendance::query()
             ->select('student_id')
-            ->whereIn('status', ['Hadir', 'Terlambat'])
+            ->whereIn('status', ['Hadir', 'Terlambat', 'Dispen'])
             ->whereBetween('tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
 
         $classAttendanceIds = AttendanceDetail::query()
             ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
             ->select('attendance_details.student_id')
-            ->whereIn('attendance_details.status', ['Hadir', 'Terlambat'])
+            ->whereIn('attendance_details.status', ['Hadir', 'Terlambat', 'Dispen'])
             ->whereBetween('teacher_attendances.tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
 
         return (int) DB::query()

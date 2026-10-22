@@ -334,6 +334,10 @@ class TeacherLeaveRequestController extends Controller
                 ->get();
 
             foreach ($schedules as $schedule) {
+                if (SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai)) {
+                    continue;
+                }
+
                 $existing = TeacherAttendance::query()
                     ->where('schedule_id', $schedule->id)
                     ->whereDate('tanggal', $date->toDateString())

@@ -132,7 +132,7 @@ class ReportController extends Controller
             ]);
         }
 
-        if (today()->isWeekend() || SchoolCalendar::isHoliday(today()) || $schedule->hari !== [
+        if (today()->isWeekend() || SchoolCalendar::isHolidayAt(today(), $schedule->jam_mulai) || $schedule->hari !== [
             1 => 'Senin',
             2 => 'Selasa',
             3 => 'Rabu',
@@ -605,6 +605,7 @@ class ReportController extends Controller
             'classrooms' => $classrooms,
             'filters' => $request->all(),
             'periodLabel' => $this->buildPeriodLabel($request),
+            'routePrefix' => $request->routeIs('kesiswaan.*') ? 'kesiswaan.reports' : 'reports',
         ]);
     }
 
@@ -852,8 +853,8 @@ class ReportController extends Controller
                 $score = 0;
 
                 foreach ($dateAttendances as $attendance) {
-                    // Hadir dan Terlambat = 1, else = 0
-                    if (in_array($attendance['status'], ['Hadir', 'Terlambat'])) {
+                    // Hadir, Terlambat, and Dispen count as present.
+                    if (in_array($attendance['status'], ['Hadir', 'Terlambat', 'Dispen'], true)) {
                         $score += 1;
                     }
 
@@ -871,7 +872,7 @@ class ReportController extends Controller
 
             // Calculate totals from daily averages
             $totalAveraged = array_sum($dailyAverages);
-            $hadir = isset($allStatuses['Hadir']) ? (int) $allStatuses['Hadir'] : 0;
+            $hadir = (int) ($allStatuses['Hadir'] ?? 0) + (int) ($allStatuses['Dispen'] ?? 0);
             $terlambat = isset($allStatuses['Terlambat']) ? (int) $allStatuses['Terlambat'] : 0;
             $sakit = isset($allStatuses['Sakit']) ? (int) $allStatuses['Sakit'] : 0;
             $izin = isset($allStatuses['Izin']) ? (int) $allStatuses['Izin'] : 0;
@@ -1524,7 +1525,9 @@ class ReportController extends Controller
                 }
             });
 
-        $schedules = $schedulesQuery->get();
+        $schedules = $schedulesQuery->get()
+            ->reject(fn($schedule) => SchoolCalendar::isHolidayAt($date, $schedule->jam_mulai))
+            ->values();
         $teacherBySchedule = $schedules
             ->filter(fn(Schedule $schedule) => (int) ($schedule->teacherSubject->teacher_id ?? 0) > 0)
             ->mapWithKeys(fn(Schedule $schedule) => [
