@@ -252,6 +252,9 @@ Rollback:
 Tahap 1 (shared hosting):
 - Tetap gunakan database queue.
 - Jadwalkan worker via cron tiap menit.
+- Untuk Laravel Scheduler, daftarkan satu cron `* * * * * cd /path/ke/aplikasi && /path/php artisan schedule:run >> /dev/null 2>&1`.
+- Gunakan direktori root Laravel (yang berisi `artisan`) dan PHP CLI dari panel hosting; `schedule:work` hanya untuk development/local.
+- Pastikan zona waktu aplikasi sesuai zona waktu jadwal sekolah dan hindari cron scheduler ganda.
 - Batasi job berat dan jalankan off-peak.
 
 Tahap 2 (VPS):

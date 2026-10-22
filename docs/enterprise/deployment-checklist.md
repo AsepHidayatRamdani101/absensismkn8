@@ -22,10 +22,33 @@
 3. composer install --no-dev --optimize-autoloader
 4. php artisan migrate --force
 5. php artisan optimize
-6. Restart queue workers
-7. Nonaktifkan maintenance mode
-8. Verifikasi health endpoint /up
-9. Pantau log 30 menit
+6. Pastikan cron Laravel Scheduler aktif (konfigurasi di bawah)
+7. Restart queue workers
+8. Nonaktifkan maintenance mode
+9. Verifikasi health endpoint /up
+10. Pantau log 30 menit
+
+### Laravel Scheduler (wajib untuk otomatisasi)
+
+Jalankan `schedule:run` setiap menit melalui cron hosting. Gunakan path aplikasi dan PHP CLI
+yang diberikan panel hosting; contoh shared hosting:
+
+```cron
+* * * * * cd /home/USERNAME/path-ke-aplikasi && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+Pastikan perintah memakai direktori root Laravel (lokasi `artisan`), bukan direktori `public`.
+Pada cPanel, masukkan bagian setelah lima kolom waktu ke kolom **Command** Cron Jobs.
+Jika lokasi PHP berbeda, gunakan PHP CLI path dari panel hosting.
+
+`php artisan schedule:work` adalah worker foreground untuk pengembangan/local dan tidak
+perlu dijalankan pada shared hosting. Jangan mendaftarkan cron `schedule:run` lebih dari
+satu kali untuk aplikasi/environment yang sama. Zona waktu aplikasi harus sesuai zona
+waktu jadwal sekolah.
+
+Di Windows/Laragon lokal, gunakan Task Scheduler yang menjalankan
+`php artisan schedule:run` setiap menit secara tersembunyi; tidak perlu membuka
+`schedule:work` di terminal.
 
 ## Rollback
 1. Aktifkan maintenance mode
