@@ -454,8 +454,8 @@
             <span class="card-icon bg-success" style="color:#fff"><i class="fab fa-whatsapp"></i></span>
             <h6>Konfigurasi WA Fonnte</h6>
             <span class="card-path">Digunakan untuk pengingat otomatis guru yang belum mengisi absensi siswa/agenda
-                5 menit setelah jadwal selesai, orang tua siswa yang belum tercatat hadir 15 menit sebelum jadwal selesai,
-                serta pengurus kelas yang belum mengirim foto guru pada pukul 15.00.</span>
+                setelah jadwal selesai dan siswa yang belum tercatat hadir sebelum jadwal selesai. Pengurus kelas tetap
+                mendapat pengingat foto guru pada pukul 15.00.</span>
         </div>
         <div class="cache-card-body">
             <div class="alert alert-info py-2 px-3 small mb-3">
@@ -493,10 +493,30 @@
                     </div>
 
                     <div class="form-group col-md-4">
-                        <label for="reminder_time" class="font-weight-semibold">Jam Pengingat Foto Guru</label>
-                        <input type="time" class="form-control" id="reminder_time"
-                            value="15:00" readonly>
-                        <small class="form-text text-muted">Pengingat absensi guru dan orang tua mengikuti jam jadwal pelajaran.</small>
+                        <label for="teacher_reminder_minutes" class="font-weight-semibold">Pengingat Guru (menit setelah jadwal)</label>
+                        <input type="number" class="form-control @error('teacher_reminder_minutes') is-invalid @enderror"
+                            id="teacher_reminder_minutes" name="teacher_reminder_minutes"
+                            value="{{ old('teacher_reminder_minutes', $fonnte['teacher_reminder_minutes']) }}"
+                            min="1" max="180" required>
+                        @error('teacher_reminder_minutes')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="student_reminder_minutes" class="font-weight-semibold">Pengingat Siswa (menit sebelum jadwal selesai)</label>
+                        <input type="number" class="form-control @error('student_reminder_minutes') is-invalid @enderror"
+                            id="student_reminder_minutes" name="student_reminder_minutes"
+                            value="{{ old('student_reminder_minutes', $fonnte['student_reminder_minutes']) }}"
+                            min="1" max="180" required>
+                        @error('student_reminder_minutes')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-group col-md-12">
+                        <small class="form-text text-muted">
+                            Pengingat guru yang terlewat karena scheduler terlambat akan dicoba kembali pada hari yang sama.
+                            Pengingat siswa hanya dikirim sebelum jadwal pelajaran berakhir.
+                        </small>
                     </div>
                 </div>
 
@@ -545,6 +565,63 @@
                     <i class="fas fa-save mr-1"></i> Simpan Konfigurasi WA Fonnte
                 </button>
             </form>
+
+            <hr>
+
+            <div class="mb-3">
+                <h6 class="font-weight-semibold">
+                    <i class="fas fa-history mr-1"></i> Riwayat Penerima Pengingat Otomatis
+                </h6>
+                @if ($scheduleReminderLastRun)
+                    <div class="alert alert-secondary py-2 px-3 small">
+                        Pemeriksaan scheduler terakhir:
+                        {{ \Illuminate\Support\Carbon::parse($scheduleReminderLastRun['at'])->format('d-m-Y H:i:s') }}.
+                        {{ $scheduleReminderLastRun['message'] }}
+                    </div>
+                @else
+                    <div class="alert alert-warning py-2 px-3 small">
+                        Scheduler pengingat belum tercatat berjalan. Pastikan <code>php artisan schedule:work</code>
+                        berjalan atau scheduler server memanggil <code>schedule:run</code> setiap menit.
+                    </div>
+                @endif
+                <p class="text-muted small">
+                    Menampilkan hingga 100 pengingat terbaru yang diterima Fonnte untuk diproses. Pengingat yang
+                    terlewat untuk guru dicoba kembali pada hari yang sama; pengingat siswa hanya berlaku sebelum
+                    jam pelajaran berakhir.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Waktu Terkirim</th>
+                                <th>Penerima</th>
+                                <th>Nama</th>
+                                <th>Kelas</th>
+                                <th>Mata Pelajaran</th>
+                                <th>Jadwal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($whatsappReminderHistory as $reminder)
+                                <tr>
+                                    <td>{{ \Illuminate\Support\Carbon::parse($reminder->sent_at)->format('d-m-Y H:i:s') }}</td>
+                                    <td>{{ $reminder->recipient_type === 'teacher' ? 'Guru' : 'Siswa' }}</td>
+                                    <td>{{ $reminder->recipient_name ?: '-' }}</td>
+                                    <td>{{ $reminder->classroom_name ?: '-' }}</td>
+                                    <td>{{ $reminder->subject_name ?: '-' }}</td>
+                                    <td>
+                                        {{ $reminder->schedule_start ? substr($reminder->schedule_start, 0, 5) : '-' }}
+                                        -
+                                        {{ $reminder->schedule_end ? substr($reminder->schedule_end, 0, 5) : '-' }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="text-center text-muted">Belum ada riwayat pengingat otomatis terkirim.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <hr>
 

@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('schedule_id')->constrained()->cascadeOnDelete();
             $table->date('tanggal');
-            $table->enum('recipient_type', ['teacher', 'parent']);
+            $table->enum('recipient_type', ['teacher', 'student']);
             $table->unsignedBigInteger('recipient_id');
             $table->timestamps();
             $table->unique(

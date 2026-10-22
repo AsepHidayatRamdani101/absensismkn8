@@ -28,6 +28,8 @@ class ScheduleWhatsappReminderService
         }
 
         $today = Carbon::today();
+        $teacherReminderMinutes = (int) config('services.fonnte.teacher_reminder_minutes', 5);
+        $studentReminderMinutes = (int) config('services.fonnte.student_reminder_minutes', 15);
         $dayNames = [
             1 => 'Senin',
             2 => 'Selasa',
@@ -39,7 +41,7 @@ class ScheduleWhatsappReminderService
         ];
         $dayName = $dayNames[$today->dayOfWeekIso] ?? null;
 
-        if ($dayName === null || $dayName === 'Minggu' || SchoolCalendar::isHoliday($today)) {
+        if ($dayName === null || $dayName === 'Minggu') {
             return ['sent' => 0, 'failed' => 0, 'skipped' => 0, 'message' => 'Hari ini bukan hari belajar efektif.'];
         }
 
@@ -75,7 +77,7 @@ class ScheduleWhatsappReminderService
             $subjectName = (string) ($schedule->teacherSubject?->subject?->nama_mapel ?? '-');
             $classroomName = (string) ($schedule->teacherSubject?->classroom?->nama_kelas ?? '-');
 
-            if ($this->isDue($today, $schedule->jam_selesai, 5)) {
+            if ($this->isDue($today, $schedule->jam_selesai, $teacherReminderMinutes, true)) {
                 if ($attendance && $attendance->kehadiran_guru !== 'Hadir') {
                     $stats['skipped']++;
                 } else {
@@ -109,6 +111,11 @@ class ScheduleWhatsappReminderService
                                 $schedule->id,
                                 $today,
                                 $teacher->id,
+                                $teacher->nama_lengkap,
+                                $classroomName,
+                                $subjectName,
+                                (string) $schedule->jam_mulai,
+                                (string) $schedule->jam_selesai,
                                 $stats
                             );
                         }
@@ -116,7 +123,16 @@ class ScheduleWhatsappReminderService
                 }
             }
 
-            if (SchoolCalendar::isPjj($today) || !$this->isDue($today, $schedule->jam_selesai, -15)) {
+            if (
+                SchoolCalendar::isPjj($today)
+                || !$this->isDue(
+                    $today,
+                    $schedule->jam_selesai,
+                    -$studentReminderMinutes,
+                    false,
+                    (string) $schedule->jam_mulai
+                )
+            ) {
                 continue;
             }
 
@@ -127,25 +143,31 @@ class ScheduleWhatsappReminderService
                     continue;
                 }
 
-                if ($this->hasSent('parent', $schedule->id, $today, $student->id)) {
+                if ($this->hasSent('student', $schedule->id, $today, $student->id)) {
                     $stats['skipped']++;
                     continue;
                 }
 
-                $message = "Assalamu'alaikum Bapak/Ibu orang tua/wali dari {$student->nama_lengkap},\n"
-                    . "Menurut jadwal {$subjectName} kelas {$classroomName} hari ini, hingga 15 menit sebelum "
-                    . "pelajaran berakhir siswa belum tercatat hadir"
+                $message = "Assalamu'alaikum {$student->nama_lengkap},\n"
+                    . "Menurut jadwal {$subjectName} kelas {$classroomName} hari ini, hingga "
+                    . "{$studentReminderMinutes} menit sebelum "
+                    . "pelajaran berakhir kamu belum tercatat hadir"
                     . ($status ? " (status: {$status})" : '')
-                    . ". Mohon konfirmasi kepada pihak sekolah bila informasi ini tidak sesuai.\n\n"
+                    . ". Mohon segera konfirmasi kepada guru apabila kamu sudah berada di kelas.\n\n"
                     . $schoolName;
 
                 $this->sendMessage(
-                    $student->no_hp_orang_tua,
+                    $student->no_hp,
                     $message,
-                    'parent',
+                    'student',
                     $schedule->id,
                     $today,
                     $student->id,
+                    $student->nama_lengkap,
+                    $classroomName,
+                    $subjectName,
+                    (string) $schedule->jam_mulai,
+                    (string) $schedule->jam_selesai,
                     $stats
                 );
             }
@@ -155,14 +177,31 @@ class ScheduleWhatsappReminderService
         return [...$stats, 'message' => $message];
     }
 
-    private function isDue(Carbon $date, string $endTime, int $offsetMinutes): bool
+    private function isDue(
+        Carbon $date,
+        string $endTime,
+        int $offsetMinutes,
+        bool $allowSameDayCatchUp = false,
+        ?string $startTime = null
+    ): bool
     {
         $triggerAt = Carbon::parse($date->toDateString() . ' ' . $endTime)
             ->addMinutes($offsetMinutes);
         $now = now();
 
+        if ($allowSameDayCatchUp) {
+            return $now->greaterThanOrEqualTo($triggerAt)
+                && $now->toDateString() === $date->toDateString();
+        }
+
+        $classEndsAt = Carbon::parse($date->toDateString() . ' ' . $endTime);
+        $classStartsAt = $startTime
+            ? Carbon::parse($date->toDateString() . ' ' . $startTime)
+            : null;
+
         return $now->greaterThanOrEqualTo($triggerAt)
-            && $now->lessThan($triggerAt->copy()->addMinutes(2));
+            && (!$classStartsAt || $now->greaterThanOrEqualTo($classStartsAt))
+            && $now->lessThan($classEndsAt);
     }
 
     private function hasSent(string $recipientType, int $scheduleId, Carbon $date, int $recipientId): bool
@@ -182,6 +221,11 @@ class ScheduleWhatsappReminderService
         int $scheduleId,
         Carbon $date,
         int $recipientId,
+        string $recipientName,
+        string $classroomName,
+        string $subjectName,
+        string $scheduleStart,
+        string $scheduleEnd,
         array &$stats
     ): bool {
         $target = $this->normalizePhone($phone);
@@ -217,6 +261,12 @@ class ScheduleWhatsappReminderService
                 'tanggal' => $date->toDateString(),
                 'recipient_type' => $recipientType,
                 'recipient_id' => $recipientId,
+                'recipient_name' => $recipientName,
+                'classroom_name' => $classroomName,
+                'subject_name' => $subjectName,
+                'schedule_start' => $scheduleStart,
+                'schedule_end' => $scheduleEnd,
+                'sent_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

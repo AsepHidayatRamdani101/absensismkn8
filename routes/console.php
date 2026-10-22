@@ -394,6 +394,10 @@ Schedule::command('reminder:guru-absen-agenda')
     ->withoutOverlapping();
 Artisan::command('reminder:class-schedule-whatsapp', function (App\Services\ScheduleWhatsappReminderService $service) {
     $result = $service->sendDueReminders();
+    Cache::put('fonnte:schedule-reminder:last-run', [
+        ...$result,
+        'at' => now()->toDateTimeString(),
+    ], now()->addDays(7));
     $this->info($result['message']);
 
     return $result['failed'] > 0 ? self::FAILURE : self::SUCCESS;

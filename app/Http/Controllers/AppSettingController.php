@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class AppSettingController extends Controller
 {
@@ -44,8 +45,18 @@ class AppSettingController extends Controller
             'default_country_code' => (string) config('services.fonnte.default_country_code', '62'),
             'reminder_enabled' => (bool) config('services.fonnte.reminder_enabled', false),
             'reminder_time' => '15:00',
+            'teacher_reminder_minutes' => (int) config('services.fonnte.teacher_reminder_minutes', 5),
+            'student_reminder_minutes' => (int) config('services.fonnte.student_reminder_minutes', 15),
             'school_name' => (string) config('services.fonnte.school_name', 'SMKN 8 GARUT'),
         ];
+        $whatsappReminderHistory = Schema::hasTable('schedule_whatsapp_reminders')
+            ? DB::table('schedule_whatsapp_reminders')
+                ->whereNotNull('sent_at')
+                ->orderByDesc('sent_at')
+                ->limit(100)
+                ->get()
+            : collect();
+        $scheduleReminderLastRun = cache('fonnte:schedule-reminder:last-run');
 
         return view('admin.app_settings.index', compact(
             'cache',
@@ -54,7 +65,9 @@ class AppSettingController extends Controller
             'configCache',
             'routeCache',
             'refBytes',
-            'fonnte'
+            'fonnte',
+            'whatsappReminderHistory',
+            'scheduleReminderLastRun'
         ));
     }
 
@@ -66,6 +79,8 @@ class AppSettingController extends Controller
             'api_url' => 'required|url|max:255',
             'default_country_code' => 'required|regex:/^\d{1,4}$/',
             'reminder_enabled' => 'nullable|boolean',
+            'teacher_reminder_minutes' => 'required|integer|min:1|max:180',
+            'student_reminder_minutes' => 'required|integer|min:1|max:180',
             'school_name' => 'required|string|max:120',
         ]);
 
@@ -85,6 +100,8 @@ class AppSettingController extends Controller
             'default_country_code' => (string) $validated['default_country_code'],
             'reminder_enabled' => $request->boolean('reminder_enabled'),
             'reminder_time' => '15:00',
+            'teacher_reminder_minutes' => (int) $validated['teacher_reminder_minutes'],
+            'student_reminder_minutes' => (int) $validated['student_reminder_minutes'],
             'school_name' => (string) $validated['school_name'],
         ]);
 
@@ -116,7 +133,7 @@ class AppSettingController extends Controller
         return redirect()->back()->with(
             'success',
             $enabled
-                ? 'Mode otomatis aktif. Pengingat guru dikirim 5 menit setelah jadwal selesai dan orang tua siswa yang belum tercatat hadir diingatkan 15 menit sebelum jadwal selesai.'
+                ? 'Mode otomatis aktif. Pengingat mengikuti jumlah menit yang diatur pada konfigurasi WA.'
                 : 'Mode manual aktif. Pengiriman otomatis dinonaktifkan dan tombol kirim WhatsApp tersedia.'
         );
     }

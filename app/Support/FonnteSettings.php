@@ -18,6 +18,8 @@ final class FonnteSettings
         'default_country_code',
         'reminder_enabled',
         'reminder_time',
+        'teacher_reminder_minutes',
+        'student_reminder_minutes',
         'school_name',
     ];
 

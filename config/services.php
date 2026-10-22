@@ -43,6 +43,8 @@ return [
         'test_batch_delay_ms' => env('FONNTE_TEST_BATCH_DELAY_MS', 1200),
         'reminder_enabled' => env('FONNTE_REMINDER_ENABLED', false),
         'reminder_time' => env('FONNTE_REMINDER_TIME', '15:00'),
+        'teacher_reminder_minutes' => env('FONNTE_TEACHER_REMINDER_MINUTES', 5),
+        'student_reminder_minutes' => env('FONNTE_STUDENT_REMINDER_MINUTES', 15),
         'school_name' => env('FONNTE_SCHOOL_NAME', 'SMKN 8 GARUT'),
     ],
 
