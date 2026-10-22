@@ -294,107 +294,6 @@ Artisan::command('reminder:guru-absen-agenda', function () {
         ->get()
         ->keyBy('schedule_id');
 
-    $groupedByTeacher = $schedules->filter(function ($schedule) {
-        return (int) ($schedule->teacherSubject?->teacher_id ?? 0) > 0;
-    })->groupBy(fn($schedule) => (int) $schedule->teacherSubject->teacher_id);
-
-    foreach ($groupedByTeacher as $teacherId => $teacherSchedules) {
-        $teacher = $teacherSchedules->first()?->teacherSubject?->teacher;
-
-        if (!$teacher) {
-            $skipCount++;
-            continue;
-        }
-
-        $target = $normalizePhone($teacher->no_hp);
-        if (!$target) {
-            $skipCount++;
-            continue;
-        }
-
-        $missingRows = [];
-
-        foreach ($teacherSchedules as $schedule) {
-            $attendance = $attendanceBySchedule->get($schedule->id);
-
-            if ($attendance && $attendance->kehadiran_guru !== 'Hadir') {
-                continue;
-            }
-
-            $missingAttendance = !$attendance || (int) ($attendance->attendance_details_count ?? 0) === 0;
-            $missingAgenda = !$attendance || (string) $attendance->status !== 'Selesai';
-
-            if (!$missingAttendance && !$missingAgenda) {
-                continue;
-            }
-
-            $missingLabels = [];
-            if ($missingAttendance) {
-                $missingLabels[] = 'absensi siswa';
-            }
-            if ($missingAgenda) {
-                $missingLabels[] = 'agenda';
-            }
-
-            $subject = (string) ($schedule->teacherSubject?->subject?->nama_mapel ?? '-');
-            $classroom = (string) ($schedule->teacherSubject?->classroom?->nama_kelas ?? '-');
-            $missingRows[] = '- ' . $subject . ' (' . $classroom . ') ' . $schedule->jam_mulai . '-' . $schedule->jam_selesai
-                . ': belum isi ' . implode(' & ', $missingLabels);
-        }
-
-        if (empty($missingRows)) {
-            $skipCount++;
-            continue;
-        }
-
-        $cacheKey = 'fonnte:reminder:guru:' . $todayLabel . ':' . $teacherId;
-        $fingerprint = md5(implode('|', $missingRows));
-
-        if (Cache::get($cacheKey) === $fingerprint) {
-            $skipCount++;
-            continue;
-        }
-
-        $message = "Assalamu'alaikum Bapak/Ibu {$teacher->nama_lengkap},\n"
-            . "Pengingat dari {$schoolName}.\n"
-            . "Hari {$todayDayName}, {$todayLabel} masih ada jadwal yang belum lengkap:\n"
-            . implode("\n", $missingRows)
-            . "\n\nSilakan lengkapi di aplikasi absensi. Terima kasih.\n\nAdmin SiAbsensi";
-
-        try {
-            $response = Http::timeout(20)
-                ->withHeaders(['Authorization' => $token])
-                ->asForm()
-                ->post($apiUrl, [
-                    'target' => $target,
-                    'message' => $message,
-                    'countryCode' => $defaultCountryCode,
-                ]);
-
-            if ($response->successful() && $response->json('status') !== false) {
-                Cache::put($cacheKey, $fingerprint, now()->endOfDay());
-                $sentCount++;
-            } else {
-                Log::channel('security')->warning('Gagal kirim WA pengingat guru via Fonnte', [
-                    'teacher_id' => $teacherId,
-                    'target' => $target,
-                    'status' => $response->status(),
-                    'response' => $response->body(),
-                ]);
-                $skipCount++;
-                $failedCount++;
-            }
-        } catch (\Throwable $e) {
-            Log::channel('security')->error('Error kirim WA pengingat guru via Fonnte', [
-                'teacher_id' => $teacherId,
-                'target' => $target,
-                'message' => $e->getMessage(),
-            ]);
-            $skipCount++;
-            $failedCount++;
-        }
-    }
-
     $photoMissingSchedules = (SchoolCalendar::isPjj($today) ? collect() : $schedules)
         ->filter(function ($schedule) use ($attendanceBySchedule) {
             $attendance = $attendanceBySchedule->get($schedule->id);
@@ -484,7 +383,7 @@ Artisan::command('reminder:guru-absen-agenda', function () {
     $this->info($message);
 
     return self::SUCCESS;
-})->purpose('Kirim pengingat WA otomatis ke guru yang belum melengkapi absensi siswa dan agenda harian.');
+})->purpose('Kirim pengingat WA kepada pengurus kelas untuk foto absensi guru yang belum dikirim.');
 
 Schedule::command('analytics:refresh')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('queue:prune-failed --hours=48')->hourly();
@@ -492,4 +391,13 @@ Schedule::command('backup:db-daily')->dailyAt('01:00')->withoutOverlapping();
 Schedule::command('backup:full-weekly')->weeklyOn(0, '01:30')->withoutOverlapping();
 Schedule::command('reminder:guru-absen-agenda')
     ->dailyAt('15:00')
+    ->withoutOverlapping();
+Artisan::command('reminder:class-schedule-whatsapp', function (App\Services\ScheduleWhatsappReminderService $service) {
+    $result = $service->sendDueReminders();
+    $this->info($result['message']);
+
+    return $result['failed'] > 0 ? self::FAILURE : self::SUCCESS;
+})->purpose('Kirim pengingat WA absensi dan agenda guru serta siswa berdasarkan jadwal pelajaran.');
+Schedule::command('reminder:class-schedule-whatsapp')
+    ->everyMinute()
     ->withoutOverlapping();

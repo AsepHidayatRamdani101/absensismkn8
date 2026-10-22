@@ -116,7 +116,7 @@ class AppSettingController extends Controller
         return redirect()->back()->with(
             'success',
             $enabled
-                ? 'Mode otomatis aktif. Tombol kirim manual dinonaktifkan; pengingat berjalan setiap hari efektif pukul 15.00.'
+                ? 'Mode otomatis aktif. Pengingat guru dikirim 5 menit setelah jadwal selesai dan orang tua siswa yang belum tercatat hadir diingatkan 15 menit sebelum jadwal selesai.'
                 : 'Mode manual aktif. Pengiriman otomatis dinonaktifkan dan tombol kirim WhatsApp tersedia.'
         );
     }

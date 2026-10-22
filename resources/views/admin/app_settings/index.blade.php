@@ -454,7 +454,8 @@
             <span class="card-icon bg-success" style="color:#fff"><i class="fab fa-whatsapp"></i></span>
             <h6>Konfigurasi WA Fonnte</h6>
             <span class="card-path">Digunakan untuk pengingat otomatis guru yang belum mengisi absensi siswa/agenda
-                dan pengurus kelas yang belum mengirim foto guru. Pengiriman hanya pada hari efektif pukul 15.00.</span>
+                5 menit setelah jadwal selesai, orang tua siswa yang belum tercatat hadir 15 menit sebelum jadwal selesai,
+                serta pengurus kelas yang belum mengirim foto guru pada pukul 15.00.</span>
         </div>
         <div class="cache-card-body">
             <div class="alert alert-info py-2 px-3 small mb-3">
@@ -492,9 +493,10 @@
                     </div>
 
                     <div class="form-group col-md-4">
-                        <label for="reminder_time" class="font-weight-semibold">Jam Pengingat</label>
+                        <label for="reminder_time" class="font-weight-semibold">Jam Pengingat Foto Guru</label>
                         <input type="time" class="form-control" id="reminder_time"
                             value="15:00" readonly>
+                        <small class="form-text text-muted">Pengingat absensi guru dan orang tua mengikuti jam jadwal pelajaran.</small>
                     </div>
                 </div>
 
