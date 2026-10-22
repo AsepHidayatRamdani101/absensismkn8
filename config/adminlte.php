@@ -343,6 +343,23 @@ return [
             'can' => 'admin',
         ],
         [
+            'text' => 'Penilaian',
+            'icon' => 'fas fa-fw fa-graduation-cap',
+            'can' => 'admin',
+            'submenu' => [
+                [
+                    'text' => 'Nilai Harian',
+                    'route' => 'admin.assessments.daily',
+                    'icon' => 'fas fa-fw fa-clipboard-list',
+                ],
+                [
+                    'text' => 'Nilai Akhir',
+                    'route' => 'admin.assessments.final',
+                    'icon' => 'fas fa-fw fa-poll',
+                ],
+            ],
+        ],
+        [
             'text' => 'Dasbor',
             'route' => 'guru.dashboard',
             'icon' => 'fas fa-fw fa-home',
@@ -353,6 +370,23 @@ return [
             'route' => 'guru.pjj.index',
             'icon' => 'fas fa-fw fa-book-reader',
             'can' => 'pjj-guru-menu',
+        ],
+        [
+            'text' => 'Penilaian',
+            'icon' => 'fas fa-fw fa-graduation-cap',
+            'can' => 'guru',
+            'submenu' => [
+                [
+                    'text' => 'Nilai Harian',
+                    'route' => 'guru.assessments.daily',
+                    'icon' => 'fas fa-fw fa-clipboard-list',
+                ],
+                [
+                    'text' => 'Nilai Akhir',
+                    'route' => 'guru.assessments.final',
+                    'icon' => 'fas fa-fw fa-poll',
+                ],
+            ],
         ],
         [
             'text' => 'Dasbor Pancawaluya',
@@ -385,9 +419,21 @@ return [
             'can' => 'siswa',
         ],
         [
+            'text' => 'Nilai dan Rekap Absensi',
+            'route' => 'siswa.assessments.index',
+            'icon' => 'fas fa-fw fa-poll',
+            'can' => 'siswa',
+        ],
+        [
             'text' => 'Dasbor Pancawaluya',
             'route' => 'wali-kelas.dashboard.dss',
             'icon' => 'fas fa-fw fa-chart-line',
+            'can' => 'wali_kelas',
+        ],
+        [
+            'text' => 'Rapor dan Absensi Kelas',
+            'route' => 'guru.wali-kelas.assessments',
+            'icon' => 'fas fa-fw fa-file-invoice',
             'can' => 'wali_kelas',
         ],
         [

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Dashboard\DashboardDssController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\EarlyWarningReportController;
 use App\Http\Controllers\ClassroomController;
 use App\Http\Controllers\AcademicYearController;
@@ -64,6 +65,22 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.reports.early-warning.students');
         Route::get('/admin/reports/early-warning/teachers', [EarlyWarningReportController::class, 'teacherData'])
             ->name('admin.reports.early-warning.teachers');
+        Route::get('/admin/reports/daily-assessment', [AssessmentController::class, 'adminDaily'])
+            ->name('admin.assessments.daily');
+        Route::get('/admin/reports/daily-assessment/data', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminData($request, 'daily'))
+            ->name('admin.assessments.daily.data');
+        Route::get('/admin/reports/daily-assessment/excel', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminExcel($request, 'daily'))
+            ->name('admin.assessments.daily.excel');
+        Route::get('/admin/reports/daily-assessment/pdf', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminPdf($request, 'daily'))
+            ->name('admin.assessments.daily.pdf');
+        Route::get('/admin/reports/final-assessment', [AssessmentController::class, 'adminFinal'])
+            ->name('admin.assessments.final');
+        Route::get('/admin/reports/final-assessment/data', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminData($request, 'final'))
+            ->name('admin.assessments.final.data');
+        Route::get('/admin/reports/final-assessment/excel', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminExcel($request, 'final'))
+            ->name('admin.assessments.final.excel');
+        Route::get('/admin/reports/final-assessment/pdf', fn(\Illuminate\Http\Request $request) => app(AssessmentController::class)->adminPdf($request, 'final'))
+            ->name('admin.assessments.final.pdf');
         Route::get('/admin/pjj', [PjjController::class, 'adminIndex'])->defaults('section', 'dashboard')->name('admin.pjj.dashboard');
         Route::get('/admin/pjj/tasks', [PjjController::class, 'adminIndex'])->defaults('section', 'tasks')->name('admin.pjj.tasks');
         Route::get('/admin/pjj/teacher-attendance', [PjjController::class, 'adminIndex'])->defaults('section', 'teacher-attendance')->name('admin.pjj.teacher-attendance');
@@ -608,6 +625,17 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::post('/guru/agenda/{schedule}', [GuruAgendaController::class, 'store'])->name('guru.agenda.store');
     Route::get('/guru/attendance-details', [AttendanceDetailController::class, 'guruIndex'])
         ->name('guru.attendance-details.index');
+    Route::get('/guru/penilaian-harian', [AssessmentController::class, 'teacherDaily'])->name('guru.assessments.daily');
+    Route::post('/guru/penilaian-harian', [AssessmentController::class, 'storeDaily'])->name('guru.assessments.daily.store');
+    Route::get('/guru/penilaian-harian/data', [AssessmentController::class, 'teacherDailyData'])->name('guru.assessments.daily.data');
+    Route::post('/guru/penilaian-harian/{assessment}/students/{student}', [AssessmentController::class, 'saveDailyScore'])
+        ->name('guru.assessments.daily.score');
+    Route::get('/guru/penilaian-akhir', [AssessmentController::class, 'teacherFinal'])->name('guru.assessments.final');
+    Route::get('/guru/penilaian-akhir/data', [AssessmentController::class, 'teacherFinalData'])->name('guru.assessments.final.data');
+    Route::post('/guru/penilaian-akhir/{teacherSubject}/method', [AssessmentController::class, 'saveFinal'])
+        ->name('guru.assessments.final.method');
+    Route::post('/guru/penilaian-akhir/{teacherSubject}/scores/{student}', [AssessmentController::class, 'saveFinalScore'])
+        ->name('guru.assessments.final.score');
     Route::get('/guru/attendance-details/datatable', [AttendanceDetailController::class, 'guruDatatable'])
         ->name('guru.attendance-details.datatable');
     Route::get('/guru/attendance-details/class-options', [AttendanceDetailController::class, 'guruClassOptions'])
@@ -671,6 +699,7 @@ Route::middleware(['auth', 'guru'])->group(function () {
 
 Route::middleware(['auth', 'siswa'])->group(function () {
     Route::get('/siswa', [DashboardController::class, 'siswa'])->name('siswa.dashboard');
+    Route::get('/siswa/nilai', [AssessmentController::class, 'student'])->name('siswa.assessments.index');
     Route::get('/siswa/dss', [DashboardDssController::class, 'siswa'])->name('siswa.dashboard.dss');
     Route::get('/siswa/pjj', [PjjController::class, 'studentIndex'])->name('siswa.pjj.index');
     Route::post('/siswa/pjj/attendance', [PjjController::class, 'studentSubmitAttendance'])->middleware('throttle:10,1')->name('siswa.pjj.attendance');
@@ -734,6 +763,9 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'role:wali_kelas'])->group(function () {
     Route::get('/wali-kelas', [DashboardDssController::class, 'waliKelas'])->name('wali-kelas.dashboard');
     Route::get('/wali-kelas/dss', [DashboardDssController::class, 'waliKelas'])->name('wali-kelas.dashboard.dss');
+    Route::get('/wali-kelas/rapor', [AssessmentController::class, 'homeroom'])->name('guru.wali-kelas.assessments');
+    Route::get('/wali-kelas/rapor/download/{format}', [AssessmentController::class, 'homeroomDownload'])
+        ->name('guru.wali-kelas.assessments.download');
 });
 
 Route::middleware(['auth', 'role:bk'])->group(function () {

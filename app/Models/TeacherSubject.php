@@ -13,6 +13,7 @@ class TeacherSubject extends Model
         'subject_id',
         'classroom_id',
         'academic_year_id',
+        'grading_method',
     ];
 
     public function teacher()
@@ -38,5 +39,15 @@ class TeacherSubject extends Model
     public function schedules()
     {
         return $this->hasMany(Schedule::class);
+    }
+
+    public function dailyAssessments()
+    {
+        return $this->hasMany(DailyAssessment::class);
+    }
+
+    public function finalGrades()
+    {
+        return $this->hasMany(FinalGrade::class);
     }
 }
