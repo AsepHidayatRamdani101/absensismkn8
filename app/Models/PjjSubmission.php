@@ -32,4 +32,9 @@ class PjjSubmission extends Model
     {
         return $this->belongsTo(Student::class);
     }
+
+    public function files()
+    {
+        return $this->hasMany(PjjSubmissionFile::class, 'pjj_submission_id');
+    }
 }

@@ -36,6 +36,8 @@ class DashboardRouteRegistrationTest extends TestCase
             'guru.pjj.index',
             'guru.pjj.assignments.store',
             'guru.pjj.assignments.show',
+            'guru.pjj.assignments.update',
+            'guru.pjj.assignments.destroy',
             'guru.pjj.submissions.grade',
             'siswa.pjj.index',
             'siswa.pjj.attendance',

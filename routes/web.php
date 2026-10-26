@@ -27,6 +27,7 @@ use App\Http\Controllers\TeacherSubjectController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\MidClassPermitController;
 use App\Http\Controllers\PjjController;
+use App\Http\Controllers\PjjWaliMonitoringController;
 use App\Http\Controllers\StaffTuController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\Pancawaluya\RewardCategoryController;
@@ -620,7 +621,10 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::get('/guru/pjj', [PjjController::class, 'teacherIndex'])->name('guru.pjj.index');
     Route::post('/guru/pjj/assignments', [PjjController::class, 'teacherStoreAssignment'])->name('guru.pjj.assignments.store');
     Route::get('/guru/pjj/assignments/{assignment}', [PjjController::class, 'teacherShowAssignment'])->name('guru.pjj.assignments.show');
+    Route::put('/guru/pjj/assignments/{assignment}', [PjjController::class, 'teacherUpdateAssignment'])->name('guru.pjj.assignments.update');
+    Route::delete('/guru/pjj/assignments/{assignment}', [PjjController::class, 'teacherDestroyAssignment'])->name('guru.pjj.assignments.destroy');
     Route::post('/guru/pjj/submissions/{submission}/grade', [PjjController::class, 'teacherGradeSubmission'])->name('guru.pjj.submissions.grade');
+    Route::post('/guru/pjj/assignments/{assignment}/grades', [PjjController::class, 'teacherBulkGradeSubmissions'])->name('guru.pjj.submissions.grade-bulk');
     Route::get('/guru/agenda', [GuruAgendaController::class, 'index'])->name('guru.agenda.index');
     Route::post('/guru/agenda/{schedule}', [GuruAgendaController::class, 'store'])->name('guru.agenda.store');
     Route::get('/guru/attendance-details', [AttendanceDetailController::class, 'guruIndex'])
@@ -681,9 +685,21 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::post('/guru/wali-kelas/pengajuan-siswa/hardfile', [StudentLeaveRequestController::class, 'waliStoreHardfile'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.leave-requests.hardfile');
+    Route::post('/guru/wali-kelas/pengajuan-siswa/batch', [StudentLeaveRequestController::class, 'waliStoreBatch'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.leave-requests.batch');
+    Route::put('/guru/wali-kelas/pengajuan-siswa/{leaveRequest}', [StudentLeaveRequestController::class, 'waliUpdate'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.leave-requests.update');
+    Route::delete('/guru/wali-kelas/pengajuan-siswa/{leaveRequest}', [StudentLeaveRequestController::class, 'waliDestroy'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.leave-requests.destroy');
     Route::get('/guru/wali-kelas/izin-keluar-kelas', [MidClassPermitController::class, 'waliIndex'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.mid-class-permits.index');
+    Route::get('/guru/wali-kelas/monitoring-pjj', [PjjWaliMonitoringController::class, 'index'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.pjj.monitoring');
     Route::post('/guru/wali-kelas/izin-keluar-kelas', [MidClassPermitController::class, 'waliStore'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.mid-class-permits.store');
@@ -758,6 +774,7 @@ Route::middleware(['auth', 'siswa'])->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/pjj/assignments/{assignment}/attachment', [PjjController::class, 'downloadAssignment'])->name('pjj.assignment.download');
     Route::get('/pjj/submissions/{submission}/attachment', [PjjController::class, 'downloadSubmission'])->name('pjj.submission.download');
+    Route::get('/pjj/submissions/{submission}/files/{file}', [PjjController::class, 'downloadSubmissionFile'])->name('pjj.submission.files.download');
 });
 
 Route::middleware(['auth', 'role:wali_kelas'])->group(function () {

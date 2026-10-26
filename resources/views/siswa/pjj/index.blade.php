@@ -23,13 +23,49 @@
     @endif
     <div id="pjj-submission-notice" class="alert d-none" role="alert"></div>
 
+    @php
+        $checkInTime = $todayAttendance?->check_in_at ?? $todayAttendance?->created_at;
+        $checkOutTime = $todayAttendance?->check_out_at;
+        $attendanceComplete = $todayAttendance && $checkOutTime;
+        $attendanceMode = $todayAttendance ? 'pulang' : 'datang';
+        $isLateToday = $todayAttendance?->status === 'Terlambat';
+    @endphp
+
     <div class="card card-info card-outline">
         <div class="card-header"><h3 class="card-title"><i class="fas fa-camera mr-1"></i> Absensi Selfie Hari Ini</h3></div>
         <div class="card-body">
-            @if ($todayAttendance)
+            <div class="row mb-3">
+                <div class="col-sm-6 mb-2 mb-sm-0">
+                    <div class="border rounded p-2 h-100 {{ $todayAttendance ? 'border-success bg-light' : '' }}">
+                        <div class="text-muted small"><i class="fas fa-sign-in-alt mr-1"></i> Absen Datang <span class="text-muted">(tepat waktu maks. 06.30)</span></div>
+                        @if ($todayAttendance)
+                            <strong class="{{ $isLateToday ? 'text-warning' : 'text-success' }}">Tercatat pukul {{ $checkInTime->format('H:i') }}</strong>
+                            @if ($isLateToday)
+                                <span class="badge badge-warning ml-1">Terlambat</span>
+                            @endif
+                        @else
+                            <strong class="text-warning">Belum absen datang</strong>
+                        @endif
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="border rounded p-2 h-100 {{ $checkOutTime ? 'border-success bg-light' : '' }}">
+                        <div class="text-muted small"><i class="fas fa-sign-out-alt mr-1"></i> Absen Pulang <span class="text-muted">(mulai 15.00)</span></div>
+                        @if ($checkOutTime)
+                            <strong class="text-success">Tercatat pukul {{ $checkOutTime->format('H:i') }}</strong>
+                        @elseif ($todayAttendance)
+                            <strong class="text-warning">Belum absen pulang</strong>
+                        @else
+                            <strong class="text-muted">Menunggu absen datang</strong>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            @if ($attendanceComplete)
                 <div class="d-flex align-items-center">
                     <span class="text-success mr-3"><i class="fas fa-check-circle fa-2x"></i></span>
-                    <div><strong>Absensi hari ini sudah tercatat.</strong><div class="text-muted">Waktu {{ $todayAttendance->created_at->format('H:i') }} · Maksimal satu kali per hari.</div></div>
+                    <div><strong>Absensi hari ini sudah lengkap.</strong><div class="text-muted">Datang pukul {{ $checkInTime->format('H:i') }} · Pulang pukul {{ $checkOutTime->format('H:i') }}.</div></div>
                 </div>
             @else
                 <form id="pjj-attendance-form" method="POST" action="{{ route('siswa.pjj.attendance') }}">
@@ -47,10 +83,69 @@
                     <div class="form-group">
                         <button type="button" id="capture-selfie" class="btn btn-outline-primary btn-sm" disabled><i class="fas fa-camera mr-1"></i> Ambil selfie</button>
                         <button type="button" id="retake-selfie" class="btn btn-outline-secondary btn-sm d-none"><i class="fas fa-redo mr-1"></i> Ulangi</button>
-                        <button type="submit" id="attendance-submit" class="btn btn-primary btn-sm" disabled><i class="fas fa-paper-plane mr-1"></i> Kirim absensi</button>
+                        <button type="submit" id="attendance-submit" class="btn btn-primary btn-sm" disabled>
+                            <i class="fas fa-paper-plane mr-1"></i> Kirim Absen {{ ucfirst($attendanceMode) }}
+                        </button>
                     </div>
-                    <div class="text-muted small">Absensi hanya dapat dikirim satu kali sehari dan memerlukan lokasi perangkat.</div>
+                    <div class="text-muted small">
+                        @if ($attendanceMode === 'datang')
+                            Absen datang tepat waktu maksimal pukul <strong>06.30</strong>; setelah itu tetap tercatat hadir dengan status <strong>Terlambat</strong>.
+                            Jika tidak absen sama sekali dalam satu hari, Anda dianggap <strong>Alpa</strong>. Absen pulang dibuka mulai pukul <strong>15.00</strong>.
+                        @else
+                            Absen pulang hanya dapat dikirim mulai pukul <strong>15.00</strong>.
+                        @endif
+                        Absensi memerlukan lokasi perangkat.
+                    </div>
                 </form>
+            @endif
+        </div>
+    </div>
+
+    <div class="card card-outline card-success">
+        <div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-list mr-1"></i> Rekap Absensi Saya</h3></div>
+        <div class="card-body">
+            @if ($attendanceHistory->isEmpty())
+                <p class="text-muted mb-0">Belum ada riwayat absensi.</p>
+            @else
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-sm mb-0">
+                        <thead><tr><th>Tanggal</th><th>Jam Datang</th><th>Jam Pulang</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach ($attendanceHistory as $entry)
+                                @php
+                                    $historyAttendance = $entry['attendance'];
+                                    $historyIn = $historyAttendance?->check_in_at ?? $historyAttendance?->created_at;
+                                    $historyOut = $historyAttendance?->check_out_at;
+                                    $isHistoryToday = $entry['date']->isToday();
+                                @endphp
+                                <tr>
+                                    <td>{{ $entry['date']->format('d-m-Y') }}</td>
+                                    <td>{{ $historyIn?->format('H:i') ?? '—' }}</td>
+                                    <td>{{ $historyOut?->format('H:i') ?? '—' }}</td>
+                                    <td>
+                                        @if (!$historyAttendance)
+                                            @if ($isHistoryToday)
+                                                <span class="badge badge-secondary">Belum absen</span>
+                                            @else
+                                                <span class="badge badge-danger">Alpa</span>
+                                            @endif
+                                        @else
+                                            @if ($historyAttendance->status === 'Terlambat')
+                                                <span class="badge badge-warning">Terlambat</span>
+                                            @else
+                                                <span class="badge badge-success">Hadir</span>
+                                            @endif
+                                            @if (!$historyOut)
+                                                <span class="badge badge-secondary">Belum absen pulang</span>
+                                            @endif
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted d-block mt-2">Menampilkan maksimal 30 hari PJJ terakhir sebagai bukti kehadiran. Tidak absen seharian penuh = Alpa.</small>
             @endif
         </div>
     </div>
@@ -120,8 +215,10 @@
                         <textarea id="pjj-answer" name="answer" class="form-control" rows="4" maxlength="10000"></textarea>
                     </div>
                     <div class="form-group mb-0">
-                        <label for="pjj-answer-file">File jawaban (PDF, gambar, atau TXT; maks. 10 MB)</label>
-                        <input id="pjj-answer-file" type="file" name="attachment" class="form-control-file" accept=".pdf,.txt,.jpg,.jpeg,.png,.webp">
+                        <label for="pjj-answer-file">File jawaban (PDF atau gambar; min. 1, maks. 10 file, 10 MB per file)</label>
+                        <input id="pjj-answer-file" type="file" name="attachments[]" class="form-control-file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple>
+                        <small id="pjj-file-status" class="form-text text-muted">Gambar akan dikompresi otomatis agar tugas lebih cepat terkirim.</small>
+                        <ul id="pjj-file-list" class="list-unstyled small mb-0 mt-1"></ul>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -129,6 +226,23 @@
                     <button class="btn btn-success btn-sm"><i class="fas fa-paper-plane mr-1"></i> Kirim jawaban</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="pjj-text-modal" tabindex="-1" role="dialog" aria-labelledby="pjj-text-modal-title" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="pjj-text-modal-title" class="modal-title">Detail Tugas</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p id="pjj-text-modal-body" class="mb-0" style="white-space: pre-wrap; word-break: break-word;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
         </div>
     </div>
 @stop
@@ -168,19 +282,120 @@
             $('#student-filter-apply').on('click', function () { table.ajax.reload(); });
             $('#student-filter-reset').on('click', function () { form[0].reset(); table.ajax.reload(); });
             form.on('change', 'input, select', function () { table.ajax.reload(); });
+            const MAX_FILES = 10;
+            const MAX_FILE_SIZE = 10 * 1024 * 1024;
+            const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+            const fileInput = document.getElementById('pjj-answer-file');
+            const fileStatus = document.getElementById('pjj-file-status');
+            const fileList = document.getElementById('pjj-file-list');
+            let preparedFiles = [];
+
+            function formatSize(bytes) {
+                return bytes >= 1024 * 1024
+                    ? (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+                    : Math.ceil(bytes / 1024) + ' KB';
+            }
+
+            function renderFileList() {
+                fileList.innerHTML = '';
+                preparedFiles.forEach(function (file, index) {
+                    $('<li>').text((index + 1) + '. ' + file.name + ' (' + formatSize(file.size) + ')').appendTo(fileList);
+                });
+            }
+
+            // Kompresi gambar di browser: resize maks 1600px + JPEG 80% sebelum upload.
+            function compressImage(file) {
+                return new Promise(function (resolve) {
+                    const objectUrl = URL.createObjectURL(file);
+                    const image = new Image();
+                    image.onload = function () {
+                        const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(image.width * scale));
+                        canvas.height = Math.max(1, Math.round(image.height * scale));
+                        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob(function (blob) {
+                            URL.revokeObjectURL(objectUrl);
+                            // Gunakan hasil kompresi hanya jika memang lebih kecil.
+                            if (blob && blob.size < file.size) {
+                                resolve(new File([blob], file.name.replace(/\.(png|webp|jpeg|jpg)$/i, '.jpg'), { type: 'image/jpeg' }));
+                            } else {
+                                resolve(file);
+                            }
+                        }, 'image/jpeg', 0.8);
+                    };
+                    image.onerror = function () { URL.revokeObjectURL(objectUrl); resolve(file); };
+                    image.src = objectUrl;
+                });
+            }
+
+            fileInput.addEventListener('change', async function () {
+                const selected = Array.from(fileInput.files || []);
+                preparedFiles = [];
+                fileList.innerHTML = '';
+
+                if (!selected.length) {
+                    fileStatus.textContent = 'Gambar akan dikompresi otomatis agar tugas lebih cepat terkirim.';
+                    return;
+                }
+                if (selected.length > MAX_FILES) {
+                    fileInput.value = '';
+                    fileStatus.textContent = 'Maksimal ' + MAX_FILES + ' file per tugas. Silakan pilih ulang.';
+                    return;
+                }
+                const invalid = selected.find(function (file) { return ALLOWED_TYPES.indexOf(file.type) === -1; });
+                if (invalid) {
+                    fileInput.value = '';
+                    fileStatus.textContent = 'File "' + invalid.name + '" tidak didukung. Gunakan PDF atau gambar (JPG/PNG/WEBP).';
+                    return;
+                }
+
+                fileStatus.textContent = 'Memproses ' + selected.length + ' file...';
+                // Kompresi seluruh gambar secara paralel.
+                preparedFiles = await Promise.all(selected.map(function (file) {
+                    return file.type.indexOf('image/') === 0 ? compressImage(file) : Promise.resolve(file);
+                }));
+
+                const oversize = preparedFiles.find(function (file) { return file.size > MAX_FILE_SIZE; });
+                if (oversize) {
+                    preparedFiles = [];
+                    fileInput.value = '';
+                    fileStatus.textContent = 'File "' + oversize.name + '" melebihi 10 MB setelah kompresi. Perkecil file tersebut.';
+                    return;
+                }
+
+                renderFileList();
+                fileStatus.textContent = preparedFiles.length + ' file siap dikirim.';
+            });
+
             $('#pjj-submission-form').on('submit', function (event) {
                 event.preventDefault();
                 const submissionForm = this;
                 const submitButton = $(submissionForm).find('button[type="submit"], button:not([type])');
+
+                if (!$('#pjj-answer').val().trim() && !preparedFiles.length) {
+                    $('#pjj-existing-answer').removeClass('d-none alert-light').addClass('alert-danger')
+                        .text('Isi jawaban teks atau lampirkan minimal 1 file (maksimal 10 file).');
+                    return;
+                }
+
+                // Bangun FormData manual agar memakai file hasil kompresi, bukan file asli.
+                const formData = new FormData(submissionForm);
+                formData.delete('attachments[]');
+                preparedFiles.forEach(function (file) { formData.append('attachments[]', file, file.name); });
+
                 submitButton.prop('disabled', true);
+                fileStatus.textContent = preparedFiles.length ? 'Mengunggah ' + preparedFiles.length + ' file...' : '';
                 $.ajax({
                     url: submissionForm.action,
                     method: 'POST',
-                    data: new FormData(submissionForm),
+                    data: formData,
                     processData: false,
                     contentType: false,
                     headers: { Accept: 'application/json' }
                 }).done(function (response) {
+                    preparedFiles = [];
+                    fileList.innerHTML = '';
                     $('#pjj-submission-modal').modal('hide');
                     $('#pjj-submission-notice').removeClass('d-none alert-danger').addClass('alert-success').text(response.message);
                     table.ajax.reload(null, false);
@@ -189,9 +404,17 @@
                         ? Object.values(xhr.responseJSON.errors).flat().join(' ')
                         : (xhr.responseJSON?.message || 'Tugas gagal dikirim. Silakan periksa kembali jawaban.');
                     $('#pjj-existing-answer').removeClass('d-none alert-light').addClass('alert-danger').text(messages);
+                    fileStatus.textContent = preparedFiles.length ? preparedFiles.length + ' file siap dikirim.' : '';
                 }).always(function () {
                     submitButton.prop('disabled', false);
                 });
+            });
+
+            $(document).on('click', '.pjj-view-text', function () {
+                const button = $(this);
+                $('#pjj-text-modal-title').text(button.attr('data-title') || 'Detail Tugas');
+                $('#pjj-text-modal-body').text(button.attr('data-text') || '');
+                $('#pjj-text-modal').modal('show');
             });
 
             $(document).on('click', '.pjj-open-submission', function () {
@@ -201,6 +424,9 @@
                 $('#pjj-submission-title').text('Kumpulkan: ' + (button.attr('data-title') || 'Tugas'));
                 $('#pjj-answer').val(existingAnswer);
                 $('#pjj-answer-file').val('');
+                preparedFiles = [];
+                fileList.innerHTML = '';
+                fileStatus.textContent = 'Gambar akan dikompresi otomatis agar tugas lebih cepat terkirim.';
                 $('#pjj-existing-answer').removeClass('alert-danger').addClass('alert-light')
                     .toggleClass('d-none', !existingAnswer).text(existingAnswer ? 'Jawaban terakhir: ' + existingAnswer : '');
                 const materialUrl = button.attr('data-attachment');

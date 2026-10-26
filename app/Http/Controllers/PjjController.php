@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\PjjAssignment;
 use App\Models\PjjAttendance;
 use App\Models\PjjSubmission;
+use App\Models\PjjSubmissionFile;
 use App\Models\Classroom;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherSubject;
 use App\Models\Subject;
 use App\Models\Holiday;
+use App\Services\PjjAttendanceSyncService;
+use App\Support\PklMode;
 use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -23,6 +26,10 @@ use Illuminate\Validation\ValidationException;
 
 class PjjController extends Controller
 {
+    public function __construct(private readonly PjjAttendanceSyncService $attendanceSync)
+    {
+    }
+
     public function adminIndex(Request $request, string $section = 'dashboard')
     {
         abort_unless(in_array($section, ['dashboard', 'tasks', 'teacher-attendance', 'student-attendance', 'effectiveness'], true), 404);
@@ -59,7 +66,11 @@ class PjjController extends Controller
 
         $isPjjActiveToday = SchoolCalendar::isPjj(Carbon::today());
         $teachers = Teacher::query()->orderBy('nama_lengkap')->get(['id', 'nama_lengkap']);
-        $classrooms = Classroom::query()->orderBy('nama_kelas')->get(['id', 'nama_kelas', 'major_id']);
+        $classroomQuery = Classroom::query()->orderBy('nama_kelas');
+        if (PklMode::isActive()) {
+            $classroomQuery->where('tingkat', '!=', 'XII');
+        }
+        $classrooms = $classroomQuery->get(['id', 'nama_kelas', 'major_id']);
         $subjects = Subject::query()->orderBy('nama_mapel')->get(['id', 'nama_mapel']);
 
         return view('admin.pjj.index', compact(
@@ -86,11 +97,14 @@ class PjjController extends Controller
             return $this->teacherAssignmentsDataTable($request, $teacher);
         }
 
-        $teacherSubjects = TeacherSubject::query()
+        $teacherSubjectsQuery = TeacherSubject::query()
             ->where('teacher_id', $teacher->id)
             ->with(['subject', 'classroom'])
-            ->orderBy('classroom_id')
-            ->get();
+            ->orderBy('classroom_id');
+        if (PklMode::isActive()) {
+            $teacherSubjectsQuery->whereHas('classroom', fn($classroom) => $classroom->where('tingkat', '!=', 'XII'));
+        }
+        $teacherSubjects = $teacherSubjectsQuery->get();
         $isPjjActiveToday = SchoolCalendar::isPjj(Carbon::today());
         $pjjDates = $this->configuredPjjDates();
 
@@ -103,29 +117,133 @@ class PjjController extends Controller
         $teacher = $this->teacherForCurrentUser();
         $data = $request->validate([
             'teacher_subject_id' => ['required', 'integer', 'exists:teacher_subjects,id'],
+            'extra_teacher_subject_ids' => ['nullable', 'array'],
+            'extra_teacher_subject_ids.*' => ['integer', 'distinct', 'exists:teacher_subjects,id'],
             'title' => ['required', 'string', 'max:180'],
             'instructions' => ['required', 'string', 'max:10000'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
             'due_at' => ['nullable', 'date', 'after_or_equal:now'],
         ]);
 
-        $teacherSubject = TeacherSubject::query()
+        $primaryTeacherSubject = TeacherSubject::query()
             ->whereKey($data['teacher_subject_id'])
             ->where('teacher_id', $teacher->id)
+            ->with('classroom')
             ->firstOrFail();
+
+        if (PklMode::excludesClassroomLevel($primaryTeacherSubject->classroom->tingkat ?? null)) {
+            throw ValidationException::withMessages([
+                'teacher_subject_id' => 'Mode PKL aktif. Tugas PJJ untuk kelas XII dinonaktifkan sementara.',
+            ]);
+        }
+
+        $teacherSubjectIds = collect([$primaryTeacherSubject->id])
+            ->merge($data['extra_teacher_subject_ids'] ?? [])
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $teacherSubjects = TeacherSubject::query()
+            ->whereIn('id', $teacherSubjectIds)
+            ->where('teacher_id', $teacher->id)
+            ->where('subject_id', $primaryTeacherSubject->subject_id)
+            ->whereHas('classroom', fn($classroom) => $classroom->where('tingkat', $primaryTeacherSubject->classroom->tingkat))
+            ->with('classroom')
+            ->get();
+
+        if ($teacherSubjects->count() !== $teacherSubjectIds->count()) {
+            throw ValidationException::withMessages([
+                'extra_teacher_subject_ids' => 'Kelas tambahan harus kelas yang Anda ampu dengan mata pelajaran yang sama dan jenjang yang sama (contoh: X dengan X).',
+            ]);
+        }
 
         $attachmentPath = $request->file('attachment')?->store('pjj/assignments', 'local');
 
-        PjjAssignment::query()->create([
-            'teacher_id' => $teacher->id,
-            'teacher_subject_id' => $teacherSubject->id,
+        foreach ($teacherSubjects as $teacherSubject) {
+            $assignment = PjjAssignment::query()->create([
+                'teacher_id' => $teacher->id,
+                'teacher_subject_id' => $teacherSubject->id,
+                'title' => $data['title'],
+                'instructions' => $data['instructions'],
+                'attachment_path' => $attachmentPath,
+                'due_at' => $data['due_at'] ?? null,
+            ]);
+
+            // Sinkronkan ke absensi reguler: upload tugas PJJ = guru hadir pada sesi KBM hari ini.
+            $this->attendanceSync->syncTeacherAssignment($assignment);
+        }
+
+        $message = $teacherSubjects->count() > 1
+            ? 'Tugas PJJ berhasil dipublikasikan ke ' . $teacherSubjects->count() . ' kelas: '
+                . $teacherSubjects->map(fn(TeacherSubject $teacherSubject) => $teacherSubject->classroom->nama_kelas)->join(', ') . '.'
+            : 'Tugas PJJ berhasil dipublikasikan.';
+
+        return redirect()->route('guru.pjj.index')->with('success', $message);
+    }
+
+    public function teacherUpdateAssignment(Request $request, PjjAssignment $assignment)
+    {
+        $teacher = $this->teacherForCurrentUser();
+        abort_unless($assignment->teacher_id === $teacher->id, 403);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'instructions' => ['required', 'string', 'max:10000'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'due_at' => ['nullable', 'date'],
+            'remove_attachment' => ['nullable', 'boolean'],
+        ]);
+
+        $oldAttachmentPath = $assignment->attachment_path;
+        $attachmentPath = $oldAttachmentPath;
+
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('pjj/assignments', 'local');
+        } elseif ($request->boolean('remove_attachment')) {
+            $attachmentPath = null;
+        }
+
+        $assignment->update([
             'title' => $data['title'],
             'instructions' => $data['instructions'],
             'attachment_path' => $attachmentPath,
             'due_at' => $data['due_at'] ?? null,
         ]);
 
-        return redirect()->route('guru.pjj.index')->with('success', 'Tugas PJJ berhasil dipublikasikan.');
+        if ($oldAttachmentPath && $oldAttachmentPath !== $attachmentPath) {
+            $this->deleteAssignmentAttachmentIfUnused($oldAttachmentPath);
+        }
+
+        return redirect()->route('guru.pjj.index')->with('success', 'Tugas PJJ berhasil diperbarui.');
+    }
+
+    public function teacherDestroyAssignment(PjjAssignment $assignment)
+    {
+        $teacher = $this->teacherForCurrentUser();
+        abort_unless($assignment->teacher_id === $teacher->id, 403);
+
+        $attachmentPaths = $assignment->submissions()
+            ->whereNotNull('attachment_path')
+            ->pluck('attachment_path')
+            ->merge(
+                PjjSubmissionFile::query()
+                    ->whereIn('pjj_submission_id', $assignment->submissions()->select('id'))
+                    ->pluck('path')
+            )
+            ->all();
+        $assignmentAttachmentPath = $assignment->attachment_path;
+
+        $assignment->delete();
+
+        foreach ($attachmentPaths as $path) {
+            Storage::disk('local')->delete($path);
+        }
+
+        if ($assignmentAttachmentPath) {
+            $this->deleteAssignmentAttachmentIfUnused($assignmentAttachmentPath);
+        }
+
+        return redirect()->route('guru.pjj.index')->with('success', 'Tugas PJJ berhasil dihapus.');
     }
 
     public function teacherShowAssignment(Request $request, PjjAssignment $assignment)
@@ -167,6 +285,45 @@ class PjjController extends Controller
         return back()->with('success', 'Nilai tugas siswa berhasil disimpan.');
     }
 
+    public function teacherBulkGradeSubmissions(Request $request, PjjAssignment $assignment)
+    {
+        $teacher = $this->teacherForCurrentUser();
+        abort_unless($assignment->teacher_id === $teacher->id, 403);
+
+        $data = $request->validate([
+            'grades' => ['required', 'array', 'min:1'],
+            'grades.*.submission_id' => ['required', 'integer'],
+            'grades.*.score' => ['required', 'numeric', 'min:0', 'max:100'],
+            'grades.*.feedback' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $grades = collect($data['grades'])->keyBy('submission_id');
+        $submissions = $assignment->submissions()->whereIn('id', $grades->keys())->get();
+
+        if ($submissions->count() !== $grades->count()) {
+            throw ValidationException::withMessages(['grades' => 'Beberapa jawaban siswa tidak ditemukan pada tugas ini.']);
+        }
+
+        DB::transaction(function () use ($submissions, $grades): void {
+            foreach ($submissions as $submission) {
+                $grade = $grades[$submission->id];
+                $submission->update([
+                    'score' => $grade['score'],
+                    'feedback' => ($grade['feedback'] ?? '') !== '' ? $grade['feedback'] : null,
+                    'graded_at' => now(),
+                ]);
+            }
+        });
+
+        $message = 'Nilai ' . $submissions->count() . ' jawaban siswa berhasil disimpan.';
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function studentIndex(Request $request)
     {
         $student = $this->studentForCurrentUser();
@@ -178,14 +335,32 @@ class PjjController extends Controller
             ->where('student_id', $student->id)
             ->whereDate('attendance_date', Carbon::today())
             ->first();
+
+        $pjjDates = $this->configuredPjjDates();
+
+        // Rekap: gabungkan absensi tercatat dengan tanggal PJJ yang terlewat (Alpa).
+        $recordedAttendances = PjjAttendance::query()
+            ->where('student_id', $student->id)
+            ->orderByDesc('attendance_date')
+            ->limit(30)
+            ->get()
+            ->keyBy(fn(PjjAttendance $attendance) => $attendance->attendance_date->toDateString());
+        $attendanceHistory = collect($pjjDates)
+            ->filter(fn(string $pjjDate) => $pjjDate <= Carbon::today()->toDateString())
+            ->sortDesc()
+            ->take(30)
+            ->map(fn(string $pjjDate) => [
+                'date' => Carbon::parse($pjjDate),
+                'attendance' => $recordedAttendances->get($pjjDate),
+            ])
+            ->values();
+
         $subjects = Subject::query()
             ->whereHas('teacherSubjects', fn($teacherSubject) => $teacherSubject->where('classroom_id', $student->classroom_id))
             ->orderBy('nama_mapel')
             ->get(['id', 'nama_mapel']);
 
-        $pjjDates = $this->configuredPjjDates();
-
-        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'subjects', 'pjjDates'));
+        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'attendanceHistory', 'subjects', 'pjjDates'));
     }
 
     public function studentSubmitAssignment(Request $request, PjjAssignment $assignment)
@@ -199,29 +374,60 @@ class PjjController extends Controller
         }
 
         $data = $request->validate([
-            'answer' => ['nullable', 'required_without:attachment', 'string', 'max:10000'],
-            'attachment' => ['nullable', 'required_without:answer', 'file', 'mimes:pdf,txt,jpg,jpeg,png,webp', 'max:10240'],
+            'answer' => ['nullable', 'required_without:attachments', 'string', 'max:10000'],
+            'attachments' => ['nullable', 'required_without:answer', 'array', 'min:1', 'max:10'],
+            'attachments.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $submission = PjjSubmission::query()->firstOrNew([
             'pjj_assignment_id' => $assignment->id,
             'student_id' => $student->id,
         ]);
-        $oldAttachmentPath = $submission->attachment_path;
         $submission->answer = $data['answer'] ?? null;
         $submission->submitted_at = now();
         $submission->score = null;
         $submission->feedback = null;
         $submission->graded_at = null;
 
-        if ($request->hasFile('attachment')) {
-            $submission->attachment_path = $request->file('attachment')->store('pjj/submissions', 'local');
+        // Simpan file ke disk di luar transaksi agar lock DB sesingkat mungkin.
+        $storedFiles = [];
+        foreach ($request->file('attachments', []) as $file) {
+            $storedFiles[] = [
+                'path' => $file->store('pjj/submissions', 'local'),
+                'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+                'size' => (int) $file->getSize(),
+            ];
         }
 
-        $submission->save();
+        $oldPaths = [];
+        DB::transaction(function () use ($submission, $storedFiles, &$oldPaths) {
+            if ($storedFiles) {
+                // File baru menggantikan seluruh file lama (termasuk kolom lama attachment_path).
+                if ($submission->exists) {
+                    $oldPaths = $submission->files()->pluck('path')->all();
+                }
+                if ($submission->attachment_path) {
+                    $oldPaths[] = $submission->attachment_path;
+                    $submission->attachment_path = null;
+                }
+            }
 
-        if ($request->hasFile('attachment') && $oldAttachmentPath) {
-            Storage::disk('local')->delete($oldAttachmentPath);
+            $submission->save();
+
+            if ($storedFiles) {
+                $submission->files()->delete();
+                $now = now();
+                // Bulk insert: satu query untuk seluruh metadata file.
+                PjjSubmissionFile::query()->insert(array_map(fn(array $file) => $file + [
+                    'pjj_submission_id' => $submission->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $storedFiles));
+            }
+        });
+
+        if ($oldPaths) {
+            Storage::disk('local')->delete($oldPaths);
         }
 
         if ($request->expectsJson()) {
@@ -236,12 +442,24 @@ class PjjController extends Controller
         $this->ensurePjjActive();
         $student = $this->studentForCurrentUser();
 
-        if (PjjAttendance::query()
+        $todayAttendance = PjjAttendance::query()
             ->where('student_id', $student->id)
             ->whereDate('attendance_date', Carbon::today())
-            ->exists()) {
-            throw ValidationException::withMessages(['selfie' => 'Absensi selfie hari ini sudah tercatat.']);
+            ->first();
+
+        if ($todayAttendance && $todayAttendance->check_out_at) {
+            throw ValidationException::withMessages(['selfie' => 'Absen datang dan pulang hari ini sudah lengkap tercatat.']);
         }
+
+        $now = Carbon::now();
+        $isCheckOut = $todayAttendance !== null;
+
+        if ($isCheckOut && $now->lt(Carbon::today()->setTime(15, 0))) {
+            throw ValidationException::withMessages(['selfie' => 'Absen pulang baru dapat dilakukan mulai pukul 15.00. Saat ini pukul ' . $now->format('H:i') . '.']);
+        }
+
+        // Absen datang setelah 06.30 tetap diterima namun berstatus Terlambat.
+        $isLate = !$isCheckOut && $now->gt(Carbon::today()->setTime(6, 30));
 
         $data = $request->validate([
             'selfie_data' => ['required', 'string', 'max:2200000'],
@@ -287,36 +505,68 @@ class PjjController extends Controller
         }
 
         $path = 'pjj/attendances/' . Carbon::today()->toDateString() . '/' . $student->id . '-' . bin2hex(random_bytes(8)) . '.jpg';
-        $attendanceCreated = DB::transaction(function () use ($student, $path, $jpeg, $data) {
+        $createdAttendance = DB::transaction(function () use ($student, $path, $jpeg, $data, $isCheckOut, $isLate) {
             Student::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
 
-            if (PjjAttendance::query()
+            $attendance = PjjAttendance::query()
                 ->where('student_id', $student->id)
                 ->whereDate('attendance_date', Carbon::today())
-                ->exists()) {
-                return false;
+                ->first();
+
+            if ($isCheckOut) {
+                if (!$attendance || $attendance->check_out_at) {
+                    return null;
+                }
+
+                if (!Storage::disk('local')->put($path, $jpeg)) {
+                    throw new \RuntimeException('Foto selfie gagal disimpan ke penyimpanan.');
+                }
+
+                $attendance->update([
+                    'check_out_at' => now(),
+                    'check_out_selfie_path' => $path,
+                    'check_out_latitude' => $data['latitude'],
+                    'check_out_longitude' => $data['longitude'],
+                ]);
+
+                return $attendance;
+            }
+
+            if ($attendance) {
+                return null;
             }
 
             if (!Storage::disk('local')->put($path, $jpeg)) {
                 throw new \RuntimeException('Foto selfie gagal disimpan ke penyimpanan.');
             }
 
-            PjjAttendance::query()->create([
+            return PjjAttendance::query()->create([
                 'student_id' => $student->id,
                 'attendance_date' => Carbon::today()->toDateString(),
                 'selfie_path' => $path,
                 'latitude' => $data['latitude'],
                 'longitude' => $data['longitude'],
+                'check_in_at' => now(),
+                'status' => $isLate ? 'Terlambat' : 'Hadir',
             ]);
-
-            return true;
         });
 
-        if (!$attendanceCreated) {
-            throw ValidationException::withMessages(['selfie' => 'Absensi selfie hari ini sudah tercatat.']);
+        if (!$createdAttendance) {
+            throw ValidationException::withMessages(['selfie' => 'Absensi selfie sudah tercatat. Muat ulang halaman untuk melihat status terbaru.']);
         }
 
-        return back()->with('success', 'Absensi selfie berhasil dicatat untuk hari ini.');
+        if (!$isCheckOut) {
+            // Sinkronkan ke absensi reguler: selfie PJJ = Hadir/Terlambat pada semua jadwal kelas hari ini.
+            $this->attendanceSync->syncStudentAttendance($createdAttendance);
+        }
+
+        if ($isCheckOut) {
+            return back()->with('success', 'Absen pulang berhasil dicatat pukul ' . $now->format('H:i') . '.');
+        }
+
+        return back()->with('success', $isLate
+            ? 'Absen datang dicatat pukul ' . $now->format('H:i') . ' dengan status Terlambat (melewati pukul 06.30).'
+            : 'Absen datang berhasil dicatat pukul ' . $now->format('H:i') . '.');
     }
 
     public function downloadAssignment(PjjAssignment $assignment)
@@ -344,10 +594,25 @@ class PjjController extends Controller
     public function downloadSubmission(PjjSubmission $submission)
     {
         abort_unless($submission->attachment_path, 404);
+        $this->authorizeSubmissionAccess($submission);
+
+        return Storage::disk('local')->response($submission->attachment_path);
+    }
+
+    public function downloadSubmissionFile(PjjSubmission $submission, PjjSubmissionFile $file)
+    {
+        abort_unless($file->pjj_submission_id === $submission->id, 404);
+        $this->authorizeSubmissionAccess($submission);
+
+        return Storage::disk('local')->response($file->path, $file->original_name);
+    }
+
+    private function authorizeSubmissionAccess(PjjSubmission $submission): void
+    {
         $user = Auth::user();
 
         if ($user->hasRole('admin')) {
-            return Storage::disk('local')->response($submission->attachment_path);
+            return;
         }
 
         if ($user->hasRole('guru')) {
@@ -359,13 +624,17 @@ class PjjController extends Controller
         } else {
             abort(403);
         }
-
-        return Storage::disk('local')->response($submission->attachment_path);
     }
 
-    public function adminAttendancePhoto(PjjAttendance $attendance)
+    public function adminAttendancePhoto(Request $request, PjjAttendance $attendance)
     {
         abort_unless(Auth::user()->hasRole('admin'), 403);
+
+        if ($request->query('type') === 'out') {
+            abort_unless($attendance->check_out_selfie_path, 404);
+            return Storage::disk('local')->response($attendance->check_out_selfie_path);
+        }
+
         return Storage::disk('local')->response($attendance->selfie_path);
     }
 
@@ -452,7 +721,15 @@ class PjjController extends Controller
                 'student' => e($attendance->student->nama_lengkap),
                 'nis' => e($attendance->student->nis),
                 'classroom' => e($attendance->student->classroom->nama_kelas),
-                'photo' => '<a class="btn btn-xs btn-outline-primary" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance)) . '"><i class="fas fa-camera"></i> Lihat foto</a>',
+                'check_in' => (($attendance->check_in_at ?? $attendance->created_at)?->format('H:i') ?? '—')
+                    . ($attendance->status === 'Terlambat' ? ' <span class="badge badge-warning">Terlambat</span>' : ''),
+                'check_out' => $attendance->check_out_at
+                    ? $attendance->check_out_at->format('H:i')
+                    : '<span class="badge badge-warning">Belum absen pulang</span>',
+                'photo' => '<a class="btn btn-xs btn-outline-primary" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance)) . '"><i class="fas fa-camera"></i> Datang</a>'
+                    . ($attendance->check_out_selfie_path
+                        ? ' <a class="btn btn-xs btn-outline-info" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance) . '?type=out') . '"><i class="fas fa-camera"></i> Pulang</a>'
+                        : ''),
                 'location' => $attendance->latitude !== null && $attendance->longitude !== null
                     ? e($attendance->latitude . ', ' . $attendance->longitude)
                         . ' <a class="btn btn-xs btn-outline-success" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q='
@@ -510,7 +787,19 @@ class PjjController extends Controller
                 'title' => '<strong>' . e($assignment->title) . '</strong>',
                 'deadline' => $assignment->due_at?->format('d-m-Y H:i') ?? '—',
                 'submissions' => (int) $assignment->submissions_count,
-                'action' => '<a class="btn btn-xs btn-primary" href="' . e(route('guru.pjj.assignments.show', $assignment)) . '"><i class="fas fa-clipboard-check"></i> Lihat & nilai</a>',
+                'action' => '<a class="btn btn-xs btn-primary" href="' . e(route('guru.pjj.assignments.show', $assignment)) . '"><i class="fas fa-clipboard-check"></i> Lihat & nilai</a> '
+                    . '<button type="button" class="btn btn-xs btn-warning pjj-edit-assignment"'
+                    . ' data-url="' . e(route('guru.pjj.assignments.update', $assignment)) . '"'
+                    . ' data-title="' . e($assignment->title) . '"'
+                    . ' data-instructions="' . e($assignment->instructions) . '"'
+                    . ' data-due-at="' . e($assignment->due_at?->format('Y-m-d\TH:i') ?? '') . '"'
+                    . ' data-attachment="' . e($assignment->attachment_path ? route('pjj.assignment.download', $assignment) : '') . '"'
+                    . '><i class="fas fa-edit"></i> Edit</button> '
+                    . '<button type="button" class="btn btn-xs btn-danger pjj-delete-assignment"'
+                    . ' data-url="' . e(route('guru.pjj.assignments.destroy', $assignment)) . '"'
+                    . ' data-title="' . e($assignment->title) . '"'
+                    . ' data-submissions="' . (int) $assignment->submissions_count . '"'
+                    . '><i class="fas fa-trash"></i> Hapus</button>',
             ]
         );
     }
@@ -523,7 +812,7 @@ class PjjController extends Controller
             'date_to' => ['nullable', 'date_format:Y-m-d', Rule::in($pjjDates)],
             'grading_status' => ['nullable', 'in:graded,pending'],
         ]);
-        $query = $assignment->submissions()->with('student');
+        $query = $assignment->submissions()->with(['student', 'files']);
         if ($request->input('grading_status') === 'graded') {
             $query->whereNotNull('graded_at');
         } elseif ($request->input('grading_status') === 'pending') {
@@ -553,10 +842,8 @@ class PjjController extends Controller
                 'answer' => $submission->answer
                     ? '<span class="submission-answer">' . nl2br(e(\Illuminate\Support\Str::limit($submission->answer, 400))) . '</span>'
                     : '<span class="text-muted">Jawaban berupa file</span>',
-                'attachment' => $submission->attachment_path
-                    ? '<a href="' . e(route('pjj.submission.download', $submission)) . '">Lihat file jawaban</a>'
-                    : '—',
-                'grading' => '<form method="POST" action="' . e(route('guru.pjj.submissions.grade', $submission)) . '" class="pjj-grade-form">'
+                'attachment' => $this->submissionFilesHtml($submission),
+                'grading' => '<form method="POST" action="' . e(route('guru.pjj.submissions.grade', $submission)) . '" class="pjj-grade-form" data-submission-id="' . (int) $submission->id . '">'
                     . csrf_field()
                     . '<div class="input-group input-group-sm"><input aria-label="Nilai" type="number" step="0.01" min="0" max="100" name="score" value="' . e((string) $submission->score) . '" class="form-control" placeholder="Nilai" required>'
                     . '<input aria-label="Catatan" name="feedback" value="' . e((string) $submission->feedback) . '" class="form-control" placeholder="Catatan">'
@@ -632,11 +919,19 @@ class PjjController extends Controller
                     ? '<a class="btn btn-xs btn-outline-secondary" href="' . e(route('pjj.assignment.download', $assignment)) . '">Materi</a>'
                     : '—';
 
+                $instructions = (string) $assignment->instructions;
+                $viewTextButton = mb_strlen($instructions) > 140
+                    ? '<br><button type="button" class="btn btn-xs btn-outline-info mt-1 pjj-view-text"'
+                        . ' data-title="' . e($assignment->title) . '"'
+                        . ' data-text="' . e($instructions) . '"'
+                        . '><i class="fas fa-eye"></i> Lihat</button>'
+                    : '';
+
                 return [
                     'date' => $assignment->created_at->format('d-m-Y'),
                     'subject' => e($assignment->teacherSubject->subject->nama_mapel),
                     'teacher' => e($assignment->teacher->nama_lengkap),
-                    'title' => '<strong>' . e($assignment->title) . '</strong><br><small>' . e(\Illuminate\Support\Str::limit($assignment->instructions, 140)) . '</small>',
+                    'title' => '<strong>' . e($assignment->title) . '</strong><br><small>' . e(\Illuminate\Support\Str::limit($instructions, 140)) . '</small>' . $viewTextButton,
                     'deadline' => $assignment->due_at?->format('d-m-Y H:i') ?? '—',
                     'status' => $status,
                     'material' => $material,
@@ -644,6 +939,22 @@ class PjjController extends Controller
                 ];
             }
         );
+    }
+
+    private function submissionFilesHtml(PjjSubmission $submission): string
+    {
+        $links = $submission->files
+            ->map(fn(PjjSubmissionFile $file, int $index) => '<a class="d-block" href="'
+                . e(route('pjj.submission.files.download', [$submission, $file]))
+                . '">File ' . ($index + 1) . ': ' . e(\Illuminate\Support\Str::limit($file->original_name, 40)) . '</a>')
+            ->all();
+
+        // Dukungan data lama: kolom attachment_path tunggal.
+        if (!$links && $submission->attachment_path) {
+            $links[] = '<a href="' . e(route('pjj.submission.download', $submission)) . '">Lihat file jawaban</a>';
+        }
+
+        return $links ? implode('', $links) : '—';
     }
 
     private function applyAssignmentFilters($query, Request $request): void
@@ -700,13 +1011,16 @@ class PjjController extends Controller
     private function teacherForCurrentUser(): Teacher
     {
         $user = Auth::user();
+
+        // Prioritaskan identitas unik (NIP/NUPTK); pencocokan nama hanya fallback
+        // agar guru dengan nama kembar tidak ter-resolve ke data guru yang salah.
         $teacher = Teacher::query()
             ->where(function ($query) use ($user) {
                 $query->where('nip', $user->email)
-                    ->orWhere('nuptk', $user->email)
-                    ->orWhere('nama_lengkap', $user->name);
+                    ->orWhere('nuptk', $user->email);
             })
-            ->first();
+            ->first()
+            ?? Teacher::query()->where('nama_lengkap', $user->name)->first();
 
         abort_unless($teacher, 403, 'Akun guru tidak terhubung dengan data guru.');
         return $teacher;
@@ -715,16 +1029,30 @@ class PjjController extends Controller
     private function studentForCurrentUser(): Student
     {
         $user = Auth::user();
+
+        // Prioritaskan identitas unik (NISN/NIS); pencocokan nama hanya fallback
+        // agar siswa dengan nama kembar tidak ter-resolve ke kelas yang salah.
         $student = Student::query()
             ->where(function ($query) use ($user) {
                 $query->where('nisn', $user->email)
-                    ->orWhere('nis', $user->email)
-                    ->orWhere('nama_lengkap', $user->name);
+                    ->orWhere('nis', $user->email);
             })
-            ->first();
+            ->first()
+            ?? Student::query()->where('nama_lengkap', $user->name)->first();
 
         abort_unless($student, 403, 'Akun siswa tidak terhubung dengan data siswa.');
         return $student;
+    }
+
+    private function deleteAssignmentAttachmentIfUnused(string $path): void
+    {
+        $stillUsed = PjjAssignment::query()
+            ->where('attachment_path', $path)
+            ->exists();
+
+        if (!$stillUsed) {
+            Storage::disk('local')->delete($path);
+        }
     }
 
     private function ensurePjjActive(): void

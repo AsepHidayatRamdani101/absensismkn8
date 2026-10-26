@@ -392,6 +392,10 @@ Schedule::command('backup:full-weekly')->weeklyOn(0, '01:30')->withoutOverlappin
 Schedule::command('reminder:guru-absen-agenda')
     ->dailyAt('15:00')
     ->withoutOverlapping();
+// Akhir hari PJJ: siswa yang sama sekali tidak absen selfie ditandai Alpa.
+Schedule::command('pjj:mark-alpa')
+    ->dailyAt('21:00')
+    ->withoutOverlapping();
 Artisan::command('reminder:class-schedule-whatsapp', function (App\Services\ScheduleWhatsappReminderService $service) {
     $result = $service->sendDueReminders();
     Cache::put('fonnte:schedule-reminder:last-run', [

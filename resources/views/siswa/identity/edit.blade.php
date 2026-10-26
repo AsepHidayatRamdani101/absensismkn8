@@ -78,7 +78,9 @@
                     <p class="mb-2"><strong>NIS:</strong> {{ $student->nis }}</p>
                     <p class="mb-2"><strong>NISN:</strong> {{ $student->nisn ?: '-' }}</p>
                     <p class="mb-2"><strong>Nama:</strong> {{ $student->nama_lengkap }}</p>
-                    <p class="mb-2"><strong>Jenis Kelamin:</strong> {{ $student->jenis_kelamin }}</p>
+                    <p class="mb-2"><strong>Jenis Kelamin:</strong>
+                        {{ $student->jenis_kelamin === 'L' ? 'Laki-laki' : ($student->jenis_kelamin === 'P' ? 'Perempuan' : '-') }}
+                    </p>
                     <p class="mb-2"><strong>Kelas:</strong> {{ $student->classroom?->nama_kelas ?? '-' }}</p>
                     <p class="mb-2"><strong>Jurusan:</strong> {{ $student->classroom?->major?->nama_jurusan ?? '-' }}</p>
                     <p class="mb-1"><strong>Progress:</strong> {{ $identityCompletion }}%</p>

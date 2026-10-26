@@ -36,7 +36,10 @@
     </div>
 
     <div class="card card-outline card-secondary">
-        <div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-check mr-1"></i> Jawaban Siswa</h3></div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title"><i class="fas fa-clipboard-check mr-1"></i> Jawaban Siswa</h3>
+            <button type="button" id="pjj-save-all-grades" class="btn btn-success btn-sm"><i class="fas fa-save mr-1"></i> Simpan Semua Nilai</button>
+        </div>
         <div class="card-body">
             <form id="pjj-submission-filter-form" class="form-row align-items-end">
                 <div class="form-group col-md-3">
@@ -128,6 +131,51 @@
                     $('#pjj-grade-notice').removeClass('d-none alert-success').addClass('alert-danger').text(message);
                 }).always(function () {
                     button.prop('disabled', false);
+                });
+            });
+            $('#pjj-save-all-grades').on('click', function () {
+                const saveAllButton = $(this);
+                const grades = [];
+                let invalid = false;
+                $('#pjj-submissions-table .pjj-grade-form').each(function () {
+                    const gradeForm = $(this);
+                    const scoreInput = gradeForm.find('input[name="score"]');
+                    const score = scoreInput.val();
+                    if (score === '' || score === null) { return; }
+                    if (!scoreInput[0].checkValidity()) {
+                        invalid = true;
+                        scoreInput.addClass('is-invalid');
+                        return;
+                    }
+                    scoreInput.removeClass('is-invalid');
+                    grades.push({
+                        submission_id: gradeForm.data('submission-id'),
+                        score: score,
+                        feedback: gradeForm.find('input[name="feedback"]').val() || ''
+                    });
+                });
+                if (invalid) {
+                    $('#pjj-grade-notice').removeClass('d-none alert-success').addClass('alert-danger').text('Ada nilai yang tidak valid. Nilai harus antara 0 dan 100.');
+                    return;
+                }
+                if (grades.length === 0) {
+                    $('#pjj-grade-notice').removeClass('d-none alert-success').addClass('alert-danger').text('Belum ada nilai yang diisi. Isi kolom nilai terlebih dahulu lalu klik Simpan Semua Nilai.');
+                    return;
+                }
+                saveAllButton.prop('disabled', true);
+                $.ajax({
+                    url: @json(route('guru.pjj.submissions.grade-bulk', $assignment)),
+                    method: 'POST',
+                    data: { _token: @json(csrf_token()), grades: grades },
+                    headers: { Accept: 'application/json' }
+                }).done(function (response) {
+                    $('#pjj-grade-notice').removeClass('d-none alert-danger').addClass('alert-success').text(response.message);
+                    table.ajax.reload(null, false);
+                }).fail(function (xhr) {
+                    const message = xhr.responseJSON?.message || 'Nilai gagal disimpan. Periksa kembali input.';
+                    $('#pjj-grade-notice').removeClass('d-none alert-success').addClass('alert-danger').text(message);
+                }).always(function () {
+                    saveAllButton.prop('disabled', false);
                 });
             });
         });

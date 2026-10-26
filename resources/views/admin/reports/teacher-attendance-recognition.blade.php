@@ -473,12 +473,14 @@
                                 <td>{{ $row['item']->classroom->major->nama_jurusan ?? '-' }}</td>
                                 <td>{{ $row['item']->classroom->nama_kelas ?? '-' }}</td>
                                 <td>
-                                    @if ($row['has_absensi_guru_siswa_kamera'])
+                                    @if (!empty($row['item']->foto_guru_path))
                                         <a class="btn btn-info btn-xs"
                                             href="{{ asset('storage/' . $row['item']->foto_guru_path) }}"
                                             target="_blank" rel="noopener noreferrer">
                                             <i class="fas fa-image"></i> Lihat Foto
                                         </a>
+                                    @elseif (!empty($row['is_pjj_session']))
+                                        <span class="badge badge-info">PJJ (tanpa foto)</span>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>
                                     @endif

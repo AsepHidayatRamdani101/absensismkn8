@@ -3,6 +3,7 @@
 @section('title', 'Tugas PJJ Guru')
 
 @section('plugins.Datatables', true)
+@section('plugins.Sweetalert2', true)
 
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -15,9 +16,6 @@
 @stop
 
 @section('content')
-    @if (session('success'))
-        <div class="alert alert-success alert-dismissible"><button type="button" class="close" data-dismiss="alert">&times;</button>{{ session('success') }}</div>
-    @endif
     @if ($errors->any())
         <div class="alert alert-danger"><strong>Periksa kembali data:</strong><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
@@ -36,7 +34,7 @@
                         <select id="teacher_subject_id" name="teacher_subject_id" class="form-control form-control-sm" required>
                             <option value="">Pilih kelas dan mata pelajaran</option>
                             @foreach ($teacherSubjects as $teacherSubject)
-                                <option value="{{ $teacherSubject->id }}" @selected(old('teacher_subject_id') == $teacherSubject->id)>{{ $teacherSubject->classroom->nama_kelas }} — {{ $teacherSubject->subject->nama_mapel }}</option>
+                                <option value="{{ $teacherSubject->id }}" data-subject-id="{{ $teacherSubject->subject_id }}" data-tingkat="{{ $teacherSubject->classroom->tingkat }}" data-classroom="{{ $teacherSubject->classroom->nama_kelas }}" @selected(old('teacher_subject_id') == $teacherSubject->id)>{{ $teacherSubject->classroom->nama_kelas }} — {{ $teacherSubject->subject->nama_mapel }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -47,6 +45,13 @@
                     <div class="form-group col-lg-4">
                         <label for="due_at">Batas pengumpulan (opsional)</label>
                         <input id="due_at" type="datetime-local" name="due_at" class="form-control form-control-sm" value="{{ old('due_at') }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-12 d-none" id="extra-classes-group">
+                        <label class="mb-1">Bagikan juga ke kelas lain (mata pelajaran dan jenjang sama)</label>
+                        <div id="extra-classes-options" class="d-flex flex-wrap"></div>
+                        <small class="form-text text-muted">Centang kelas lain yang Anda ampu dengan jenjang yang sama (contoh: X dengan X) agar tugas yang sama otomatis dipublikasikan ke kelas tersebut tanpa perlu mengunggah ulang.</small>
                     </div>
                 </div>
                 <div class="form-row">
@@ -121,11 +126,73 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="pjj-edit-modal" tabindex="-1" role="dialog" aria-labelledby="pjj-edit-modal-label" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="pjj-edit-form" method="POST" enctype="multipart/form-data" class="modal-content">
+                @csrf
+                @method('PUT')
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pjj-edit-modal-label"><i class="fas fa-edit mr-1"></i> Edit Tugas</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-title">Judul tugas</label>
+                        <input id="edit-title" name="title" class="form-control form-control-sm" maxlength="180" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-instructions">Materi / instruksi teks</label>
+                        <textarea id="edit-instructions" name="instructions" class="form-control form-control-sm" rows="4" maxlength="10000" required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="edit-due-at">Batas pengumpulan (opsional)</label>
+                            <input id="edit-due-at" type="datetime-local" name="due_at" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="edit-attachment">Ganti lampiran (maks. 10 MB)</label>
+                            <div class="custom-file">
+                                <input id="edit-attachment" type="file" name="attachment" class="custom-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                                <label class="custom-file-label" for="edit-attachment">Pilih file</label>
+                            </div>
+                            <div id="edit-attachment-info" class="mt-1 d-none">
+                                <a id="edit-attachment-link" href="#" class="btn btn-xs btn-outline-primary">Lihat lampiran saat ini</a>
+                                <div class="custom-control custom-checkbox d-inline-block ml-2">
+                                    <input type="checkbox" class="custom-control-input" id="edit-remove-attachment" name="remove_attachment" value="1">
+                                    <label class="custom-control-label" for="edit-remove-attachment">Hapus lampiran</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-warning btn-sm"><i class="fas fa-save mr-1"></i> Simpan perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <form id="pjj-delete-form" method="POST" class="d-none">
+        @csrf
+        @method('DELETE')
+    </form>
 @stop
 
 @section('js')
     <script>
         $(function () {
+            @if (session('success'))
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil',
+                    text: @json(session('success')),
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: false
+                });
+            @endif
             const form = $('#pjj-teacher-filter-form');
             const table = $('#pjj-teacher-assignments').DataTable({
                 processing: true,
@@ -159,6 +226,77 @@
             form.on('change', 'input, select', function () { table.ajax.reload(); });
             $(document).on('change', '.custom-file-input', function () {
                 $(this).next('.custom-file-label').text(this.files[0]?.name || 'Pilih file');
+            });
+            const oldExtraIds = @json(collect(old('extra_teacher_subject_ids', []))->map(fn($id) => (int) $id)->values());
+            function refreshExtraClasses() {
+                const select = $('#teacher_subject_id');
+                const selected = select.find('option:selected');
+                const group = $('#extra-classes-group');
+                const container = $('#extra-classes-options');
+                container.empty();
+                if (!selected.val()) {
+                    group.addClass('d-none');
+                    return;
+                }
+                const subjectId = selected.data('subject-id');
+                const tingkat = selected.data('tingkat');
+                let count = 0;
+                select.find('option').each(function () {
+                    const option = $(this);
+                    if (!option.val() || option.val() === selected.val() || option.data('subject-id') !== subjectId || option.data('tingkat') !== tingkat) {
+                        return;
+                    }
+                    count++;
+                    const checked = oldExtraIds.includes(parseInt(option.val(), 10)) ? ' checked' : '';
+                    container.append(
+                        '<div class="custom-control custom-checkbox mr-3">'
+                        + '<input type="checkbox" class="custom-control-input" id="extra-class-' + option.val() + '" name="extra_teacher_subject_ids[]" value="' + option.val() + '"' + checked + '>'
+                        + '<label class="custom-control-label" for="extra-class-' + option.val() + '">' + $('<span>').text(option.data('classroom')).html() + '</label>'
+                        + '</div>'
+                    );
+                });
+                group.toggleClass('d-none', count === 0);
+            }
+            $('#teacher_subject_id').on('change', refreshExtraClasses);
+            refreshExtraClasses();
+            $('#pjj-teacher-assignments').on('click', '.pjj-edit-assignment', function () {
+                const button = $(this);
+                $('#pjj-edit-form').attr('action', button.data('url'));
+                $('#edit-title').val(button.data('title'));
+                $('#edit-instructions').val(button.data('instructions'));
+                $('#edit-due-at').val(button.data('due-at'));
+                $('#edit-attachment').val('');
+                $('#edit-attachment').next('.custom-file-label').text('Pilih file');
+                $('#edit-remove-attachment').prop('checked', false);
+                const attachment = button.data('attachment');
+                if (attachment) {
+                    $('#edit-attachment-link').attr('href', attachment);
+                    $('#edit-attachment-info').removeClass('d-none');
+                } else {
+                    $('#edit-attachment-info').addClass('d-none');
+                }
+                $('#pjj-edit-modal').modal('show');
+            });
+            $('#pjj-teacher-assignments').on('click', '.pjj-delete-assignment', function () {
+                const button = $(this);
+                const submissions = parseInt(button.data('submissions'), 10) || 0;
+                let message = 'Tugas "' + button.data('title') + '" akan dihapus permanen.';
+                if (submissions > 0) {
+                    message += ' Terdapat ' + submissions + ' jawaban siswa yang juga akan terhapus.';
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Hapus tugas?',
+                    text: message,
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Ya, hapus',
+                    cancelButtonText: 'Batal'
+                }).then(function (result) {
+                    if (result.value) {
+                        $('#pjj-delete-form').attr('action', button.data('url')).trigger('submit');
+                    }
+                });
             });
         });
     </script>

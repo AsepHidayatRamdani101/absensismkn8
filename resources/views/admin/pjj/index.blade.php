@@ -161,6 +161,8 @@
                     ['data' => 'student', 'name' => 'student'],
                     ['data' => 'nis', 'name' => 'nis'],
                     ['data' => 'classroom', 'name' => 'classroom'],
+                    ['data' => 'check_in', 'name' => 'check_in', 'orderable' => false, 'searchable' => false],
+                    ['data' => 'check_out', 'name' => 'check_out', 'orderable' => false, 'searchable' => false],
                     ['data' => 'photo', 'name' => 'photo', 'orderable' => false, 'searchable' => false],
                     ['data' => 'location', 'name' => 'location', 'orderable' => false, 'searchable' => false],
                 ],
@@ -274,7 +276,7 @@
                         </table></div>
                     @elseif ($section === 'student-attendance')
                         <div class="table-responsive"><table id="pjj-admin-table" class="table table-bordered table-striped table-hover w-100">
-                            <thead><tr><th>Tanggal</th><th>Nama Siswa</th><th>NIS</th><th>Kelas</th><th>Bukti Selfie</th><th>Lokasi Foto</th></tr></thead>
+                            <thead><tr><th>Tanggal</th><th>Nama Siswa</th><th>NIS</th><th>Kelas</th><th>Jam Datang</th><th>Jam Pulang</th><th>Bukti Selfie</th><th>Lokasi Foto</th></tr></thead>
                         </table></div>
                     @endif
                 </div>

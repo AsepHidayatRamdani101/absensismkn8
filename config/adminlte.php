@@ -711,6 +711,12 @@ return [
                     'route' => 'guru.wali-kelas.mid-class-permits.index',
                     'icon' => 'fas fa-home',
                 ],
+                [
+                    'text' => 'Monitoring PJJ',
+                    'route' => 'guru.wali-kelas.pjj.monitoring',
+                    'icon' => 'fas fa-laptop-house',
+                    'can' => 'pjj-wali-menu',
+                ],
             ],
         ],
         [
@@ -944,7 +950,7 @@ return [
                 [
                     'type' => 'js',
                     'asset' => false,
-                    'location' => '//cdn.jsdelivr.net/npm/sweetalert2@8',
+                    'location' => '//cdn.jsdelivr.net/npm/sweetalert2@11',
                 ],
             ],
         ],

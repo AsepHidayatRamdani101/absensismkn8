@@ -12,6 +12,7 @@ use App\Exports\TeacherAttendanceRecognitionMissingSessionsExport;
 use App\Exports\TeacherLeaveReportExport;
 use App\Models\AttendanceDetail;
 use App\Models\Classroom;
+use App\Models\Holiday;
 use App\Models\Major;
 use App\Models\Student;
 use App\Models\StudentLeaveRequest;
@@ -37,6 +38,9 @@ class ReportController extends Controller
 {
     private const PDF_EXPORT_MAX_ROWS = 3000;
     private const EXCEL_EXPORT_MAX_ROWS = 20000;
+
+    /** Cache daftar tanggal PJJ (date string => index) per request. */
+    private ?array $pjjDates = null;
 
     public function teacherAttendanceRecognition(Request $request)
     {
@@ -1656,17 +1660,43 @@ class ReportController extends Controller
 
     private function buildTeacherAttendanceRecognitionRow(TeacherAttendance $item): array
     {
-        $hasAbsensiGuruSiswaKamera = !empty($item->foto_guru_path);
+        // Saat PJJ, foto guru oleh kamera siswa dinonaktifkan, sehingga syarat foto
+        // dianggap terpenuhi agar sesi PJJ tetap dapat diakui penuh.
+        $isPjjSession = $item->tanggal && $this->isPjjDate($item->tanggal->toDateString());
+        $hasAbsensiGuruSiswaKamera = !empty($item->foto_guru_path) || $isPjjSession;
         $hasAgendaGuru = $item->status === 'Selesai';
         $hasAbsensiSiswaOlehGuru = $item->kehadiran_guru === 'Hadir' && (int) $item->attendance_details_count > 0;
         $recognizedPoint = ($hasAbsensiGuruSiswaKamera && $hasAgendaGuru && $hasAbsensiSiswaOlehGuru) ? 1 : 0;
 
         return [
+            'is_pjj_session' => $isPjjSession,
             'has_absensi_guru_siswa_kamera' => $hasAbsensiGuruSiswaKamera,
             'has_agenda_guru' => $hasAgendaGuru,
             'has_absensi_siswa_oleh_guru' => $hasAbsensiSiswaOlehGuru,
             'recognized_point' => $recognizedPoint,
         ];
+    }
+
+    private function isPjjDate(string $date): bool
+    {
+        if ($this->pjjDates === null) {
+            $this->pjjDates = Holiday::query()
+                ->where('is_pjj', true)
+                ->get(['tanggal', 'tanggal_akhir'])
+                ->flatMap(function (Holiday $holiday): array {
+                    $start = Carbon::parse($holiday->tanggal)->startOfDay();
+                    $end = Carbon::parse($holiday->tanggal_akhir ?? $holiday->tanggal)->startOfDay();
+
+                    return collect(\Carbon\CarbonPeriod::create($start, $end))
+                        ->map(fn(Carbon $pjjDate) => $pjjDate->toDateString())
+                        ->all();
+                })
+                ->unique()
+                ->flip()
+                ->all();
+        }
+
+        return isset($this->pjjDates[$date]);
     }
 
     private function teacherAttendanceRecognitionTypeConfig(): array

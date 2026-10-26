@@ -159,6 +159,11 @@ class AppServiceProvider extends ServiceProvider
             return $user->hasRole('siswa') && SchoolCalendar::isPjj(Carbon::today());
         });
 
+        Gate::define('pjj-wali-menu', function ($user) {
+            return SchoolCalendar::isPjj(Carbon::today())
+                && Gate::forUser($user)->allows('guru-wali-kelas');
+        });
+
         Gate::define('wali_kelas', function ($user) {
             return $user->hasRole('wali_kelas');
         });

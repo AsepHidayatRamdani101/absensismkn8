@@ -12,7 +12,9 @@ use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class StudentLeaveRequestController extends Controller
 {
@@ -244,6 +246,175 @@ class StudentLeaveRequestController extends Controller
 
         return redirect()->route('guru.wali-kelas.leave-requests.index')
             ->with('success', 'Input langsung izin/sakit oleh wali kelas berhasil diproses dan absensi siswa telah diisikan.');
+    }
+
+    public function waliStoreBatch(Request $request)
+    {
+        if (!Schema::hasTable('student_leave_requests')) {
+            return response()->json([
+                'message' => 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.',
+            ], 422);
+        }
+
+        $teacher = $this->resolveCurrentTeacher();
+
+        if (!$teacher || !$teacher->wali_classroom_id) {
+            return response()->json(['message' => 'Anda tidak terdaftar sebagai wali kelas.'], 403);
+        }
+
+        $validated = $request->validate([
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'alasan_umum' => 'required|string|max:2000',
+            'entries' => 'required|array|min:1',
+            'entries.*.student_id' => 'required|integer|exists:students,id',
+            'entries.*.jenis_pengajuan' => 'required|in:Izin,Sakit',
+            'entries.*.alasan' => 'nullable|string|max:2000',
+        ], [
+            'entries.required' => 'Pilih minimal satu siswa (Izin/Sakit) terlebih dahulu.',
+            'alasan_umum.required' => 'Alasan umum wajib diisi.',
+        ]);
+
+        // Pastikan semua siswa milik kelas wali sebelum menyimpan apapun.
+        $studentIds = collect($validated['entries'])->pluck('student_id')->map(fn($id) => (int) $id)->unique();
+
+        $students = Student::query()
+            ->whereIn('id', $studentIds)
+            ->where('classroom_id', $teacher->wali_classroom_id)
+            ->get()
+            ->keyBy('id');
+
+        if ($students->count() !== $studentIds->count()) {
+            return response()->json(['message' => 'Ada siswa yang bukan anggota kelas Anda.'], 403);
+        }
+
+        $savedCount = 0;
+
+        DB::transaction(function () use ($validated, $students, $teacher, &$savedCount) {
+            foreach ($validated['entries'] as $entry) {
+                $student = $students->get((int) $entry['student_id']);
+                $alasan = trim((string) ($entry['alasan'] ?? '')) !== ''
+                    ? trim($entry['alasan'])
+                    : $validated['alasan_umum'];
+
+                $leaveRequest = StudentLeaveRequest::create([
+                    'student_id' => $student->id,
+                    'jenis_pengajuan' => $entry['jenis_pengajuan'],
+                    'tanggal_mulai' => $validated['tanggal_mulai'],
+                    'tanggal_selesai' => $validated['tanggal_selesai'],
+                    'alasan' => $alasan,
+                    'foto_surat_path' => null,
+                    'status_pengajuan' => 'Disetujui',
+                    'catatan_wali' => 'Input langsung wali kelas (input cepat massal).',
+                    'verified_by_teacher_id' => $teacher->id,
+                    'verified_at' => now(),
+                ]);
+
+                $this->applyLeaveToAttendanceDetails($leaveRequest);
+                $savedCount++;
+            }
+        });
+
+        return response()->json([
+            'message' => $savedCount . ' izin/sakit siswa berhasil disimpan dan absensi otomatis diisikan.',
+            'saved' => $savedCount,
+        ]);
+    }
+
+    public function waliUpdate(Request $request, StudentLeaveRequest $leaveRequest)
+    {
+        if (!Schema::hasTable('student_leave_requests')) {
+            return redirect()->route('guru.wali-kelas.leave-requests.index')
+                ->with('error', 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.');
+        }
+
+        $teacher = $this->resolveCurrentTeacher();
+
+        if (!$teacher || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $leaveRequest->load('student.classroom');
+
+        if ((int) ($leaveRequest->student->classroom_id ?? 0) !== (int) $teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'jenis_pengajuan' => 'required|in:Izin,Sakit',
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'alasan' => 'required|string|max:2000',
+            'catatan_wali' => 'nullable|string|max:2000',
+            'foto_surat' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120|dimensions:min_width=600,min_height=600',
+        ]);
+
+        $wasApproved = $leaveRequest->status_pengajuan === 'Disetujui';
+
+        // Hapus absensi lama agar tidak tersisa saat rentang tanggal berubah.
+        if ($wasApproved) {
+            $this->revertLeaveFromAttendanceDetails($leaveRequest);
+        }
+
+        $fotoSuratPath = $leaveRequest->foto_surat_path;
+
+        if ($request->hasFile('foto_surat')) {
+            if ($fotoSuratPath) {
+                Storage::disk('public')->delete($fotoSuratPath);
+            }
+
+            $fotoSuratPath = $request->file('foto_surat')->store('siswa-surat-izin', 'public');
+        }
+
+        $leaveRequest->update([
+            'jenis_pengajuan' => $validated['jenis_pengajuan'],
+            'tanggal_mulai' => $validated['tanggal_mulai'],
+            'tanggal_selesai' => $validated['tanggal_selesai'],
+            'alasan' => $validated['alasan'],
+            'catatan_wali' => $validated['catatan_wali'] ?? $leaveRequest->catatan_wali,
+            'foto_surat_path' => $fotoSuratPath,
+        ]);
+
+        if ($wasApproved) {
+            $this->applyLeaveToAttendanceDetails($leaveRequest->fresh());
+        }
+
+        return redirect()->route('guru.wali-kelas.leave-requests.index')
+            ->with('success', 'Data izin/sakit berhasil diperbarui' . ($wasApproved ? ' dan absensi siswa telah disesuaikan.' : '.'));
+    }
+
+    public function waliDestroy(StudentLeaveRequest $leaveRequest)
+    {
+        if (!Schema::hasTable('student_leave_requests')) {
+            return redirect()->route('guru.wali-kelas.leave-requests.index')
+                ->with('error', 'Menu pengajuan belum aktif. Jalankan migrasi database terlebih dahulu.');
+        }
+
+        $teacher = $this->resolveCurrentTeacher();
+
+        if (!$teacher || !$teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        $leaveRequest->load('student.classroom');
+
+        if ((int) ($leaveRequest->student->classroom_id ?? 0) !== (int) $teacher->wali_classroom_id) {
+            abort(403);
+        }
+
+        // Bersihkan absensi Izin/Sakit yang dihasilkan pengajuan ini sebelum dihapus.
+        if ($leaveRequest->status_pengajuan === 'Disetujui') {
+            $this->revertLeaveFromAttendanceDetails($leaveRequest);
+        }
+
+        if ($leaveRequest->foto_surat_path) {
+            Storage::disk('public')->delete($leaveRequest->foto_surat_path);
+        }
+
+        $leaveRequest->delete();
+
+        return redirect()->route('guru.wali-kelas.leave-requests.index')
+            ->with('success', 'Data izin/sakit berhasil dihapus dan absensi terkait telah dibersihkan.');
     }
 
     public function officerStoreDirect(Request $request)
@@ -546,6 +717,33 @@ class StudentLeaveRequestController extends Controller
                 );
             }
         }
+    }
+
+    private function revertLeaveFromAttendanceDetails(StudentLeaveRequest $leaveRequest): void
+    {
+        $leaveRequest->loadMissing('student');
+
+        $student = $leaveRequest->student;
+        if (!$student) {
+            return;
+        }
+
+        $status = $leaveRequest->jenis_pengajuan === 'Sakit' ? 'Sakit' : 'Izin';
+
+        // Hapus hanya detail absensi hasil auto-fill pengajuan ini (bukan input manual guru).
+        AttendanceDetail::query()
+            ->where('student_id', $student->id)
+            ->where('status', $status)
+            ->where(function ($query) {
+                $query->where('keterangan', 'like', 'Verifikasi wali kelas%')
+                    ->orWhere('keterangan', 'like', 'Input pengurus kelas%')
+                    ->orWhere('keterangan', 'like', 'Input langsung wali kelas%');
+            })
+            ->whereHas('teacherAttendance', function ($query) use ($leaveRequest) {
+                $query->whereDate('tanggal', '>=', Carbon::parse($leaveRequest->tanggal_mulai)->toDateString())
+                    ->whereDate('tanggal', '<=', Carbon::parse($leaveRequest->tanggal_selesai)->toDateString());
+            })
+            ->delete();
     }
 
     private function resolveCurrentStudent(): ?Student

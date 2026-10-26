@@ -160,14 +160,20 @@ class TeacherAttendanceController extends Controller
             $todayLeaveRequest = $todayLeaveRequestsByTeacher->get((int) ($schedule->teacherSubject->teacher_id ?? 0));
             $approvedLeave = $approvedLeavesByTeacher->get((int) ($schedule->teacherSubject->teacher_id ?? 0));
 
+            $kehadiranGuru = (string) ($teacherAttendance?->kehadiran_guru ?? '');
+
             $selectedAction = null;
-            if ($detail) {
-                if ($detail->status === 'Hadir') {
-                    $selectedAction = 'Hadir';
-                } elseif ($detail->status === 'Izin' && strcasecmp((string) $detail->keterangan, 'Tugas') === 0) {
+            if ($kehadiranGuru === 'Tugas') {
+                $selectedAction = 'Tugas';
+            } elseif ($kehadiranGuru === 'Tanpa Keterangan') {
+                $selectedAction = 'Tanpa Keterangan';
+            } elseif ($detail) {
+                if ($detail->status === 'Izin' && strcasecmp((string) $detail->keterangan, 'Tugas') === 0) {
                     $selectedAction = 'Tugas';
-                } elseif ($detail->status === 'Alpha') {
+                } elseif ($detail->status === 'Alpha' && strcasecmp((string) $detail->keterangan, 'Tanpa Keterangan') === 0) {
                     $selectedAction = 'Tanpa Keterangan';
+                } elseif ($detail->status === 'Hadir' && $kehadiranGuru === 'Hadir') {
+                    $selectedAction = 'Hadir';
                 }
             }
 
@@ -473,6 +479,12 @@ class TeacherAttendanceController extends Controller
                 ->with('error', 'Guru sudah mengajukan izin, tetapi belum disetujui kurikulum. Absensi belum bisa dilakukan.');
         }
 
+        $kehadiranGuru = match ($validated['action']) {
+            'Tugas' => 'Tugas',
+            'Tanpa Keterangan' => 'Tanpa Keterangan',
+            default => 'Hadir',
+        };
+
         $teacherAttendance = TeacherAttendance::query()
             ->where('schedule_id', $schedule->id)
             ->whereDate('tanggal', $today->toDateString())
@@ -493,7 +505,7 @@ class TeacherAttendanceController extends Controller
                 'pertemuan' => max($lastPertemuan + 1, 1),
                 'materi_pembelajaran' => null,
                 'catatan_guru' => null,
-                'kehadiran_guru' => $approvedLeave?->jenis_pengajuan ?? 'Hadir',
+                'kehadiran_guru' => $approvedLeave?->jenis_pengajuan ?? $kehadiranGuru,
                 'tugas_file_path' => $approvedLeave?->lampiran_tugas_path,
                 'tugas_deskripsi' => $approvedLeave?->deskripsi_tugas,
                 'foto_guru_path' => null,
@@ -504,6 +516,10 @@ class TeacherAttendanceController extends Controller
                 'kehadiran_guru' => $approvedLeave->jenis_pengajuan,
                 'tugas_file_path' => $approvedLeave->lampiran_tugas_path,
                 'tugas_deskripsi' => $approvedLeave->deskripsi_tugas,
+            ]);
+        } else {
+            $teacherAttendance->update([
+                'kehadiran_guru' => $kehadiranGuru,
             ]);
         }
 
@@ -518,26 +534,15 @@ class TeacherAttendanceController extends Controller
             $teacherAttendance->save();
         }
 
-        $status = match ($validated['action']) {
-            'Tugas' => 'Izin',
-            'Tanpa Keterangan' => 'Alpha',
-            default => 'Hadir',
-        };
-
-        $keterangan = match ($validated['action']) {
-            'Tugas' => 'Tugas',
-            'Tanpa Keterangan' => 'Tanpa Keterangan',
-            default => null,
-        };
-
+        // Status guru disimpan pada kehadiran_guru di atas; siswa yang mengabsen tetap Hadir.
         AttendanceDetail::updateOrCreate(
             [
                 'teacher_attendance_id' => $teacherAttendance->id,
                 'student_id' => $student->id,
             ],
             [
-                'status' => $status,
-                'keterangan' => $keterangan,
+                'status' => 'Hadir',
+                'keterangan' => null,
                 'jam_absen' => now()->format('H:i:s'),
             ]
         );
