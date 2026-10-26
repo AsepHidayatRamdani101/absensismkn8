@@ -93,11 +93,13 @@
                                     </span>
                                 </td>
                                 <td>
-                                    @if ($row['has_camera_attendance'])
+                                    @if (!empty($row['photo_url']))
                                         <a class="btn btn-info btn-xs" href="{{ $row['photo_url'] }}"
                                             target="_blank" rel="noopener noreferrer">
                                             <i class="fas fa-image"></i> Lihat Foto
                                         </a>
+                                    @elseif ($row['has_camera_attendance'])
+                                        <span class="badge badge-info">Otomatis (Tugas PJJ)</span>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>
                                     @endif

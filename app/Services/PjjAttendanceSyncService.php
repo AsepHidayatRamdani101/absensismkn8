@@ -12,6 +12,7 @@ use App\Support\PklMode;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Menyinkronkan data kehadiran PJJ (selfie siswa & upload tugas guru)
@@ -32,7 +33,9 @@ class PjjAttendanceSyncService
 
     /**
      * Upload tugas PJJ oleh guru dihitung sebagai kehadiran guru:
-     * sesi KBM reguler dibuat/dilengkapi dengan kehadiran "Hadir" dan agenda "Selesai".
+     * sesi KBM reguler dibuat/dilengkapi dengan kehadiran "Hadir" dan agenda
+     * terisi otomatis ("Selesai") mengikuti struktur isian agenda guru
+     * (materi, deskripsi tugas, catatan).
      *
      * @return int Jumlah sesi guru yang tersinkron.
      */
@@ -54,10 +57,13 @@ class PjjAttendanceSyncService
                 $updates['kehadiran_guru'] = 'Hadir';
             }
             if (blank($session->materi_pembelajaran)) {
-                $updates['materi_pembelajaran'] = 'PJJ: ' . $assignment->title;
+                $updates['materi_pembelajaran'] = Str::limit('PJJ: ' . $assignment->title, 3000, '');
+            }
+            if (blank($session->tugas_deskripsi)) {
+                $updates['tugas_deskripsi'] = Str::limit((string) $assignment->instructions, 3000, '');
             }
             if (blank($session->catatan_guru)) {
-                $updates['catatan_guru'] = 'Sesi PJJ — tersinkron otomatis dari upload tugas PJJ.';
+                $updates['catatan_guru'] = 'Sesi PJJ — agenda terisi otomatis dari upload tugas PJJ.';
             }
 
             if ($updates !== []) {

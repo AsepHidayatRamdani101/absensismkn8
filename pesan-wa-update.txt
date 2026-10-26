@@ -1,0 +1,25 @@
+*[INFO UPDATE] Aplikasi SiAbsensi SMKN 8 Garut*
+_Update: 26 Oktober 2026_
+
+Assalamu'alaikum Bapak/Ibu dan rekan-rekan,
+
+Berikut pembaruan aplikasi absensi yang sudah dilakukan hari ini:
+
+*1. Perbaikan Bug Absensi Guru oleh Siswa* ✅
+Sebelumnya: saat pengurus kelas (KM/Sekretaris/Bendahara) mengabsen guru dengan status *Tugas* atau *Tanpa Keterangan*, status absensi siswa yang mengabsen malah ikut menjadi *Izin* atau *Alpa*.
+Sekarang: siswa yang mengabsen guru tetap tercatat *HADIR*. Status Tugas/Tanpa Keterangan hanya dicatat untuk guru.
+
+*2. Status Kehadiran Guru Lebih Lengkap* ✅
+Status guru kini bisa tercatat sebagai *Tugas* atau *Tanpa Keterangan* di data absensi guru (sebelumnya tidak ada pilihan ini di sistem).
+
+*3. Perbaikan Data Lama (Otomatis)* ✅
+Siswa pengurus kelas yang terlanjur berstatus *Alpa/Izin* gara-gara mengabsen guru sudah dikembalikan menjadi *HADIR* secara otomatis. Riwayat absen, rekap, dan laporan sudah ikut terkoreksi.
+Catatan: izin/sakit/alpa yang memang sah (dari pengajuan izin siswa, izin tengah pelajaran, atau input guru) *TIDAK* berubah.
+
+*4. Laporan & Notifikasi Lebih Akurat* ✅
+Rekap laporan, dashboard, dan pengingat WhatsApp kini otomatis mengenali guru yang dilaporkan Tugas/Tanpa Keterangan sebagai tidak hadir.
+
+Jika masih menemukan data absensi yang tidak sesuai, silakan laporkan ke admin.
+
+Terima kasih 🙏
+_Admin SiAbsensi SMKN 8 Garut_

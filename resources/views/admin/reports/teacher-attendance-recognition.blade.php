@@ -486,15 +486,19 @@
                                     @endif
                                 </td>
                                 <td>
-                                    @if ($row['has_agenda_guru'])
+                                    @if ($row['item']->status === 'Selesai')
                                         <span class="badge badge-success">Terisi</span>
+                                    @elseif (!empty($row['has_pjj_task']))
+                                        <span class="badge badge-info">Otomatis (Tugas PJJ)</span>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>
                                     @endif
                                 </td>
                                 <td>
-                                    @if ($row['has_absensi_siswa_oleh_guru'])
+                                    @if (($row['item']->kehadiran_guru ?? null) === 'Hadir' && (int) $row['item']->attendance_details_count > 0)
                                         <span class="badge badge-success">Terisi</span>
+                                    @elseif (!empty($row['has_pjj_task']))
+                                        <span class="badge badge-info">Otomatis (Tugas PJJ)</span>
                                     @else
                                         <span class="badge badge-secondary">Belum</span>
                                     @endif

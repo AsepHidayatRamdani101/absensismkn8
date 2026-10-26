@@ -42,6 +42,12 @@ class ReportController extends Controller
     /** Cache daftar tanggal PJJ (date string => index) per request. */
     private ?array $pjjDates = null;
 
+    /** Cache kunci sesi tugas PJJ "teacher|subject|classroom|date" per request. */
+    private ?array $pjjAssignmentSessionKeys = null;
+
+    /** Cache kunci tugas PJJ "teacher_subject_id|date" per request. */
+    private ?array $pjjAssignmentTeacherSubjectKeys = null;
+
     public function teacherAttendanceRecognition(Request $request)
     {
         $baseRows = $this->buildTeacherAttendanceRecognitionQuery($request)->get();
@@ -1546,23 +1552,32 @@ class ReportController extends Controller
             ->filter(fn(TeacherAttendance $attendance) => $teacherBySchedule->get((int) $attendance->schedule_id) === (int) $attendance->teacher_id)
             ->keyBy('schedule_id');
 
+        $isPjjDay = SchoolCalendar::isPjj($date);
+
         $teacherRows = $schedules
             ->filter(fn(Schedule $schedule) => (int) ($schedule->teacherSubject->teacher_id ?? 0) > 0)
             ->groupBy(fn(Schedule $schedule) => (int) $schedule->teacherSubject->teacher_id)
-            ->map(function (Collection $teacherSchedules) use ($activityBySchedule) {
+            ->map(function (Collection $teacherSchedules) use ($activityBySchedule, $isPjjDay, $date) {
                 $teacher = $teacherSchedules->first()->teacherSubject->teacher;
-                $scheduleRows = $teacherSchedules->map(function (Schedule $schedule) use ($activityBySchedule) {
+                $scheduleRows = $teacherSchedules->map(function (Schedule $schedule) use ($activityBySchedule, $isPjjDay, $date) {
                     $attendance = $activityBySchedule->get($schedule->id);
                     $hasCameraAttendance = !empty($attendance?->foto_guru_path);
+                    // Saat PJJ, upload tugas terjadwal = ketiga aktivitas dianggap terpenuhi.
+                    $hasPjjTask = $isPjjDay && $this->hasPjjAssignmentForTeacherSubject(
+                        (int) $schedule->teacher_subject_id,
+                        $date->toDateString()
+                    );
 
                     return [
                         'schedule' => $schedule,
                         'attendance' => $attendance,
-                        'has_camera_attendance' => $hasCameraAttendance,
+                        'has_pjj_task' => $hasPjjTask,
+                        'has_camera_attendance' => $hasCameraAttendance || $hasPjjTask,
                         'is_teacher_present' => !$attendance || $attendance->kehadiran_guru === 'Hadir',
-                        'has_agenda' => $attendance?->status === 'Selesai',
-                        'has_student_attendance' => $attendance?->kehadiran_guru === 'Hadir'
-                            && (int) ($attendance?->attendance_details_count ?? 0) > 0,
+                        'has_agenda' => $attendance?->status === 'Selesai' || $hasPjjTask,
+                        'has_student_attendance' => ($attendance?->kehadiran_guru === 'Hadir'
+                            && (int) ($attendance?->attendance_details_count ?? 0) > 0)
+                            || $hasPjjTask,
                         'photo_url' => $hasCameraAttendance ? asset('storage/' . $attendance->foto_guru_path) : null,
                     ];
                 })->values();
@@ -1579,6 +1594,7 @@ class ReportController extends Controller
                     'has_agenda' => $hasAgenda,
                     'has_student_attendance' => $hasStudentAttendance,
                     'has_any_activity' => $hasCameraAttendance || $hasAgenda || $hasStudentAttendance,
+                    'photo_url' => $scheduleRows->first(fn($row) => !empty($row['photo_url']))['photo_url'] ?? null,
                 ];
             })
             ->sortBy('teacher_name')
@@ -1660,21 +1676,63 @@ class ReportController extends Controller
 
     private function buildTeacherAttendanceRecognitionRow(TeacherAttendance $item): array
     {
-        // Saat PJJ, foto guru oleh kamera siswa dinonaktifkan, sehingga syarat foto
-        // dianggap terpenuhi agar sesi PJJ tetap dapat diakui penuh.
+        // Saat PJJ, guru yang sudah mengunggah tugas terjadwal pada hari itu dianggap
+        // memenuhi ketiga indikator secara otomatis: absensi guru oleh siswa (kamera),
+        // agenda oleh guru, dan absensi siswa oleh guru.
         $isPjjSession = $item->tanggal && $this->isPjjDate($item->tanggal->toDateString());
+        $hasPjjTask = $isPjjSession && $this->hasPjjAssignmentForSession($item);
+
         $hasAbsensiGuruSiswaKamera = !empty($item->foto_guru_path) || $isPjjSession;
-        $hasAgendaGuru = $item->status === 'Selesai';
-        $hasAbsensiSiswaOlehGuru = $item->kehadiran_guru === 'Hadir' && (int) $item->attendance_details_count > 0;
+        $hasAgendaGuru = $item->status === 'Selesai' || $hasPjjTask;
+        $hasAbsensiSiswaOlehGuru = ($item->kehadiran_guru === 'Hadir' && (int) $item->attendance_details_count > 0)
+            || $hasPjjTask;
         $recognizedPoint = ($hasAbsensiGuruSiswaKamera && $hasAgendaGuru && $hasAbsensiSiswaOlehGuru) ? 1 : 0;
 
         return [
             'is_pjj_session' => $isPjjSession,
+            'has_pjj_task' => $hasPjjTask,
             'has_absensi_guru_siswa_kamera' => $hasAbsensiGuruSiswaKamera,
             'has_agenda_guru' => $hasAgendaGuru,
             'has_absensi_siswa_oleh_guru' => $hasAbsensiSiswaOlehGuru,
             'recognized_point' => $recognizedPoint,
         ];
+    }
+
+    /**
+     * Cek apakah guru sudah mengunggah tugas PJJ untuk mapel+kelas sesi ini
+     * pada tanggal sesi tersebut. Lookup di-cache per request.
+     */
+    private function hasPjjAssignmentForSession(TeacherAttendance $item): bool
+    {
+        if ($this->pjjAssignmentSessionKeys === null) {
+            $this->pjjAssignmentSessionKeys = DB::table('pjj_assignments')
+                ->join('teacher_subjects', 'teacher_subjects.id', '=', 'pjj_assignments.teacher_subject_id')
+                ->selectRaw("CONCAT(teacher_subjects.teacher_id, '|', teacher_subjects.subject_id, '|', teacher_subjects.classroom_id, '|', DATE(pjj_assignments.created_at)) as session_key")
+                ->pluck('session_key')
+                ->flip()
+                ->all();
+        }
+
+        $key = $item->teacher_id . '|' . $item->subject_id . '|' . $item->classroom_id . '|' . $item->tanggal->toDateString();
+
+        return isset($this->pjjAssignmentSessionKeys[$key]);
+    }
+
+    /**
+     * Cek apakah ada tugas PJJ untuk teacher_subject tertentu pada tanggal tertentu.
+     * Lookup di-cache per request.
+     */
+    private function hasPjjAssignmentForTeacherSubject(int $teacherSubjectId, string $date): bool
+    {
+        if ($this->pjjAssignmentTeacherSubjectKeys === null) {
+            $this->pjjAssignmentTeacherSubjectKeys = DB::table('pjj_assignments')
+                ->selectRaw("CONCAT(teacher_subject_id, '|', DATE(created_at)) as task_key")
+                ->pluck('task_key')
+                ->flip()
+                ->all();
+        }
+
+        return isset($this->pjjAssignmentTeacherSubjectKeys[$teacherSubjectId . '|' . $date]);
     }
 
     private function isPjjDate(string $date): bool
