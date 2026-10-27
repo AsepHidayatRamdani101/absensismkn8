@@ -192,7 +192,7 @@
             </form>
             <div class="table-responsive">
                 <table id="pjj-student-assignments" class="table table-bordered table-striped table-hover w-100">
-                    <thead><tr><th>Tanggal</th><th>Mata Pelajaran</th><th>Guru</th><th>Tugas</th><th>Deadline</th><th>Status</th><th>Materi</th><th>Aksi</th></tr></thead>
+                    <thead><tr><th>Tanggal</th><th>Mata Pelajaran</th><th>Guru</th><th>Tugas</th><th>Deadline</th><th>Status</th><th>Nilai</th><th>Materi</th><th>Aksi</th></tr></thead>
                 </table>
             </div>
         </div>
@@ -207,7 +207,7 @@
                     <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted">Jawaban sebelumnya akan diperbarui jika Anda mengirim ulang.</p>
+                    <p class="text-muted">Jawaban sebelumnya akan diperbarui jika Anda mengirim ulang. Nilai yang sudah diberikan guru akan direset dan menunggu penilaian ulang.</p>
                     <div id="pjj-existing-answer" class="alert alert-light border d-none"></div>
                     <div id="pjj-assignment-material" class="mb-3"></div>
                     <div class="form-group">
@@ -268,6 +268,7 @@
                     { data: 'title', name: 'title' },
                     { data: 'deadline', name: 'deadline' },
                     { data: 'status', name: 'status', orderable: false },
+                    { data: 'score', name: 'score', orderable: false, searchable: false },
                     { data: 'material', name: 'material', orderable: false, searchable: false },
                     { data: 'action', name: 'action', orderable: false, searchable: false }
                 ],

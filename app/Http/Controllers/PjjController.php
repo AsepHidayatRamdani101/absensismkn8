@@ -910,10 +910,26 @@ class PjjController extends Controller
             function (PjjAssignment $assignment): array {
                 $submission = $assignment->submissions->first();
                 $status = $submission?->graded_at
-                    ? '<span class="badge badge-success">Dinilai: ' . e((string) $submission->score) . '</span>'
+                    ? '<span class="badge badge-success">Sudah dinilai</span>'
                     : ($submission
                         ? '<span class="badge badge-info">Sudah dikumpulkan</span>'
                         : '<span class="badge badge-warning">Belum dikumpulkan</span>');
+
+                if ($submission?->graded_at) {
+                    $score = '<strong class="text-success">' . e(rtrim(rtrim((string) $submission->score, '0'), '.')) . '</strong>';
+                    $feedback = trim((string) $submission->feedback);
+                    if ($feedback !== '') {
+                        $score .= '<br><button type="button" class="btn btn-xs btn-outline-info mt-1 pjj-view-text"'
+                            . ' data-title="Catatan Guru — ' . e($assignment->title) . '"'
+                            . ' data-text="' . e($feedback) . '"'
+                            . '><i class="fas fa-comment"></i> Catatan guru</button>';
+                    }
+                    $score .= '<br><small class="text-muted">Dinilai ' . $submission->graded_at->format('d-m-Y H:i') . '</small>';
+                } else {
+                    $score = $submission
+                        ? '<span class="text-muted">Menunggu penilaian</span>'
+                        : '—';
+                }
                 $canSubmit = !$assignment->due_at || !$assignment->due_at->isPast();
                 $action = $canSubmit
                     ? '<button type="button" class="btn btn-xs btn-primary pjj-open-submission"'
@@ -943,6 +959,7 @@ class PjjController extends Controller
                     'title' => '<strong>' . e($assignment->title) . '</strong><br><small>' . e(\Illuminate\Support\Str::limit($instructions, 140)) . '</small>' . $viewTextButton,
                     'deadline' => $assignment->due_at?->format('d-m-Y H:i') ?? '—',
                     'status' => $status,
+                    'score' => $score,
                     'material' => $material,
                     'action' => $action,
                 ];
