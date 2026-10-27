@@ -97,8 +97,10 @@ class PjjController extends Controller
             return $this->teacherAssignmentsDataTable($request, $teacher);
         }
 
+        // Pilihan kelas & mapel dibatasi hanya yang terjadwal pada hari ini (jadwal pembelajaran biasa).
         $teacherSubjectsQuery = TeacherSubject::query()
             ->where('teacher_id', $teacher->id)
+            ->whereHas('schedules', fn($schedule) => $schedule->where('hari', $this->dayNameToday()))
             ->with(['subject', 'classroom'])
             ->orderBy('classroom_id');
         if (PklMode::isActive()) {
@@ -131,6 +133,12 @@ class PjjController extends Controller
             ->with('classroom')
             ->firstOrFail();
 
+        if (!$primaryTeacherSubject->schedules()->where('hari', $this->dayNameToday())->exists()) {
+            throw ValidationException::withMessages([
+                'teacher_subject_id' => 'Kelas dan mata pelajaran ini tidak terjadwal hari ini. Tugas PJJ hanya dapat dipublikasikan sesuai jadwal pembelajaran biasa.',
+            ]);
+        }
+
         if (PklMode::excludesClassroomLevel($primaryTeacherSubject->classroom->tingkat ?? null)) {
             throw ValidationException::withMessages([
                 'teacher_subject_id' => 'Mode PKL aktif. Tugas PJJ untuk kelas XII dinonaktifkan sementara.',
@@ -148,12 +156,13 @@ class PjjController extends Controller
             ->where('teacher_id', $teacher->id)
             ->where('subject_id', $primaryTeacherSubject->subject_id)
             ->whereHas('classroom', fn($classroom) => $classroom->where('tingkat', $primaryTeacherSubject->classroom->tingkat))
+            ->whereHas('schedules', fn($schedule) => $schedule->where('hari', $this->dayNameToday()))
             ->with('classroom')
             ->get();
 
         if ($teacherSubjects->count() !== $teacherSubjectIds->count()) {
             throw ValidationException::withMessages([
-                'extra_teacher_subject_ids' => 'Kelas tambahan harus kelas yang Anda ampu dengan mata pelajaran yang sama dan jenjang yang sama (contoh: X dengan X).',
+                'extra_teacher_subject_ids' => 'Kelas tambahan harus kelas yang Anda ampu dengan mata pelajaran yang sama, jenjang yang sama, dan terjadwal pada hari ini.',
             ]);
         }
 
@@ -1058,6 +1067,21 @@ class PjjController extends Controller
     private function ensurePjjActive(): void
     {
         abort_unless(SchoolCalendar::isPjj(Carbon::today()), 403, 'Fitur ini hanya aktif pada tanggal yang ditetapkan sebagai mode PJJ.');
+    }
+
+    private function dayNameToday(): string
+    {
+        $dayNames = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        return $dayNames[Carbon::today()->dayOfWeekIso];
     }
 
     private function periodFilter(Request $request, array $pjjDates): array

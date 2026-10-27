@@ -9,6 +9,7 @@ use App\Models\Classroom;
 use App\Models\Holiday;
 use App\Models\Major;
 use App\Models\OfficerAttendancePermit;
+use App\Models\PjjAttendance;
 use App\Models\Schedule;
 use App\Models\SchoolSetting;
 use App\Models\Student;
@@ -75,7 +76,12 @@ class DashboardController extends Controller
             $monthStart,
             $monthEnd
         ) {
-            $totalStudents = Student::count();
+            // Mode PKL aktif: siswa kelas XII yang sedang PKL tidak dihitung dalam total.
+            $totalStudentsQuery = Student::query();
+            if (PklMode::isActive()) {
+                $totalStudentsQuery->whereDoesntHave('classroom', fn($q) => $q->where('tingkat', 'XII'));
+            }
+            $totalStudents = $totalStudentsQuery->count();
             $totalTeachers = Teacher::count();
             $totalClassrooms = Classroom::count();
             $totalMajors = Major::count();
@@ -103,6 +109,31 @@ class DashboardController extends Controller
                 ->distinct()
                 ->orderBy('students.nama_lengkap')
                 ->get();
+
+            // Hari PJJ: kartu Hadir/Terlambat diambil dari absensi selfie PJJ
+            // agar jumlahnya sama dengan dashboard PJJ.
+            if (SchoolCalendar::isPjj($today)) {
+                $pjjStatusRows = PjjAttendance::query()
+                    ->join('students', 'students.id', '=', 'pjj_attendances.student_id')
+                    ->leftJoin('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+                    ->whereDate('pjj_attendances.attendance_date', $today)
+                    ->selectRaw("CASE WHEN pjj_attendances.status = 'Terlambat' THEN 'Terlambat' ELSE 'Hadir' END as status")
+                    ->addSelect(
+                        'students.id as student_id',
+                        'students.nama_lengkap as name',
+                        'students.nis',
+                        'classrooms.nama_kelas as classroom'
+                    )
+                    ->distinct()
+                    ->orderBy('students.nama_lengkap')
+                    ->get();
+
+                $pjjStudentIds = $pjjStatusRows->pluck('student_id')->flip();
+                $studentStatusRows = $studentStatusRows
+                    ->reject(fn($row) => in_array($row->status, ['Hadir', 'Terlambat'], true)
+                        || isset($pjjStudentIds[$row->student_id]))
+                    ->concat($pjjStatusRows);
+            }
 
             $statusDefinitions = [
                 'Hadir' => ['label' => 'Hadir', 'color' => 'success'],
@@ -211,8 +242,12 @@ class DashboardController extends Controller
                     ->whereIn('attendance_details.status', ['Hadir', 'Terlambat', 'Dispen'])
                     ->whereBetween('teacher_attendances.tanggal', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
 
+                $dailyPjjAttendance = PjjAttendance::query()
+                    ->selectRaw('DATE(attendance_date) as tanggal, student_id')
+                    ->whereBetween('attendance_date', [Carbon::today()->subDays(6)->toDateString(), $today->toDateString()]);
+
                 $dailyStudentCounts = DB::query()
-                    ->fromSub($dailySchoolAttendance->union($dailyClassAttendance), 'present_students')
+                    ->fromSub($dailySchoolAttendance->union($dailyClassAttendance)->union($dailyPjjAttendance), 'present_students')
                     ->select('tanggal')
                     ->selectRaw('COUNT(DISTINCT student_id) as total_siswa_hadir')
                     ->groupBy('tanggal')
@@ -259,6 +294,14 @@ class DashboardController extends Controller
 
     private function countPresentStudents(Carbon $startDate, Carbon $endDate): int
     {
+        // Hari PJJ: kehadiran diambil dari absensi selfie PJJ agar angkanya sama dengan dashboard PJJ.
+        if ($startDate->isSameDay($endDate) && SchoolCalendar::isPjj($startDate)) {
+            return (int) PjjAttendance::query()
+                ->whereDate('attendance_date', $startDate->toDateString())
+                ->distinct()
+                ->count('student_id');
+        }
+
         $schoolAttendanceIds = Attendance::query()
             ->select('student_id')
             ->whereIn('status', ['Hadir', 'Terlambat', 'Dispen'])
@@ -270,8 +313,13 @@ class DashboardController extends Controller
             ->whereIn('attendance_details.status', ['Hadir', 'Terlambat', 'Dispen'])
             ->whereBetween('teacher_attendances.tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
 
+        // Sertakan absensi PJJ (baris hanya ada pada tanggal PJJ) agar rekap mingguan/bulanan ikut menghitungnya.
+        $pjjAttendanceIds = PjjAttendance::query()
+            ->select('student_id')
+            ->whereBetween('attendance_date', [$startDate->toDateString(), $endDate->toDateString()]);
+
         return (int) DB::query()
-            ->fromSub($schoolAttendanceIds->union($classAttendanceIds), 'present_students')
+            ->fromSub($schoolAttendanceIds->union($classAttendanceIds)->union($pjjAttendanceIds), 'present_students')
             ->distinct()
             ->count('student_id');
     }

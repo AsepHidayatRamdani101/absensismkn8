@@ -123,6 +123,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('students/qr-card/{student}', [StudentController::class, 'qrCard'])->name('students.qr-card');
         Route::get('students/qr-cards/classroom', [StudentController::class, 'qrCardsByClassroom'])->name('students.qr-cards.classroom');
         Route::post('students/generate-accounts', [StudentController::class, 'generateAccounts'])->name('students.generate-accounts');
+        Route::post('students/{student}/generate-account', [StudentController::class, 'generateAccountSingle'])->name('students.generate-account-single');
         Route::delete('students/destroy-multiple', [StudentController::class, 'destroyMultiple'])->name('students.destroy-multiple');
         Route::resource('students', StudentController::class)->except(['show', 'create']);
 

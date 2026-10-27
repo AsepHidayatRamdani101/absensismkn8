@@ -69,7 +69,7 @@
                     </div>
                 </div>
                 @if ($teacherSubjects->isEmpty())
-                    <div class="alert alert-info mb-0">Akun ini belum memiliki penugasan kelas dan mata pelajaran. Hubungi admin untuk memperbarui data guru pengampu.</div>
+                    <div class="alert alert-info mb-0">Tidak ada kelas dan mata pelajaran yang Anda ampu pada jadwal hari ini. Tugas PJJ hanya dapat dipublikasikan sesuai jadwal pembelajaran biasa.</div>
                 @endif
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">

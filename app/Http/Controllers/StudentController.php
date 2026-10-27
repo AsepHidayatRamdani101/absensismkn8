@@ -162,7 +162,8 @@ class StudentController extends Controller
 
             $aksiHtml = '<button class="btn btn-warning btn-xs btn-edit" data-id="' . $student->id . '"><i class="fas fa-edit"></i></button> '
                 . '<button class="btn btn-danger btn-xs btn-delete" data-id="' . $student->id . '"><i class="fas fa-trash"></i></button> '
-                . '<a href="' . route('students.qr-card', $student) . '" target="_blank" class="btn btn-dark btn-xs" title="Cetak Kartu QR"><i class="fas fa-qrcode"></i></a>';
+                . '<a href="' . route('students.qr-card', $student) . '" target="_blank" class="btn btn-dark btn-xs" title="Cetak Kartu QR"><i class="fas fa-qrcode"></i></a> '
+                . '<button class="btn btn-info btn-xs btn-generate-account" data-id="' . $student->id . '" data-nama="' . e((string) $student->nama_lengkap) . '" data-has-account="' . ($hasAccount ? 1 : 0) . '" title="' . ($hasAccount ? 'Reset Akun' : 'Generate Akun') . '"><i class="fas fa-' . ($hasAccount ? 'key' : 'user-plus') . '"></i></button>';
 
             return [
                 'checkbox' => '<input type="checkbox" class="check-student" value="' . $student->id . '">',
@@ -711,6 +712,47 @@ class StudentController extends Controller
             'success',
             "Batch generate akun siswa diproses. Jalankan lagi untuk batch berikutnya. after_id={$lastIdInBatch}."
         );
+    }
+
+    public function generateAccountSingle(Student $student)
+    {
+        $username = trim((string) $student->nisn);
+
+        if ($username === '') {
+            $username = trim((string) $student->nis);
+        }
+
+        if ($username === '') {
+            return response()->json([
+                'message' => 'NISN/NIS siswa kosong. Lengkapi data siswa terlebih dahulu.',
+            ], 422);
+        }
+
+        $role = Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
+
+        $existing = User::query()->where('email', $username)->first();
+
+        $user = User::updateOrCreate(
+            ['email' => $username],
+            [
+                'name' => $student->nama_lengkap,
+                'password' => Hash::make('siswa12345'),
+            ]
+        );
+
+        DB::table('model_has_roles')->insertOrIgnore([
+            'role_id' => $role->id,
+            'model_type' => User::class,
+            'model_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => $existing
+                ? "Akun siswa {$student->nama_lengkap} berhasil direset. Username: {$username}, password: siswa12345."
+                : "Akun siswa {$student->nama_lengkap} berhasil dibuat. Username: {$username}, password: siswa12345.",
+            'created' => !$existing,
+            'username' => $username,
+        ]);
     }
 
     private function buildStudentsWithAccountStatus(?string $majorFilter = '', ?string $classroomFilter = '')

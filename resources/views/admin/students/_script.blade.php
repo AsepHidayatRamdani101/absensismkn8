@@ -305,6 +305,56 @@
         });
 
         //------------------------------------
+        // GENERATE / RESET AKUN SINGLE
+        //------------------------------------
+
+        $(document).on('click', '.btn-generate-account', function() {
+
+            let id = $(this).data('id');
+            let nama = $(this).data('nama');
+            let hasAccount = Number($(this).data('has-account')) === 1;
+
+            Swal.fire({
+                title: hasAccount ? 'Reset akun siswa?' : 'Generate akun siswa?',
+                html: 'Akun untuk <strong>' + nama + '</strong> akan ' +
+                    (hasAccount ? 'direset' : 'dibuat') +
+                    '.<br>Username dari NISN (fallback NIS), password <strong>siswa12345</strong>.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: hasAccount ? 'Ya, reset' : 'Ya, generate',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+
+                if (result.isConfirmed) {
+
+                    $.ajax({
+                        url: '/students/' + id + '/generate-account',
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}'
+                        },
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        success: function(res) {
+                            Swal.fire('Berhasil', res.message, 'success').then(() => {
+                                $('#tableStudents').DataTable().ajax.reload(null, false);
+                            });
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Gagal', xhr.responseJSON?.message ??
+                                'Terjadi kesalahan saat generate akun.', 'error');
+                        }
+                    });
+
+                }
+
+            });
+
+        });
+
+        //------------------------------------
         // DELETE MULTIPLE
         //------------------------------------
 
