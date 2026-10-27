@@ -4,11 +4,38 @@
 
 @section('plugins.Datatables', true)
 
+@section('css')
+    <style>
+        #pjj-submissions-table {
+            width: 100% !important;
+            table-layout: fixed;
+        }
+
+        #pjj-submissions-table th:nth-child(5),
+        #pjj-submissions-table td:nth-child(5) {
+            width: 150px !important;
+            min-width: 150px !important;
+        }
+
+        #pjj-submissions-table td:nth-child(5) .form-control {
+            width: 100%;
+            min-width: 0;
+        }
+
+        #pjj-submissions-table td:nth-child(5) .pjj-grade-form {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+    </style>
+@stop
+
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <div>
             <h1 class="mb-0">Pengumpulan dan Penilaian</h1>
-            <p class="text-muted mb-0">{{ $assignment->title }} · {{ $assignment->teacherSubject->classroom->nama_kelas }} ·
+            <p class="text-muted mb-0">{{ $assignment->title }} Â· {{ $assignment->teacherSubject->classroom->nama_kelas }}
+                Â·
                 {{ $assignment->teacherSubject->subject->nama_mapel }}</p>
         </div>
         <a href="{{ route('guru.pjj.index') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i>
@@ -100,8 +127,8 @@
                             <th>Siswa</th>
                             <th>Waktu pengumpulan</th>
                             <th>Jawaban teks</th>
-                            <th>Lampiran</th>
-                            <th style="width: 40%;">Nilai dan catatan</th>
+                            <th style="width: 10%;">Lampiran</th>
+                            <th style="width: 50%;">Nilai dan catatan</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -118,7 +145,35 @@
             const table = $('#pjj-submissions-table').DataTable({
                 processing: true,
                 serverSide: true,
-                responsive: true,
+                responsive: false,
+                autoWidth: false,
+                scrollX: true,
+                columnDefs: [{
+                        targets: 0,
+                        width: '15%'
+                    }, // Siswa
+                    {
+                        targets: 1,
+                        width: '15%'
+                    }, // Waktu pengumpulan
+                    {
+                        targets: 2,
+                        width: '12%'
+                    }, // Jawaban teks
+                    {
+                        targets: 3,
+                        width: '23%'
+                    }, // Lampiran
+                    {
+                        targets: 4,
+                        width: '350px'
+                    }, // Nilai dan catatan
+                    {
+                        targets: 5,
+                        width: '12%'
+                    } // Status
+                ],
+
                 pageLength: 25,
                 lengthMenu: [10, 25, 50, 100],
                 ajax: {
@@ -167,7 +222,7 @@
                     processing: 'Memuat data...',
                     search: 'Cari siswa/jawaban:',
                     lengthMenu: 'Tampilkan _MENU_ data',
-                    info: 'Menampilkan _START_–_END_ dari _TOTAL_ data',
+                    info: 'Menampilkan _START_â€“_END_ dari _TOTAL_ data',
                     infoEmpty: 'Tidak ada data',
                     zeroRecords: 'Data tidak ditemukan',
                     emptyTable: 'Belum ada jawaban siswa',
