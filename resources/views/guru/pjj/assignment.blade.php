@@ -94,14 +94,14 @@
                 </div>
             </form>
             <div class="table-responsive">
-                <table id="pjj-submissions-table" class="table table-bordered table-striped table-hover w-100">
+                <table id="pjj-submissions-table" class="table table-bordered table-striped table-hover ">
                     <thead>
                         <tr>
                             <th>Siswa</th>
                             <th>Waktu pengumpulan</th>
                             <th>Jawaban teks</th>
                             <th>Lampiran</th>
-                            <th style="width: 30%;">Nilai dan catatan</th>
+                            <th style="width: 40%;">Nilai dan catatan</th>
                             <th>Status</th>
                         </tr>
                     </thead>
