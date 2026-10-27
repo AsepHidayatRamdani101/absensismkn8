@@ -27,6 +27,28 @@
             flex-direction: column;
             gap: 8px;
         }
+
+        /* Pratinjau jawaban teks: batasi 1 baris agar tabel tetap rapi. */
+        .submission-answer-preview {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        /* Teks jawaban lengkap di modal: rapi dan mudah dibaca untuk penilaian. */
+        #pjj-answer-modal-text {
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.7;
+            font-size: 1rem;
+            max-height: 60vh;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: .25rem;
+            padding: 1rem 1.25rem;
+        }
     </style>
 @stop
 
@@ -133,6 +155,30 @@
                         </tr>
                     </thead>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="pjj-answer-modal" tabindex="-1" role="dialog" aria-labelledby="pjj-answer-modal-title"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 id="pjj-answer-modal-title" class="modal-title mb-0"><i class="fas fa-file-alt mr-1"></i>
+                            Jawaban Lengkap Siswa</h5>
+                        <small id="pjj-answer-modal-meta" class="text-muted"></small>
+                    </div>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span
+                            aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div id="pjj-answer-modal-text"></div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <small id="pjj-answer-modal-count" class="text-muted"></small>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">Tutup</button>
+                </div>
             </div>
         </div>
     </div>
@@ -243,6 +289,18 @@
             });
             form.on('change', 'input, select', function() {
                 table.ajax.reload();
+            });
+            $(document).on('click', '.pjj-view-answer', function() {
+                const button = $(this);
+                const answer = button.attr('data-answer') || '';
+                const words = answer.trim().split(/\s+/).filter(Boolean).length;
+                $('#pjj-answer-modal-meta').text(
+                    button.attr('data-student') + ' (' + button.attr('data-nis') + ') · dikirim ' +
+                    button.attr('data-date')
+                );
+                $('#pjj-answer-modal-text').text(answer);
+                $('#pjj-answer-modal-count').text(words + ' kata · ' + answer.length + ' karakter');
+                $('#pjj-answer-modal').modal('show');
             });
             $(document).on('submit', '.pjj-grade-form', function(event) {
                 event.preventDefault();

@@ -10,6 +10,7 @@ class PjjSubmission extends Model
         'pjj_assignment_id',
         'student_id',
         'answer',
+        'answers',
         'attachment_path',
         'submitted_at',
         'score',
@@ -21,6 +22,7 @@ class PjjSubmission extends Model
         'submitted_at' => 'datetime',
         'graded_at' => 'datetime',
         'score' => 'decimal:2',
+        'answers' => 'array',
     ];
 
     public function assignment()

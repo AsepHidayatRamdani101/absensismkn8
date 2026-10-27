@@ -9,14 +9,17 @@ class PjjAssignment extends Model
     protected $fillable = [
         'teacher_id',
         'teacher_subject_id',
+        'task_type',
         'title',
         'instructions',
+        'questions',
         'attachment_path',
         'due_at',
     ];
 
     protected $casts = [
         'due_at' => 'datetime',
+        'questions' => 'array',
     ];
 
     public function teacher()

@@ -720,6 +720,7 @@ Route::middleware(['auth', 'siswa'])->group(function () {
     Route::get('/siswa/dss', [DashboardDssController::class, 'siswa'])->name('siswa.dashboard.dss');
     Route::get('/siswa/pjj', [PjjController::class, 'studentIndex'])->name('siswa.pjj.index');
     Route::post('/siswa/pjj/attendance', [PjjController::class, 'studentSubmitAttendance'])->middleware('throttle:10,1')->name('siswa.pjj.attendance');
+    Route::get('/siswa/pjj/assignments/{assignment}/questions', [PjjController::class, 'studentShowQuestions'])->name('siswa.pjj.assignments.questions');
     Route::post('/siswa/pjj/assignments/{assignment}/submission', [PjjController::class, 'studentSubmitAssignment'])->name('siswa.pjj.assignments.submit');
     Route::get('/siswa/identitas', [StudentController::class, 'editOwnIdentity'])
         ->name('siswa.identity.edit');

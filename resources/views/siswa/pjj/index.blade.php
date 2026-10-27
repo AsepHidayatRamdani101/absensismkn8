@@ -229,6 +229,26 @@
         </div>
     </div>
 
+    <div class="modal fade" id="pjj-interactive-modal" tabindex="-1" role="dialog" aria-labelledby="pjj-interactive-title" aria-hidden="true" data-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="pjj-interactive-title" class="modal-title">Kerjakan Tugas</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div id="pjj-interactive-error" class="alert alert-danger d-none"></div>
+                    <div id="pjj-interactive-instructions" class="alert alert-light border"></div>
+                    <div id="pjj-interactive-body"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-dismiss="modal">Batal</button>
+                    <button type="button" id="pjj-interactive-submit" class="btn btn-success btn-sm"><i class="fas fa-paper-plane mr-1"></i> Kirim jawaban</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="pjj-text-modal" tabindex="-1" role="dialog" aria-labelledby="pjj-text-modal-title" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
             <div class="modal-content">
@@ -433,6 +453,193 @@
                 const materialUrl = button.attr('data-attachment');
                 $('#pjj-assignment-material').html(materialUrl ? $('<a>', { href: materialUrl, text: 'Lihat materi/lampiran', class: 'btn btn-xs btn-outline-secondary' }) : '');
                 $('#pjj-submission-modal').modal('show');
+            });
+
+            // ================= PLAYER TUGAS INTERAKTIF =================
+            let interactiveState = { type: null, submitUrl: null, data: null };
+
+            function escapeHtml(text) { return $('<span>').text(text == null ? '' : String(text)).html(); }
+
+            function renderInteractive(payload) {
+                const body = $('#pjj-interactive-body').empty();
+                const q = payload.questions;
+
+                if (payload.task_type === 'multiple_choice') {
+                    q.items.forEach(function (item, i) {
+                        let options = '';
+                        item.options.forEach(function (opt, j) {
+                            options += '<div class="custom-control custom-radio">'
+                                + '<input type="radio" class="custom-control-input" id="mc-' + i + '-' + j + '" name="mc-answer-' + i + '" value="' + j + '">'
+                                + '<label class="custom-control-label" for="mc-' + i + '-' + j + '">' + escapeHtml(opt) + '</label></div>';
+                        });
+                        body.append('<div class="border rounded p-2 mb-2"><strong>' + (i + 1) + '. ' + escapeHtml(item.question) + '</strong><div class="mt-1">' + options + '</div></div>');
+                    });
+                } else if (payload.task_type === 'matching') {
+                    let rightOptions = '<option value="">— pilih pasangan —</option>';
+                    q.rights.forEach(function (right) { rightOptions += '<option value="' + escapeHtml(right) + '">' + escapeHtml(right) + '</option>'; });
+                    q.lefts.forEach(function (left, i) {
+                        body.append('<div class="form-row align-items-center mb-2">'
+                            + '<div class="col-5"><span class="d-block border rounded p-2 bg-light">' + escapeHtml(left) + '</span></div>'
+                            + '<div class="col-2 text-center"><i class="fas fa-long-arrow-alt-right"></i></div>'
+                            + '<div class="col-5"><select class="form-control form-control-sm match-answer" data-i="' + i + '">' + rightOptions + '</select></div>'
+                            + '</div>');
+                    });
+                    body.append('<small class="text-muted">Setiap pilihan pasangan hanya boleh dipakai satu kali.</small>');
+                } else if (payload.task_type === 'sequence') {
+                    if (q.instruction) body.append('<p><strong>' + escapeHtml(q.instruction) + '</strong></p>');
+                    const list = $('<ol id="seq-answer-list" class="list-group list-group-numbered mb-2">');
+                    q.items.forEach(function (item) {
+                        list.append('<li class="list-group-item d-flex justify-content-between align-items-center seq-answer-item" data-value="' + escapeHtml(item) + '">'
+                            + '<span>' + escapeHtml(item) + '</span>'
+                            + '<span class="btn-group btn-group-sm">'
+                            + '<button type="button" class="btn btn-outline-secondary seq-up"><i class="fas fa-arrow-up"></i></button>'
+                            + '<button type="button" class="btn btn-outline-secondary seq-down"><i class="fas fa-arrow-down"></i></button>'
+                            + '</span></li>');
+                    });
+                    body.append('<small class="text-muted d-block mb-2">Gunakan tombol panah untuk menyusun urutan yang benar (atas = pertama).</small>').append(list);
+                } else if (payload.task_type === 'fill_blank') {
+                    let bank = '<option value="">— pilih kata —</option>';
+                    q.word_bank.forEach(function (word) { bank += '<option value="' + escapeHtml(word) + '">' + escapeHtml(word) + '</option>'; });
+                    let html = '<p class="border rounded p-3 bg-light" style="line-height:2.4;">';
+                    q.parts.forEach(function (part, i) {
+                        html += escapeHtml(part);
+                        if (i < q.blank_count) {
+                            html += '<select class="custom-select custom-select-sm d-inline-block mx-1 fb-answer" data-i="' + i + '" style="width:auto;">' + bank + '</select>';
+                        }
+                    });
+                    html += '</p><small class="text-muted">Pilih kata yang tepat dari bank kata untuk setiap bagian rumpang.</small>';
+                    body.append(html);
+                } else if (payload.task_type === 'hotspot') {
+                    body.append('<p class="mb-1"><strong>Klik pada gambar untuk menempatkan label berikut:</strong></p>');
+                    const labelButtons = $('<div class="mb-2" id="hotspot-labels">');
+                    q.labels.forEach(function (label) {
+                        labelButtons.append('<button type="button" class="btn btn-sm btn-outline-primary mr-1 mb-1 hotspot-label" data-label="' + escapeHtml(label) + '">' + escapeHtml(label) + '</button>');
+                    });
+                    body.append(labelButtons);
+                    body.append('<div id="hotspot-answer-wrap" class="position-relative d-inline-block" style="max-width:100%;">'
+                        + '<img id="hotspot-answer-image" src="' + payload.attachment_url + '" class="img-fluid border rounded" style="max-height:420px; cursor:crosshair;" alt="Gambar soal"></div>');
+                    body.append('<small class="text-muted d-block mt-1">Pilih nama label lalu klik posisinya pada gambar. Klik ulang label untuk memindahkan.</small>');
+                    interactiveState.hotspotAnswers = {};
+                    interactiveState.activeLabel = null;
+                } else if (payload.task_type === 'category_sort') {
+                    let catOptions = '<option value="">— pilih kategori —</option>';
+                    q.categories.forEach(function (cat) { catOptions += '<option value="' + escapeHtml(cat) + '">' + escapeHtml(cat) + '</option>'; });
+                    q.items.forEach(function (item) {
+                        body.append('<div class="form-row align-items-center mb-2">'
+                            + '<div class="col-6"><span class="d-block border rounded p-2 bg-light">' + escapeHtml(item) + '</span></div>'
+                            + '<div class="col-6"><select class="form-control form-control-sm cat-answer" data-item="' + escapeHtml(item) + '">' + catOptions + '</select></div>'
+                            + '</div>');
+                    });
+                }
+            }
+
+            function collectInteractiveAnswers() {
+                const type = interactiveState.type;
+                if (type === 'multiple_choice') {
+                    const answers = [];
+                    interactiveState.data.questions.items.forEach(function (_, i) {
+                        const value = $('input[name="mc-answer-' + i + '"]:checked').val();
+                        answers.push(value === undefined ? null : parseInt(value, 10));
+                    });
+                    return answers;
+                }
+                if (type === 'matching') {
+                    const answers = [];
+                    $('.match-answer').each(function () { answers[parseInt($(this).data('i'), 10)] = $(this).val() || null; });
+                    return answers;
+                }
+                if (type === 'sequence') {
+                    return $('#seq-answer-list .seq-answer-item').map(function () { return $(this).data('value'); }).get();
+                }
+                if (type === 'fill_blank') {
+                    const answers = [];
+                    $('.fb-answer').each(function () { answers[parseInt($(this).data('i'), 10)] = $(this).val() || null; });
+                    return answers;
+                }
+                if (type === 'hotspot') {
+                    return Object.keys(interactiveState.hotspotAnswers).map(function (label) {
+                        return { label: label, x: interactiveState.hotspotAnswers[label].x, y: interactiveState.hotspotAnswers[label].y };
+                    });
+                }
+                if (type === 'category_sort') {
+                    const answers = {};
+                    $('.cat-answer').each(function () { answers[$(this).data('item')] = $(this).val() || null; });
+                    return answers;
+                }
+                return null;
+            }
+
+            $(document).on('click', '.seq-up, .seq-down', function () {
+                const item = $(this).closest('.seq-answer-item');
+                if ($(this).hasClass('seq-up')) item.insertBefore(item.prev('.seq-answer-item'));
+                else item.insertAfter(item.next('.seq-answer-item'));
+            });
+
+            $(document).on('click', '.hotspot-label', function () {
+                $('.hotspot-label').removeClass('active btn-primary').addClass('btn-outline-primary');
+                $(this).addClass('active btn-primary').removeClass('btn-outline-primary');
+                interactiveState.activeLabel = $(this).data('label');
+            });
+
+            $(document).on('click', '#hotspot-answer-image', function (event) {
+                if (!interactiveState.activeLabel) {
+                    $('#pjj-interactive-error').removeClass('d-none').text('Pilih nama label terlebih dahulu, lalu klik posisinya pada gambar.');
+                    return;
+                }
+                $('#pjj-interactive-error').addClass('d-none');
+                const rect = this.getBoundingClientRect();
+                const x = Math.round(((event.clientX - rect.left) / rect.width) * 10000) / 100;
+                const y = Math.round(((event.clientY - rect.top) / rect.height) * 10000) / 100;
+                interactiveState.hotspotAnswers[interactiveState.activeLabel] = { x: x, y: y };
+                $('#hotspot-answer-wrap .hotspot-pin[data-label="' + interactiveState.activeLabel + '"]').remove();
+                $('#hotspot-answer-wrap').append(
+                    $('<span class="badge badge-success hotspot-pin" style="position:absolute; transform:translate(-50%,-50%); z-index:5;">')
+                        .attr('data-label', interactiveState.activeLabel)
+                        .css({ left: x + '%', top: y + '%' })
+                        .text(interactiveState.activeLabel)
+                );
+            });
+
+            $(document).on('click', '.pjj-open-interactive', function () {
+                const button = $(this);
+                interactiveState = { type: null, submitUrl: button.data('submit-url'), data: null, hotspotAnswers: {}, activeLabel: null };
+                $('#pjj-interactive-error').addClass('d-none');
+                $('#pjj-interactive-body').html('<p class="text-muted">Memuat soal...</p>');
+                $('#pjj-interactive-title').text(button.data('title'));
+                $('#pjj-interactive-modal').modal('show');
+                $.get(button.data('questions-url')).done(function (payload) {
+                    interactiveState.type = payload.task_type;
+                    interactiveState.data = payload;
+                    $('#pjj-interactive-title').text(payload.task_label + ': ' + payload.title);
+                    $('#pjj-interactive-instructions').text(payload.instructions);
+                    renderInteractive(payload);
+                }).fail(function () {
+                    $('#pjj-interactive-body').html('<p class="text-danger">Soal gagal dimuat. Tutup lalu coba lagi.</p>');
+                });
+            });
+
+            $('#pjj-interactive-submit').on('click', function () {
+                const button = $(this);
+                const answers = collectInteractiveAnswers();
+                if (answers == null) return;
+                button.prop('disabled', true);
+                $.ajax({
+                    url: interactiveState.submitUrl,
+                    method: 'POST',
+                    data: { _token: '{{ csrf_token() }}', answers: JSON.stringify(answers) },
+                    headers: { Accept: 'application/json' }
+                }).done(function (response) {
+                    $('#pjj-interactive-modal').modal('hide');
+                    $('#pjj-submission-notice').removeClass('d-none alert-danger').addClass('alert-success').text(response.message);
+                    table.ajax.reload(null, false);
+                }).fail(function (xhr) {
+                    const messages = xhr.responseJSON?.errors
+                        ? Object.values(xhr.responseJSON.errors).flat().join(' ')
+                        : (xhr.responseJSON?.message || 'Jawaban gagal dikirim. Silakan coba lagi.');
+                    $('#pjj-interactive-error').removeClass('d-none').text(messages);
+                }).always(function () {
+                    button.prop('disabled', false);
+                });
             });
 
             const attendanceForm = document.getElementById('pjj-attendance-form');

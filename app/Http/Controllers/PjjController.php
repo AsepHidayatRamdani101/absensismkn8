@@ -13,6 +13,7 @@ use App\Models\TeacherSubject;
 use App\Models\Subject;
 use App\Models\Holiday;
 use App\Services\PjjAttendanceSyncService;
+use App\Support\PjjTaskType;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
 use Carbon\Carbon;
@@ -121,11 +122,21 @@ class PjjController extends Controller
             'teacher_subject_id' => ['required', 'integer', 'exists:teacher_subjects,id'],
             'extra_teacher_subject_ids' => ['nullable', 'array'],
             'extra_teacher_subject_ids.*' => ['integer', 'distinct', 'exists:teacher_subjects,id'],
+            'task_type' => ['required', Rule::in(PjjTaskType::all())],
             'title' => ['required', 'string', 'max:180'],
             'instructions' => ['required', 'string', 'max:10000'],
+            'questions' => ['nullable', 'string', 'max:60000'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
             'due_at' => ['nullable', 'date', 'after_or_equal:now'],
         ]);
+
+        $questions = PjjTaskType::validateQuestions($data['task_type'], $data['questions'] ?? null);
+
+        if ($data['task_type'] === PjjTaskType::HOTSPOT && !$request->hasFile('attachment')) {
+            throw ValidationException::withMessages([
+                'attachment' => 'Metode Menandai Gambar membutuhkan lampiran gambar (JPG/PNG/WEBP).',
+            ]);
+        }
 
         $primaryTeacherSubject = TeacherSubject::query()
             ->whereKey($data['teacher_subject_id'])
@@ -172,8 +183,10 @@ class PjjController extends Controller
             $assignment = PjjAssignment::query()->create([
                 'teacher_id' => $teacher->id,
                 'teacher_subject_id' => $teacherSubject->id,
+                'task_type' => $data['task_type'],
                 'title' => $data['title'],
                 'instructions' => $data['instructions'],
+                'questions' => $questions,
                 'attachment_path' => $attachmentPath,
                 'due_at' => $data['due_at'] ?? null,
             ]);
@@ -198,10 +211,15 @@ class PjjController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'instructions' => ['required', 'string', 'max:10000'],
+            'questions' => ['nullable', 'string', 'max:60000'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
             'due_at' => ['nullable', 'date'],
             'remove_attachment' => ['nullable', 'boolean'],
         ]);
+
+        $questions = $request->filled('questions')
+            ? PjjTaskType::validateQuestions((string) $assignment->task_type, $data['questions'])
+            : $assignment->questions;
 
         $oldAttachmentPath = $assignment->attachment_path;
         $attachmentPath = $oldAttachmentPath;
@@ -212,9 +230,16 @@ class PjjController extends Controller
             $attachmentPath = null;
         }
 
+        if ($assignment->task_type === PjjTaskType::HOTSPOT && !$attachmentPath) {
+            throw ValidationException::withMessages([
+                'attachment' => 'Metode Menandai Gambar membutuhkan lampiran gambar. Lampiran tidak boleh dihapus.',
+            ]);
+        }
+
         $assignment->update([
             'title' => $data['title'],
             'instructions' => $data['instructions'],
+            'questions' => $questions,
             'attachment_path' => $attachmentPath,
             'due_at' => $data['due_at'] ?? null,
         ]);
@@ -372,6 +397,24 @@ class PjjController extends Controller
         return view('siswa.pjj.index', compact('student', 'todayAttendance', 'attendanceHistory', 'subjects', 'pjjDates'));
     }
 
+    public function studentShowQuestions(PjjAssignment $assignment)
+    {
+        $student = $this->studentForCurrentUser();
+        abort_unless($assignment->teacherSubject()->where('classroom_id', $student->classroom_id)->exists(), 403);
+
+        $taskType = (string) ($assignment->task_type ?? PjjTaskType::ESSAY);
+        abort_unless(PjjTaskType::isInteractive($taskType), 404);
+
+        return response()->json([
+            'task_type' => $taskType,
+            'task_label' => PjjTaskType::label($taskType),
+            'title' => $assignment->title,
+            'instructions' => $assignment->instructions,
+            'attachment_url' => $assignment->attachment_path ? route('pjj.assignment.download', $assignment) : null,
+            'questions' => PjjTaskType::sanitizeForStudent($taskType, $assignment->questions),
+        ]);
+    }
+
     public function studentSubmitAssignment(Request $request, PjjAssignment $assignment)
     {
         $this->ensurePjjActive();
@@ -380,6 +423,38 @@ class PjjController extends Controller
 
         if ($assignment->due_at && $assignment->due_at->isPast()) {
             throw ValidationException::withMessages(['submission' => 'Batas pengumpulan tugas ini sudah lewat.']);
+        }
+
+        $taskType = (string) ($assignment->task_type ?? PjjTaskType::ESSAY);
+
+        if (PjjTaskType::isInteractive($taskType)) {
+            $data = $request->validate([
+                'answers' => ['required', 'string', 'max:60000'],
+            ]);
+
+            $answers = json_decode($data['answers'], true);
+            // Nilai otomatis dihitung dari kunci jawaban guru.
+            $autoScore = PjjTaskType::grade($taskType, $assignment->questions, $answers);
+
+            $submission = PjjSubmission::query()->firstOrNew([
+                'pjj_assignment_id' => $assignment->id,
+                'student_id' => $student->id,
+            ]);
+            $submission->answer = null;
+            $submission->answers = $answers;
+            $submission->submitted_at = now();
+            $submission->score = $autoScore;
+            $submission->feedback = 'Dinilai otomatis oleh sistem (' . PjjTaskType::label($taskType) . ').';
+            $submission->graded_at = now();
+            $submission->save();
+
+            $message = 'Jawaban terkirim. Nilai Anda: ' . rtrim(rtrim(number_format($autoScore, 2, '.', ''), '0'), '.') . '.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $message, 'score' => $autoScore]);
+            }
+
+            return back()->with('success', $message);
         }
 
         $data = $request->validate([
@@ -393,6 +468,7 @@ class PjjController extends Controller
             'student_id' => $student->id,
         ]);
         $submission->answer = $data['answer'] ?? null;
+        $submission->answers = null;
         $submission->submitted_at = now();
         $submission->score = null;
         $submission->feedback = null;
@@ -793,7 +869,8 @@ class PjjController extends Controller
                 'date' => $assignment->created_at?->format('d-m-Y H:i'),
                 'classroom' => e($assignment->teacherSubject->classroom->nama_kelas),
                 'subject' => e($assignment->teacherSubject->subject->nama_mapel),
-                'title' => '<strong>' . e($assignment->title) . '</strong>',
+                'title' => '<strong>' . e($assignment->title) . '</strong><br>'
+                    . '<span class="badge badge-light border">' . e(PjjTaskType::label($assignment->task_type)) . '</span>',
                 'deadline' => $assignment->due_at?->format('d-m-Y H:i') ?? '—',
                 'submissions' => (int) $assignment->submissions_count,
                 'action' => '<a class="btn btn-xs btn-primary" href="' . e(route('guru.pjj.assignments.show', $assignment)) . '"><i class="fas fa-clipboard-check"></i> Lihat & nilai</a> '
@@ -849,8 +926,16 @@ class PjjController extends Controller
                 'student' => e($submission->student->nama_lengkap) . '<br><small class="text-muted">' . e($submission->student->nis) . '</small>',
                 'date' => $submission->submitted_at->format('d-m-Y H:i'),
                 'answer' => $submission->answer
-                    ? '<span class="submission-answer">' . nl2br(e(\Illuminate\Support\Str::limit($submission->answer, 400))) . '</span>'
-                    : '<span class="text-muted">Jawaban berupa file</span>',
+                    ? '<span class="submission-answer-preview d-block">' . e(\Illuminate\Support\Str::limit(preg_replace('/\s+/u', ' ', $submission->answer), 120)) . '</span>'
+                        . '<button type="button" class="btn btn-xs btn-outline-primary d-block mt-1 pjj-view-answer"'
+                        . ' data-student="' . e($submission->student->nama_lengkap) . '"'
+                        . ' data-nis="' . e((string) $submission->student->nis) . '"'
+                        . ' data-date="' . e($submission->submitted_at->format('d-m-Y H:i')) . '"'
+                        . ' data-answer="' . e($submission->answer) . '"'
+                        . '><i class="fas fa-expand-alt"></i> Lihat detail</button>'
+                    : ($submission->answers !== null
+                        ? '<span class="text-muted">Jawaban interaktif (' . e(PjjTaskType::label($assignment->task_type)) . ') — dinilai otomatis</span>'
+                        : '<span class="text-muted">Jawaban berupa file</span>'),
                 'attachment' => $this->submissionFilesHtml($submission),
                 'grading' => '<form method="POST" action="' . e(route('guru.pjj.submissions.grade', $submission)) . '" class="pjj-grade-form" data-submission-id="' . (int) $submission->id . '">'
                     . csrf_field()
@@ -931,14 +1016,23 @@ class PjjController extends Controller
                         : '—';
                 }
                 $canSubmit = !$assignment->due_at || !$assignment->due_at->isPast();
-                $action = $canSubmit
-                    ? '<button type="button" class="btn btn-xs btn-primary pjj-open-submission"'
+                $taskType = (string) ($assignment->task_type ?? PjjTaskType::ESSAY);
+                if (!$canSubmit) {
+                    $action = '<span class="text-muted">Deadline lewat</span>';
+                } elseif (PjjTaskType::isInteractive($taskType)) {
+                    $action = '<button type="button" class="btn btn-xs btn-primary pjj-open-interactive"'
+                        . ' data-questions-url="' . e(route('siswa.pjj.assignments.questions', $assignment)) . '"'
+                        . ' data-submit-url="' . e(route('siswa.pjj.assignments.submit', $assignment)) . '"'
+                        . ' data-title="' . e($assignment->title) . '"'
+                        . '><i class="fas fa-gamepad"></i> ' . ($submission ? 'Kerjakan ulang' : 'Kerjakan') . '</button>';
+                } else {
+                    $action = '<button type="button" class="btn btn-xs btn-primary pjj-open-submission"'
                         . ' data-url="' . e(route('siswa.pjj.assignments.submit', $assignment)) . '"'
                         . ' data-title="' . e($assignment->title) . '"'
                         . ' data-answer="' . e((string) $submission?->answer) . '"'
                         . ' data-attachment="' . e($assignment->attachment_path ? route('pjj.assignment.download', $assignment) : '') . '"'
-                        . '><i class="fas fa-upload"></i> ' . ($submission ? 'Ubah jawaban' : 'Kumpulkan') . '</button>'
-                    : '<span class="text-muted">Deadline lewat</span>';
+                        . '><i class="fas fa-upload"></i> ' . ($submission ? 'Ubah jawaban' : 'Kumpulkan') . '</button>';
+                }
 
                 $material = $assignment->attachment_path
                     ? '<a class="btn btn-xs btn-outline-secondary" href="' . e(route('pjj.assignment.download', $assignment)) . '">Materi</a>'
@@ -956,7 +1050,9 @@ class PjjController extends Controller
                     'date' => $assignment->created_at->format('d-m-Y'),
                     'subject' => e($assignment->teacherSubject->subject->nama_mapel),
                     'teacher' => e($assignment->teacher->nama_lengkap),
-                    'title' => '<strong>' . e($assignment->title) . '</strong><br><small>' . e(\Illuminate\Support\Str::limit($instructions, 140)) . '</small>' . $viewTextButton,
+                    'title' => '<strong>' . e($assignment->title) . '</strong> '
+                        . '<span class="badge badge-light border">' . e(PjjTaskType::label($taskType)) . '</span>'
+                        . '<br><small>' . e(\Illuminate\Support\Str::limit($instructions, 140)) . '</small>' . $viewTextButton,
                     'deadline' => $assignment->due_at?->format('d-m-Y H:i') ?? '—',
                     'status' => $status,
                     'score' => $score,
