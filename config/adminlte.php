@@ -330,6 +330,11 @@ return [
                     'icon' => 'fas fa-fw fa-user-check',
                 ],
                 [
+                    'text' => 'Force Absensi Siswa',
+                    'route' => 'admin.pjj.force-attendance',
+                    'icon' => 'fas fa-fw fa-user-shield',
+                ],
+                [
                     'text' => 'Efektivitas Belajar',
                     'route' => 'admin.pjj.effectiveness',
                     'icon' => 'fas fa-fw fa-chart-line',

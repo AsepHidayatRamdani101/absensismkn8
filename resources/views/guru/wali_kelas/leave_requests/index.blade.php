@@ -36,6 +36,10 @@
             background: #fffbeb !important;
         }
 
+        #tableQuickLeave tr.row-selected-dispen {
+            background: #eef2ff !important;
+        }
+
         #quickLeaveSummary .summary-chip {
             display: inline-flex;
             align-items: center;
@@ -57,6 +61,12 @@
             color: #92400e;
             background: #fffbeb;
             border-color: #fde68a;
+        }
+
+        #quickLeaveSummary .chip-dispen {
+            color: #3730a3;
+            background: #eef2ff;
+            border-color: #c7d2fe;
         }
 
         @media (max-width: 767.98px) {
@@ -118,9 +128,10 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:.5rem;">
                     <div id="quickLeaveSummary" class="d-flex flex-wrap align-items-center" style="gap:.4rem;">
-                        <small class="text-muted mb-0">Klik Izin/Sakit pada siswa yang diperlukan, lalu simpan sekali.</small>
+                        <small class="text-muted mb-0">Klik Izin/Sakit/Dispen pada siswa yang diperlukan, lalu simpan sekali.</small>
                         <span class="summary-chip chip-izin">Izin <strong id="quickCountIzin">0</strong></span>
                         <span class="summary-chip chip-sakit">Sakit <strong id="quickCountSakit">0</strong></span>
+                        <span class="summary-chip chip-dispen">Dispen <strong id="quickCountDispen">0</strong></span>
                     </div>
                     <div class="d-flex" style="gap:.4rem;">
                         <button type="button" id="btnQuickReset" class="btn btn-outline-secondary btn-sm" disabled>
@@ -162,6 +173,8 @@
                                             data-status="Izin">Izin</button>
                                         <button type="button" class="btn btn-outline-warning js-quick-status"
                                             data-status="Sakit">Sakit</button>
+                                        <button type="button" class="btn btn-outline-primary js-quick-status"
+                                            data-status="Dispen">Dispen</button>
                                     </div>
                                 </td>
                                 <td>
@@ -203,6 +216,7 @@
                             <option value="">- Pilih -</option>
                             <option value="Izin">Izin</option>
                             <option value="Sakit">Sakit</option>
+                            <option value="Dispen">Dispen</option>
                         </select>
                     </div>
 
@@ -464,6 +478,7 @@
                                 <select name="jenis_pengajuan" id="editJenisPengajuan" class="form-control" required>
                                     <option value="Izin">Izin</option>
                                     <option value="Sakit">Sakit</option>
+                                    <option value="Dispen">Dispen</option>
                                 </select>
                             </div>
                             <div class="form-group col-md-4">
@@ -578,20 +593,23 @@
 
             // ================= Input Cepat Izin/Sakit Massal =================
             let isSavingQuickLeave = false;
-            // Draft status per siswa: { studentId: 'Izin' | 'Sakit' }
+            // Draft status per siswa: { studentId: 'Izin' | 'Sakit' | 'Dispen' }
             const quickDraft = new Map();
 
             function updateQuickToolbarState() {
                 let izin = 0;
                 let sakit = 0;
+                let dispen = 0;
 
                 quickDraft.forEach(function(status) {
                     if (status === 'Izin') izin++;
                     if (status === 'Sakit') sakit++;
+                    if (status === 'Dispen') dispen++;
                 });
 
                 $('#quickCountIzin').text(izin);
                 $('#quickCountSakit').text(sakit);
+                $('#quickCountDispen').text(dispen);
                 $('#btnQuickSave').prop('disabled', quickDraft.size === 0 || isSavingQuickLeave);
                 $('#btnQuickReset').prop('disabled', quickDraft.size === 0 || isSavingQuickLeave);
             }
@@ -602,12 +620,12 @@
                 const $alasan = $row.find('.js-quick-alasan');
 
                 $buttons.removeClass('active');
-                $row.removeClass('row-selected-izin row-selected-sakit');
+                $row.removeClass('row-selected-izin row-selected-sakit row-selected-dispen');
 
-                if (status === 'Izin' || status === 'Sakit') {
+                if (status === 'Izin' || status === 'Sakit' || status === 'Dispen') {
                     quickDraft.set(studentId, status);
                     $buttons.filter('[data-status="' + status + '"]').addClass('active');
-                    $row.addClass(status === 'Izin' ? 'row-selected-izin' : 'row-selected-sakit');
+                    $row.addClass('row-selected-' + status.toLowerCase());
                     $alasan.prop('disabled', false);
                 } else {
                     quickDraft.delete(studentId);

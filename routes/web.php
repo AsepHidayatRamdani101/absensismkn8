@@ -88,6 +88,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/pjj/student-attendance', [PjjController::class, 'adminIndex'])->defaults('section', 'student-attendance')->name('admin.pjj.student-attendance');
         Route::get('/admin/pjj/effectiveness', [PjjController::class, 'adminIndex'])->defaults('section', 'effectiveness')->name('admin.pjj.effectiveness');
         Route::get('/admin/pjj/attendance/{attendance}/photo', [PjjController::class, 'adminAttendancePhoto'])->name('admin.pjj.attendance-photo');
+        Route::get('/admin/pjj/force-attendance', [PjjController::class, 'adminForceAttendance'])->name('admin.pjj.force-attendance');
+        Route::get('/admin/pjj/force-attendance/students', [PjjController::class, 'adminForceAttendanceStudents'])->name('admin.pjj.force-attendance.students');
+        Route::post('/admin/pjj/force-attendance', [PjjController::class, 'adminForceAttendanceStore'])->name('admin.pjj.force-attendance.store');
 
         Route::get('school-settings', [SchoolSettingController::class, 'index'])->name('school-settings.index');
         Route::put('school-settings', [SchoolSettingController::class, 'update'])->name('school-settings.update');

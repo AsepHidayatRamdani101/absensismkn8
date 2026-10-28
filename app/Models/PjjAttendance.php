@@ -18,6 +18,8 @@ class PjjAttendance extends Model
         'check_out_latitude',
         'check_out_longitude',
         'status',
+        'forced_at',
+        'forced_note',
     ];
 
     protected $casts = [
@@ -28,6 +30,7 @@ class PjjAttendance extends Model
         'check_out_at' => 'datetime',
         'check_out_latitude' => 'decimal:7',
         'check_out_longitude' => 'decimal:7',
+        'forced_at' => 'datetime',
     ];
 
     public function student()

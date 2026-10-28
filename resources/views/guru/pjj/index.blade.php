@@ -397,7 +397,7 @@
             let mcCount = 0;
             function mcAdd(data) {
                 const index = mcCount++;
-                const options = (data && data.options) || ['', '', '', ''];
+                const options = (data && data.options) || ['', '', '', '', ''];
                 let optionsHtml = '';
                 options.forEach(function (opt, i) {
                     optionsHtml += '<div class="input-group input-group-sm mb-1">'

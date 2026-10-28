@@ -720,7 +720,126 @@ class PjjController extends Controller
             return Storage::disk('local')->response($attendance->check_out_selfie_path);
         }
 
+        abort_unless($attendance->selfie_path, 404);
+
         return Storage::disk('local')->response($attendance->selfie_path);
+    }
+
+    public function adminForceAttendance(Request $request)
+    {
+        abort_unless(Auth::user()->hasRole('admin'), 403);
+
+        $pjjDates = $this->configuredPjjDates();
+        $classroomQuery = Classroom::query()->orderBy('nama_kelas');
+        if (PklMode::isActive()) {
+            $classroomQuery->where('tingkat', '!=', 'XII');
+        }
+        $classrooms = $classroomQuery->get(['id', 'nama_kelas']);
+
+        return view('admin.pjj.force_attendance', compact('pjjDates', 'classrooms'));
+    }
+
+    public function adminForceAttendanceStudents(Request $request)
+    {
+        abort_unless(Auth::user()->hasRole('admin'), 403);
+
+        $data = $request->validate([
+            'classroom_id' => ['required', 'integer', 'exists:classrooms,id'],
+            'date' => ['required', 'date_format:Y-m-d', Rule::in($this->configuredPjjDates())],
+        ]);
+
+        $students = Student::query()
+            ->where('classroom_id', $data['classroom_id'])
+            ->orderBy('nama_lengkap')
+            ->get(['id', 'nama_lengkap', 'nis']);
+
+        $attendances = PjjAttendance::query()
+            ->whereIn('student_id', $students->pluck('id'))
+            ->whereDate('attendance_date', $data['date'])
+            ->get()
+            ->keyBy('student_id');
+
+        return response()->json([
+            'students' => $students->map(function (Student $student) use ($attendances) {
+                $attendance = $attendances->get($student->id);
+
+                return [
+                    'id' => $student->id,
+                    'name' => $student->nama_lengkap,
+                    'nis' => $student->nis,
+                    'attended' => $attendance !== null,
+                    'status' => $attendance?->status,
+                    'check_in' => ($attendance?->check_in_at ?? $attendance?->created_at)?->format('H:i'),
+                    'forced' => $attendance?->forced_at !== null,
+                ];
+            })->values(),
+        ]);
+    }
+
+    public function adminForceAttendanceStore(Request $request)
+    {
+        abort_unless(Auth::user()->hasRole('admin'), 403);
+
+        $data = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d', Rule::in($this->configuredPjjDates())],
+            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
+            'status' => ['required', 'in:Hadir,Terlambat'],
+            'note' => ['required', 'string', 'max:255'],
+        ], [
+            'student_ids.required' => 'Pilih minimal satu siswa yang akan diabsenkan.',
+            'note.required' => 'Isi alasan/kendala siswa sebagai catatan force absensi.',
+        ]);
+
+        $date = Carbon::parse($data['date']);
+        $students = Student::query()
+            ->whereIn('id', $data['student_ids'])
+            ->whereNotNull('classroom_id')
+            ->get();
+
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($students as $student) {
+            $attendance = null;
+
+            DB::transaction(function () use ($student, $date, $data, &$attendance, &$skipped) {
+                Student::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+
+                $exists = PjjAttendance::query()
+                    ->where('student_id', $student->id)
+                    ->whereDate('attendance_date', $date->toDateString())
+                    ->exists();
+
+                if ($exists) {
+                    $skipped++;
+                    return;
+                }
+
+                $attendance = PjjAttendance::query()->create([
+                    'student_id' => $student->id,
+                    'attendance_date' => $date->toDateString(),
+                    'selfie_path' => null,
+                    'check_in_at' => $date->copy()->setTime(6, 30),
+                    'status' => $data['status'],
+                    'forced_at' => now(),
+                    'forced_note' => 'Force absensi oleh admin: ' . $data['note'],
+                ]);
+            });
+
+            if ($attendance) {
+                // Sinkron ke absensi reguler seperti alur selfie siswa biasa.
+                $this->attendanceSync->syncStudentAttendance($attendance);
+                $created++;
+            }
+        }
+
+        $message = $created . ' siswa berhasil diabsenkan (status ' . $data['status'] . ') dan tersinkron ke absensi reguler.';
+        if ($skipped > 0) {
+            $message .= ' ' . $skipped . ' siswa dilewati karena sudah memiliki absensi PJJ pada tanggal tersebut.';
+        }
+
+        return response()->json(['message' => $message, 'created' => $created, 'skipped' => $skipped]);
     }
 
     private function adminDataTable(Request $request, string $section, $assignmentQuery, array $filters)
@@ -807,11 +926,16 @@ class PjjController extends Controller
                 'nis' => e($attendance->student->nis),
                 'classroom' => e($attendance->student->classroom->nama_kelas),
                 'check_in' => (($attendance->check_in_at ?? $attendance->created_at)?->format('H:i') ?? '—')
-                    . ($attendance->status === 'Terlambat' ? ' <span class="badge badge-warning">Terlambat</span>' : ''),
+                    . ($attendance->status === 'Terlambat' ? ' <span class="badge badge-warning">Terlambat</span>' : '')
+                    . ($attendance->forced_at
+                        ? ' <span class="badge badge-info" title="' . e((string) $attendance->forced_note) . '">Force admin</span>'
+                        : ''),
                 'check_out' => $attendance->check_out_at
                     ? $attendance->check_out_at->format('H:i')
                     : '<span class="badge badge-warning">Belum absen pulang</span>',
-                'photo' => '<a class="btn btn-xs btn-outline-primary" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance)) . '"><i class="fas fa-camera"></i> Datang</a>'
+                'photo' => ($attendance->selfie_path
+                        ? '<a class="btn btn-xs btn-outline-primary" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance)) . '"><i class="fas fa-camera"></i> Datang</a>'
+                        : '<span class="text-muted">Tanpa selfie (force admin)</span>')
                     . ($attendance->check_out_selfie_path
                         ? ' <a class="btn btn-xs btn-outline-info" target="_blank" href="' . e(route('admin.pjj.attendance-photo', $attendance) . '?type=out') . '"><i class="fas fa-camera"></i> Pulang</a>'
                         : ''),

@@ -213,7 +213,7 @@ class StudentLeaveRequestController extends Controller
 
         $validated = $request->validate([
             'student_id' => 'required|exists:students,id',
-            'jenis_pengajuan' => 'required|in:Izin,Sakit',
+            'jenis_pengajuan' => 'required|in:Izin,Sakit,Dispen',
             'tanggal_mulai' => 'required|date',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
             'alasan' => 'required|string|max:2000',
@@ -268,7 +268,7 @@ class StudentLeaveRequestController extends Controller
             'alasan_umum' => 'required|string|max:2000',
             'entries' => 'required|array|min:1',
             'entries.*.student_id' => 'required|integer|exists:students,id',
-            'entries.*.jenis_pengajuan' => 'required|in:Izin,Sakit',
+            'entries.*.jenis_pengajuan' => 'required|in:Izin,Sakit,Dispen',
             'entries.*.alasan' => 'nullable|string|max:2000',
         ], [
             'entries.required' => 'Pilih minimal satu siswa (Izin/Sakit) terlebih dahulu.',
@@ -341,7 +341,7 @@ class StudentLeaveRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'jenis_pengajuan' => 'required|in:Izin,Sakit',
+            'jenis_pengajuan' => 'required|in:Izin,Sakit,Dispen',
             'tanggal_mulai' => 'required|date',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
             'alasan' => 'required|string|max:2000',
@@ -635,7 +635,9 @@ class StudentLeaveRequestController extends Controller
             7 => 'Minggu',
         ];
 
-        $status = $leaveRequest->jenis_pengajuan === 'Sakit' ? 'Sakit' : 'Izin';
+        $status = in_array($leaveRequest->jenis_pengajuan, ['Sakit', 'Dispen'], true)
+            ? $leaveRequest->jenis_pengajuan
+            : 'Izin';
         $sourceNote = 'Verifikasi wali kelas';
         $catatanLower = strtolower((string) ($leaveRequest->catatan_wali ?? ''));
 
@@ -728,7 +730,9 @@ class StudentLeaveRequestController extends Controller
             return;
         }
 
-        $status = $leaveRequest->jenis_pengajuan === 'Sakit' ? 'Sakit' : 'Izin';
+        $status = in_array($leaveRequest->jenis_pengajuan, ['Sakit', 'Dispen'], true)
+            ? $leaveRequest->jenis_pengajuan
+            : 'Izin';
 
         // Hapus hanya detail absensi hasil auto-fill pengajuan ini (bukan input manual guru).
         AttendanceDetail::query()
