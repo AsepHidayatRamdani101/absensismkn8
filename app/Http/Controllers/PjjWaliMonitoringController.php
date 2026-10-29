@@ -7,15 +7,21 @@ use App\Models\PjjAssignment;
 use App\Models\PjjAttendance;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Services\PjjAttendanceSyncService;
 use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PjjWaliMonitoringController extends Controller
 {
+    public function __construct(private readonly PjjAttendanceSyncService $attendanceSync)
+    {
+    }
+
     public function index(Request $request)
     {
         abort_unless(SchoolCalendar::isPjj(Carbon::today()), 403, 'Monitoring PJJ hanya tersedia saat mode PJJ aktif.');
@@ -94,6 +100,126 @@ class PjjWaliMonitoringController extends Controller
             'date' => $date,
             'isToday' => $isToday,
         ]);
+    }
+
+    /**
+     * Force absen datang: wali kelas mencatatkan kehadiran PJJ siswa yang
+     * terkendala perangkat/jaringan, lalu disinkronkan ke absensi reguler.
+     */
+    public function forceCheckIn(Request $request)
+    {
+        abort_unless(SchoolCalendar::isPjj(Carbon::today()), 403, 'Force absen hanya tersedia saat mode PJJ aktif.');
+
+        $teacher = $this->waliTeacherForCurrentUser();
+
+        $data = $request->validate([
+            'student_id' => ['required', 'integer', 'exists:students,id'],
+            'status' => ['required', 'in:Hadir,Terlambat'],
+            'note' => ['required', 'string', 'max:255'],
+        ], [
+            'note.required' => 'Isi alasan/kendala siswa sebagai catatan force absen.',
+        ]);
+
+        $student = $this->studentOfWaliClassroom($teacher, (int) $data['student_id']);
+
+        $attendance = null;
+
+        DB::transaction(function () use ($student, $teacher, $data, &$attendance) {
+            Student::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+
+            $exists = PjjAttendance::query()
+                ->where('student_id', $student->id)
+                ->whereDate('attendance_date', Carbon::today())
+                ->exists();
+
+            if ($exists) {
+                return;
+            }
+
+            $attendance = PjjAttendance::query()->create([
+                'student_id' => $student->id,
+                'attendance_date' => Carbon::today()->toDateString(),
+                'selfie_path' => null,
+                'check_in_at' => now(),
+                'status' => $data['status'],
+                'forced_at' => now(),
+                'forced_note' => 'Force absen datang oleh wali kelas ' . $teacher->nama_lengkap . ': ' . $data['note'],
+            ]);
+        });
+
+        if (!$attendance) {
+            return response()->json(['message' => 'Siswa sudah memiliki absensi PJJ hari ini. Muat ulang halaman.'], 422);
+        }
+
+        // Sinkron ke absensi reguler seperti alur selfie siswa biasa.
+        $this->attendanceSync->syncStudentAttendance($attendance);
+
+        return response()->json([
+            'message' => $student->nama_lengkap . ' berhasil diabsenkan datang (status ' . $data['status'] . ') dan tersinkron ke absensi reguler.',
+        ]);
+    }
+
+    /**
+     * Force absen pulang: lengkapi check-out siswa yang sudah absen datang
+     * namun terkendala saat absen pulang.
+     */
+    public function forceCheckOut(Request $request)
+    {
+        abort_unless(SchoolCalendar::isPjj(Carbon::today()), 403, 'Force absen hanya tersedia saat mode PJJ aktif.');
+
+        $teacher = $this->waliTeacherForCurrentUser();
+
+        $data = $request->validate([
+            'student_id' => ['required', 'integer', 'exists:students,id'],
+            'note' => ['required', 'string', 'max:255'],
+        ], [
+            'note.required' => 'Isi alasan/kendala siswa sebagai catatan force absen.',
+        ]);
+
+        $student = $this->studentOfWaliClassroom($teacher, (int) $data['student_id']);
+
+        // Mengikuti aturan absen pulang siswa: baru dapat dilakukan mulai pukul 15.00.
+        if (now()->lt(Carbon::today()->setTime(15, 0))) {
+            return response()->json(['message' => 'Force absen pulang baru dapat dilakukan mulai pukul 15.00. Saat ini pukul ' . now()->format('H:i') . '.'], 422);
+        }
+
+        $attendance = PjjAttendance::query()
+            ->where('student_id', $student->id)
+            ->whereDate('attendance_date', Carbon::today())
+            ->first();
+
+        if (!$attendance) {
+            return response()->json(['message' => 'Siswa belum absen datang. Lakukan force absen datang terlebih dahulu.'], 422);
+        }
+
+        if ($attendance->check_out_at) {
+            return response()->json(['message' => 'Absen pulang siswa sudah tercatat. Muat ulang halaman.'], 422);
+        }
+
+        $forcedNote = trim((string) $attendance->forced_note);
+        $checkOutNote = 'Force absen pulang oleh wali kelas ' . $teacher->nama_lengkap . ': ' . $data['note'];
+
+        $attendance->update([
+            'check_out_at' => now(),
+            'forced_at' => $attendance->forced_at ?? now(),
+            'forced_note' => $forcedNote !== '' ? $forcedNote . ' | ' . $checkOutNote : $checkOutNote,
+        ]);
+
+        return response()->json([
+            'message' => 'Absen pulang ' . $student->nama_lengkap . ' berhasil dicatat pukul ' . now()->format('H:i') . '.',
+        ]);
+    }
+
+    private function studentOfWaliClassroom(Teacher $teacher, int $studentId): Student
+    {
+        $student = Student::query()
+            ->whereKey($studentId)
+            ->where('classroom_id', $teacher->wali_classroom_id)
+            ->first();
+
+        abort_unless($student, 403, 'Siswa ini bukan anggota kelas Anda.');
+
+        return $student;
     }
 
     /**

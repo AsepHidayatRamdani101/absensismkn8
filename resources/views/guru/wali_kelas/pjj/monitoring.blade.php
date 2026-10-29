@@ -4,6 +4,8 @@
 
 @section('plugins.Datatables', true)
 
+@section('plugins.Sweetalert2', true)
+
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <div>
@@ -94,6 +96,7 @@
                         <th>Status Absen</th>
                         <th>Tugas Belum Dikumpulkan</th>
                         <th>Pengingat</th>
+                        <th>Force Absen</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -115,6 +118,9 @@
                                     <span class="badge badge-warning">Terlambat</span>
                                 @else
                                     <span class="badge badge-success">Hadir</span>
+                                @endif
+                                @if ($attendance?->forced_at)
+                                    <span class="badge badge-info" title="{{ $attendance->forced_note }}">Force</span>
                                 @endif
                             </td>
                             <td>
@@ -145,6 +151,25 @@
                                     <span class="text-muted">—</span>
                                 @endif
                             </td>
+                            <td>
+                                @if (!$isToday)
+                                    <span class="text-muted">—</span>
+                                @elseif (!$attendance)
+                                    <button type="button" class="btn btn-xs btn-primary js-force-checkin"
+                                        data-student-id="{{ $row['student']->id }}"
+                                        data-student-name="{{ $row['student']->nama_lengkap }}">
+                                        <i class="fas fa-sign-in-alt"></i> Absen Datang
+                                    </button>
+                                @elseif (!$checkOut)
+                                    <button type="button" class="btn btn-xs btn-info js-force-checkout"
+                                        data-student-id="{{ $row['student']->id }}"
+                                        data-student-name="{{ $row['student']->nama_lengkap }}">
+                                        <i class="fas fa-sign-out-alt"></i> Absen Pulang
+                                    </button>
+                                @else
+                                    <span class="badge badge-success">Lengkap</span>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -160,7 +185,7 @@
                 pageLength: 50,
                 lengthMenu: [25, 50, 100],
                 order: [],
-                columnDefs: [{ orderable: false, targets: [5, 6] }],
+                columnDefs: [{ orderable: false, targets: [5, 6, 7] }],
                 language: {
                     search: 'Cari siswa:', lengthMenu: 'Tampilkan _MENU_ data',
                     info: 'Menampilkan _START_–_END_ dari _TOTAL_ siswa', infoEmpty: 'Tidak ada data',
@@ -169,6 +194,111 @@
                 }
             });
             $('#monitoring-date').on('change', function () { this.form.submit(); });
+
+            // ================= Force Absen Datang/Pulang =================
+            function submitForceAttendance(url, payload, button) {
+                button.prop('disabled', true);
+
+                $.post(url, payload).done(function (response) {
+                    Swal.fire({
+                        title: 'Berhasil',
+                        text: response.message,
+                        icon: 'success'
+                    }).then(function () {
+                        window.location.reload();
+                    });
+                }).fail(function (xhr) {
+                    const message = xhr.responseJSON?.errors
+                        ? Object.values(xhr.responseJSON.errors).flat().join(' ')
+                        : (xhr.responseJSON?.message || 'Force absen gagal disimpan. Silakan coba lagi.');
+                    Swal.fire('Gagal', message, 'error');
+                    button.prop('disabled', false);
+                });
+            }
+
+            $('#pjj-monitoring-table').on('click', '.js-force-checkin', function () {
+                const button = $(this);
+
+                Swal.fire({
+                    title: 'Force Absen Datang',
+                    html: '<p class="mb-2">Siswa <strong>' + button.data('student-name') + '</strong> akan dicatat hadir PJJ hari ini dan tersinkron ke absensi reguler.</p>',
+                    input: 'text',
+                    inputLabel: 'Alasan / kendala siswa (wajib)',
+                    inputPlaceholder: 'Contoh: HP rusak / tidak ada kuota / gangguan jaringan',
+                    inputAttributes: { maxlength: 255 },
+                    showCancelButton: true,
+                    confirmButtonColor: '#007bff',
+                    confirmButtonText: '<i class="fas fa-sign-in-alt mr-1"></i> Pilih Status',
+                    cancelButtonText: 'Batal',
+                    inputValidator: function (value) {
+                        if (!value || !value.trim()) {
+                            return 'Alasan/kendala siswa wajib diisi.';
+                        }
+                    }
+                }).then(function (result) {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    const note = result.value.trim();
+
+                    Swal.fire({
+                        title: 'Status Kehadiran',
+                        text: 'Pilih status absen datang untuk ' + button.data('student-name') + '.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        confirmButtonColor: '#28a745',
+                        denyButtonColor: '#ffc107',
+                        confirmButtonText: 'Hadir',
+                        denyButtonText: 'Terlambat',
+                        cancelButtonText: 'Batal'
+                    }).then(function (statusResult) {
+                        if (!statusResult.isConfirmed && !statusResult.isDenied) {
+                            return;
+                        }
+
+                        submitForceAttendance('{{ route('guru.wali-kelas.pjj.force-checkin') }}', {
+                            _token: '{{ csrf_token() }}',
+                            student_id: button.data('student-id'),
+                            status: statusResult.isConfirmed ? 'Hadir' : 'Terlambat',
+                            note: note
+                        }, button);
+                    });
+                });
+            });
+
+            $('#pjj-monitoring-table').on('click', '.js-force-checkout', function () {
+                const button = $(this);
+
+                Swal.fire({
+                    title: 'Force Absen Pulang',
+                    html: '<p class="mb-2">Absen pulang siswa <strong>' + button.data('student-name') + '</strong> akan dicatat sekarang (minimal pukul 15.00).</p>',
+                    input: 'text',
+                    inputLabel: 'Alasan / kendala siswa (wajib)',
+                    inputPlaceholder: 'Contoh: HP mati / kuota habis sore hari',
+                    inputAttributes: { maxlength: 255 },
+                    showCancelButton: true,
+                    confirmButtonColor: '#17a2b8',
+                    confirmButtonText: '<i class="fas fa-sign-out-alt mr-1"></i> Catat Absen Pulang',
+                    cancelButtonText: 'Batal',
+                    inputValidator: function (value) {
+                        if (!value || !value.trim()) {
+                            return 'Alasan/kendala siswa wajib diisi.';
+                        }
+                    }
+                }).then(function (result) {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    submitForceAttendance('{{ route('guru.wali-kelas.pjj.force-checkout') }}', {
+                        _token: '{{ csrf_token() }}',
+                        student_id: button.data('student-id'),
+                        note: result.value.trim()
+                    }, button);
+                });
+            });
         });
     </script>
 @stop

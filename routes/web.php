@@ -704,6 +704,12 @@ Route::middleware(['auth', 'guru'])->group(function () {
     Route::get('/guru/wali-kelas/monitoring-pjj', [PjjWaliMonitoringController::class, 'index'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.pjj.monitoring');
+    Route::post('/guru/wali-kelas/monitoring-pjj/force-absen-datang', [PjjWaliMonitoringController::class, 'forceCheckIn'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.pjj.force-checkin');
+    Route::post('/guru/wali-kelas/monitoring-pjj/force-absen-pulang', [PjjWaliMonitoringController::class, 'forceCheckOut'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.pjj.force-checkout');
     Route::post('/guru/wali-kelas/izin-keluar-kelas', [MidClassPermitController::class, 'waliStore'])
         ->middleware('can:guru-wali-kelas')
         ->name('guru.wali-kelas.mid-class-permits.store');
