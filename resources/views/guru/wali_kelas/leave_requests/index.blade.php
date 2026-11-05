@@ -69,6 +69,12 @@
             border-color: #c7d2fe;
         }
 
+        #quickLeaveSummary .chip-batal {
+            color: #374151;
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+
         @media (max-width: 767.98px) {
             #tableQuickLeave .btn-group .btn {
                 min-width: 48px;
@@ -128,10 +134,11 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:.5rem;">
                     <div id="quickLeaveSummary" class="d-flex flex-wrap align-items-center" style="gap:.4rem;">
-                        <small class="text-muted mb-0">Klik Izin/Sakit/Dispen pada siswa yang diperlukan, lalu simpan sekali.</small>
+                        <small class="text-muted mb-0">Klik Izin/Sakit/Dispen pada siswa yang diperlukan, lalu simpan sekali. Pilih ulang untuk mengubah status yang sudah tersimpan hari ini.</small>
                         <span class="summary-chip chip-izin">Izin <strong id="quickCountIzin">0</strong></span>
                         <span class="summary-chip chip-sakit">Sakit <strong id="quickCountSakit">0</strong></span>
                         <span class="summary-chip chip-dispen">Dispen <strong id="quickCountDispen">0</strong></span>
+                        <span class="summary-chip chip-batal">Kembali Hadir <strong id="quickCountBatal">0</strong></span>
                     </div>
                     <div class="d-flex" style="gap:.4rem;">
                         <button type="button" id="btnQuickReset" class="btn btn-outline-secondary btn-sm" disabled>
@@ -161,19 +168,31 @@
                     </thead>
                     <tbody>
                         @foreach ($students as $student)
+                            @php
+                                // Status tersimpan hari ini: pengajuan disetujui yang masih berlaku hari ini.
+                                $todayLeave = $todayLeaves->get($student->id);
+                                $savedStatus = $todayLeave?->jenis_pengajuan;
+                            @endphp
                             <tr data-student-id="{{ $student->id }}"
-                                data-student-name="{{ strtolower($student->nama_lengkap) }}">
+                                data-student-name="{{ strtolower($student->nama_lengkap) }}"
+                                data-saved-status="{{ $savedStatus ?? '' }}"
+                                @class(['row-selected-' . strtolower($savedStatus ?? '') => $savedStatus])>
                                 <td class="text-center">{{ $loop->iteration }}</td>
-                                <td>{{ $student->nama_lengkap }}</td>
+                                <td>
+                                    {{ $student->nama_lengkap }}
+                                    @if ($savedStatus)
+                                        <i class="fas fa-check-circle text-success ml-1" title="Sudah tercatat {{ $savedStatus }} hari ini ({{ $todayLeave->tanggal_mulai->format('d-m-Y') }} s.d. {{ $todayLeave->tanggal_selesai->format('d-m-Y') }}). Pilih ulang untuk mengubah."></i>
+                                    @endif
+                                </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-secondary js-quick-status active"
+                                        <button type="button" class="btn btn-outline-secondary js-quick-status @if (!$savedStatus) active @endif"
                                             data-status="">Hadir</button>
-                                        <button type="button" class="btn btn-outline-info js-quick-status"
+                                        <button type="button" class="btn btn-outline-info js-quick-status @if ($savedStatus === 'Izin') active @endif"
                                             data-status="Izin">Izin</button>
-                                        <button type="button" class="btn btn-outline-warning js-quick-status"
+                                        <button type="button" class="btn btn-outline-warning js-quick-status @if ($savedStatus === 'Sakit') active @endif"
                                             data-status="Sakit">Sakit</button>
-                                        <button type="button" class="btn btn-outline-primary js-quick-status"
+                                        <button type="button" class="btn btn-outline-primary js-quick-status @if ($savedStatus === 'Dispen') active @endif"
                                             data-status="Dispen">Dispen</button>
                                     </div>
                                 </td>
@@ -593,44 +612,55 @@
 
             // ================= Input Cepat Izin/Sakit Massal =================
             let isSavingQuickLeave = false;
-            // Draft status per siswa: { studentId: 'Izin' | 'Sakit' | 'Dispen' }
+            // Draft perubahan per siswa: { studentId: 'Izin' | 'Sakit' | 'Dispen' | '' }.
+            // '' berarti kembali ke Hadir (membatalkan izin tersimpan hari ini).
             const quickDraft = new Map();
 
             function updateQuickToolbarState() {
                 let izin = 0;
                 let sakit = 0;
                 let dispen = 0;
+                let batal = 0;
 
                 quickDraft.forEach(function(status) {
                     if (status === 'Izin') izin++;
                     if (status === 'Sakit') sakit++;
                     if (status === 'Dispen') dispen++;
+                    if (status === '') batal++;
                 });
 
                 $('#quickCountIzin').text(izin);
                 $('#quickCountSakit').text(sakit);
                 $('#quickCountDispen').text(dispen);
+                $('#quickCountBatal').text(batal);
                 $('#btnQuickSave').prop('disabled', quickDraft.size === 0 || isSavingQuickLeave);
                 $('#btnQuickReset').prop('disabled', quickDraft.size === 0 || isSavingQuickLeave);
             }
 
             function setQuickRowStatus($row, status) {
                 const studentId = String($row.data('student-id'));
+                const savedStatus = String($row.data('saved-status') || '');
                 const $buttons = $row.find('.js-quick-status');
                 const $alasan = $row.find('.js-quick-alasan');
 
                 $buttons.removeClass('active');
+                $buttons.filter('[data-status="' + status + '"]').addClass('active');
                 $row.removeClass('row-selected-izin row-selected-sakit row-selected-dispen');
 
-                if (status === 'Izin' || status === 'Sakit' || status === 'Dispen') {
-                    quickDraft.set(studentId, status);
-                    $buttons.filter('[data-status="' + status + '"]').addClass('active');
+                if (status !== '') {
                     $row.addClass('row-selected-' + status.toLowerCase());
-                    $alasan.prop('disabled', false);
-                } else {
+                }
+
+                if (status === savedStatus) {
+                    // Sama dengan status tersimpan: tidak ada perubahan yang perlu dikirim.
                     quickDraft.delete(studentId);
-                    $buttons.filter('[data-status=""]').addClass('active');
                     $alasan.prop('disabled', true).val('');
+                } else {
+                    quickDraft.set(studentId, status);
+                    $alasan.prop('disabled', status === '');
+                    if (status === '') {
+                        $alasan.val('');
+                    }
                 }
 
                 updateQuickToolbarState();
@@ -650,8 +680,9 @@
             });
 
             $('#btnQuickReset').on('click', function() {
+                // Kembalikan setiap baris ke status tersimpannya (batalkan draft perubahan).
                 $('#tableQuickLeave tbody tr').each(function() {
-                    setQuickRowStatus($(this), '');
+                    setQuickRowStatus($(this), String($(this).data('saved-status') || ''));
                 });
             });
 
@@ -674,19 +705,21 @@
                     return;
                 }
 
-                if (alasanUmum === '') {
-                    Swal.fire('Gagal', 'Isi alasan umum terlebih dahulu.', 'error');
-                    $('#quickAlasanUmum').focus();
-                    return;
-                }
-
                 const entries = [];
+                const cancellations = [];
 
                 $('#tableQuickLeave tbody tr').each(function() {
                     const studentId = String($(this).data('student-id'));
+
+                    if (!quickDraft.has(studentId)) {
+                        return;
+                    }
+
                     const status = quickDraft.get(studentId);
 
-                    if (status) {
+                    if (status === '') {
+                        cancellations.push(Number(studentId));
+                    } else {
                         entries.push({
                             student_id: Number(studentId),
                             jenis_pengajuan: status,
@@ -695,10 +728,24 @@
                     }
                 });
 
+                if (entries.length > 0 && alasanUmum === '') {
+                    Swal.fire('Gagal', 'Isi alasan umum terlebih dahulu.', 'error');
+                    $('#quickAlasanUmum').focus();
+                    return;
+                }
+
+                let confirmHtml = '';
+                if (entries.length > 0) {
+                    confirmHtml += '<strong>' + entries.length + ' siswa</strong> akan dicatat Izin/Sakit/Dispen dan absensi otomatis diisikan.';
+                }
+                if (cancellations.length > 0) {
+                    confirmHtml += (confirmHtml ? '<br>' : '') + '<strong>' + cancellations.length +
+                        ' siswa</strong> dikembalikan ke Hadir (izin hari ini dibatalkan).';
+                }
+
                 Swal.fire({
-                    title: 'Simpan Izin/Sakit?',
-                    html: '<strong>' + entries.length +
-                        ' siswa</strong> akan dicatat Izin/Sakit dan absensi otomatis diisikan.',
+                    title: 'Simpan Perubahan?',
+                    html: confirmHtml,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonColor: '#28a745',
@@ -731,6 +778,7 @@
                                     tanggal_selesai: tanggalSelesai,
                                     alasan_umum: alasanUmum,
                                     entries: entries,
+                                    cancel_student_ids: cancellations,
                                 }),
                             });
                         const payload = await response.json();

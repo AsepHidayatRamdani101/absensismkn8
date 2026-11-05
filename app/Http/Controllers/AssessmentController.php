@@ -145,12 +145,16 @@ class AssessmentController extends Controller
         abort_unless($this->teacherAssignments($teacher)->contains('id', $teacherSubject->id), 403);
         $validated = $request->validate([
             'grading_method' => ['required', 'in:manual,automatic'],
+            'attendance_weight' => ['required', 'numeric', 'min:0', 'max:100'],
             'scores' => ['nullable', 'array'],
             'scores.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         DB::transaction(function () use ($teacherSubject, $validated) {
-            $teacherSubject->update(['grading_method' => $validated['grading_method']]);
+            $teacherSubject->update([
+                'grading_method' => $validated['grading_method'],
+                'attendance_weight' => $validated['attendance_weight'],
+            ]);
             if ($validated['grading_method'] === 'manual') {
                 foreach ($validated['scores'] ?? [] as $studentId => $score) {
                     abort_unless(Student::query()
@@ -369,9 +373,11 @@ class AssessmentController extends Controller
             ->whereNotNull('daily_assessment_scores.score')
             ->get(['daily_assessment_scores.score', 'daily_assessments.max_score', 'daily_assessments.weight']);
         $weightTotal = $daily->sum(fn($row) => (float) $row->weight);
-        $automaticScore = $weightTotal > 0
+        $dailyAverage = $weightTotal > 0
             ? round($daily->sum(fn($row) => ((float) $row->score / (float) $row->max_score) * 100 * (float) $row->weight) / $weightTotal, 2)
             : null;
+        $attendancePercentage = $this->subjectAttendancePercentage($assignment, $student->id);
+        $automaticScore = $this->blendAutomaticScore($assignment, $dailyAverage, $attendancePercentage);
         $manualScore = FinalGrade::query()->where('teacher_subject_id', $assignment->id)
             ->where('student_id', $student->id)->value('score');
         $score = $assignment->grading_method === 'automatic' ? $automaticScore : $manualScore;
@@ -383,9 +389,49 @@ class AssessmentController extends Controller
             'subject' => $assignment->subject?->nama_mapel ?? '-',
             'teacher' => $assignment->teacher?->nama_lengkap ?? '-',
             'grading_method' => $assignment->grading_method ?? 'manual',
-            'daily_average' => $automaticScore,
+            'daily_average' => $dailyAverage,
+            'attendance_percentage' => $attendancePercentage,
             'final_score' => $score,
         ];
+    }
+
+    /**
+     * Persentase kehadiran siswa pada sesi KBM mapel ini (Hadir/Terlambat/Dispen
+     * dihitung hadir). Null bila belum ada sesi tercatat.
+     */
+    private function subjectAttendancePercentage(TeacherSubject $assignment, int $studentId): ?float
+    {
+        $counts = AttendanceDetail::query()
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->where('teacher_attendances.subject_id', $assignment->subject_id)
+            ->where('teacher_attendances.classroom_id', $assignment->classroom_id)
+            ->where('teacher_attendances.academic_year_id', $assignment->academic_year_id)
+            ->where('attendance_details.student_id', $studentId)
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw("SUM(CASE WHEN attendance_details.status IN ('Hadir','Terlambat','Dispen') THEN 1 ELSE 0 END) AS hadir")
+            ->first();
+
+        if (!$counts || (int) $counts->total === 0) {
+            return null;
+        }
+
+        return round(((int) $counts->hadir / (int) $counts->total) * 100, 2);
+    }
+
+    /**
+     * Nilai akhir otomatis = rata-rata nilai harian × (100% − bobot absensi)
+     * + persentase kehadiran mapel × bobot absensi. Komponen yang belum ada
+     * datanya tidak ikut dihitung (bobot dinormalisasi).
+     */
+    private function blendAutomaticScore(TeacherSubject $assignment, ?float $dailyAverage, ?float $attendancePercentage): ?float
+    {
+        $weight = max(0.0, min(100.0, (float) ($assignment->attendance_weight ?? 30))) / 100;
+
+        if ($dailyAverage !== null && $attendancePercentage !== null) {
+            return round($dailyAverage * (1 - $weight) + $attendancePercentage * $weight, 2);
+        }
+
+        return $dailyAverage ?? $attendancePercentage;
     }
 
     private function adminRows(string $kind, array $filters, Request $request)
@@ -422,8 +468,8 @@ class AssessmentController extends Controller
     {
         return match ($kind) {
             'daily' => ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Penilaian', 'Jenis', 'Tanggal', 'Nilai', 'Skor Maksimum', 'Bobot'],
-            'final' => ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos'],
-            default => ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos'],
+            'final' => ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos'],
+            default => ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos'],
         };
     }
 
@@ -456,6 +502,17 @@ class AssessmentController extends Controller
                 ->groupBy('daily_assessments.teacher_subject_id', 'daily_assessment_scores.student_id')
                 ->get()
                 ->keyBy(fn($row) => $row->teacher_subject_id . ':' . $row->student_id);
+            // Persentase kehadiran per mapel per siswa (komponen nilai akhir otomatis).
+            $subjectAttendance = DB::table('attendance_details')
+                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+                ->where('teacher_attendances.academic_year_id', $filters['academic_year_id'])
+                ->whereIn('attendance_details.student_id', $studentIds)
+                ->select('teacher_attendances.subject_id', 'teacher_attendances.classroom_id', 'attendance_details.student_id')
+                ->selectRaw('COUNT(*) AS total')
+                ->selectRaw("SUM(CASE WHEN attendance_details.status IN ('Hadir','Terlambat','Dispen') THEN 1 ELSE 0 END) AS hadir")
+                ->groupBy('teacher_attendances.subject_id', 'teacher_attendances.classroom_id', 'attendance_details.student_id')
+                ->get()
+                ->keyBy(fn($row) => $row->subject_id . ':' . $row->classroom_id . ':' . $row->student_id);
             $attendanceByStudent = DB::table('attendance_details')
                 ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
                 ->where('teacher_attendances.academic_year_id', $filters['academic_year_id'])
@@ -473,7 +530,13 @@ class AssessmentController extends Controller
                 foreach ($studentsByClass->get($assignment->classroom_id, collect()) as $student) {
                     $key = $assignment->id . ':' . $student->id;
                     $manual = $manualScores->get($key)?->score;
-                    $automatic = $automaticScores->get($key)?->weighted_score;
+                    $dailyAverage = $automaticScores->get($key)?->weighted_score;
+                    $dailyAverage = $dailyAverage === null ? null : round((float) $dailyAverage, 2);
+                    $attendanceRow = $subjectAttendance->get($assignment->subject_id . ':' . $assignment->classroom_id . ':' . $student->id);
+                    $attendancePercentage = $attendanceRow && (int) $attendanceRow->total > 0
+                        ? round(((int) $attendanceRow->hadir / (int) $attendanceRow->total) * 100, 2)
+                        : null;
+                    $automatic = $this->blendAutomaticScore($assignment, $dailyAverage, $attendancePercentage);
                     $grade = ($assignment->grading_method ?? 'manual') === 'automatic' ? $automatic : $manual;
                     $counts = $attendanceByStudent->get($student->id);
                     $rows->push([
@@ -483,6 +546,8 @@ class AssessmentController extends Controller
                         'NIS' => $student->nis,
                         'Siswa' => $student->nama_lengkap,
                         'Metode Nilai' => ($assignment->grading_method ?? 'manual') === 'automatic' ? 'Otomatis' : 'Manual',
+                        'Rata-rata Harian' => $dailyAverage,
+                        'Kehadiran Mapel (%)' => $attendancePercentage,
                         'Nilai Akhir' => $grade === null ? null : round((float) $grade, 2),
                         'Hadir/Terlambat/Dispen' => (int) ($counts->hadir ?? 0),
                         'Sakit' => (int) ($counts->sakit ?? 0),

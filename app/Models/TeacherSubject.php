@@ -14,6 +14,11 @@ class TeacherSubject extends Model
         'classroom_id',
         'academic_year_id',
         'grading_method',
+        'attendance_weight',
+    ];
+
+    protected $casts = [
+        'attendance_weight' => 'decimal:2',
     ];
 
     public function teacher()

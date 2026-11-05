@@ -8,6 +8,7 @@ class DailyAssessment extends Model
 {
     protected $fillable = [
         'teacher_subject_id',
+        'pjj_assignment_id',
         'title',
         'type',
         'assessment_date',
@@ -29,5 +30,10 @@ class DailyAssessment extends Model
     public function scores()
     {
         return $this->hasMany(DailyAssessmentScore::class);
+    }
+
+    public function pjjAssignment()
+    {
+        return $this->belongsTo(PjjAssignment::class);
     }
 }

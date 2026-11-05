@@ -20,7 +20,7 @@
         <div class="alert alert-danger"><strong>Periksa kembali data:</strong><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
     @if (!$isPjjActiveToday)
-        <div class="alert alert-warning"><i class="fas fa-info-circle mr-1"></i> Mode PJJ tidak aktif hari ini. Tugas baru hanya dapat dipublikasikan pada hari PJJ.</div>
+        <div class="alert alert-info"><i class="fas fa-info-circle mr-1"></i> Mode PJJ tidak aktif hari ini. Tugas tetap dapat dipublikasikan untuk pembelajaran biasa dan nilainya otomatis terekam ke penilaian harian; sinkronisasi absensi guru hanya berlaku pada hari PJJ.</div>
     @endif
 
     <div class="card card-primary card-outline">
@@ -143,9 +143,13 @@
                     <div class="alert alert-info mb-0">Tidak ada kelas dan mata pelajaran yang Anda ampu pada jadwal hari ini. Tugas PJJ hanya dapat dipublikasikan sesuai jadwal pembelajaran biasa.</div>
                 @endif
             </div>
-            <div class="card-footer d-flex justify-content-between align-items-center">
-                <small class="text-muted">Tugas akan terlihat oleh seluruh siswa di kelas yang dipilih.</small>
-                <button class="btn btn-primary btn-sm" @disabled($teacherSubjects->isEmpty() || !$isPjjActiveToday)><i class="fas fa-paper-plane mr-1"></i> Publikasikan tugas</button>
+            <div class="card-footer d-flex justify-content-between align-items-center flex-wrap">
+                <small class="text-muted">Tugas akan terlihat oleh seluruh siswa di kelas yang dipilih. Gunakan <strong>Simpan draf</strong> agar penulisan soal tidak hilang sebelum dipublikasikan (lampiran file tidak ikut tersimpan).</small>
+                <div class="text-nowrap">
+                    <button type="button" id="btn-clear-draft" class="btn btn-outline-danger btn-sm d-none" title="Hapus draf tersimpan"><i class="far fa-trash-alt"></i></button>
+                    <button type="button" id="btn-save-draft" class="btn btn-outline-secondary btn-sm" @disabled($teacherSubjects->isEmpty())><i class="far fa-save mr-1"></i> Simpan draf</button>
+                    <button class="btn btn-primary btn-sm" @disabled($teacherSubjects->isEmpty())><i class="fas fa-paper-plane mr-1"></i> Publikasikan tugas</button>
+                </div>
             </div>
         </form>
     </div>
@@ -567,8 +571,133 @@
                 return null;
             }
 
+            // --- Restore builder <- data (kebalikan collectQuestions) ---
+            function restoreQuestions(type, data) {
+                if (!data || typeof data !== 'object') { return; }
+                if (type === 'multiple_choice' && Array.isArray(data.items)) {
+                    $('#mc-questions').empty();
+                    data.items.forEach(function (item) {
+                        const options = (item.options || []).slice();
+                        while (options.length < 5) { options.push(''); }
+                        mcAdd({
+                            question: item.question || '',
+                            options: options,
+                            correct: typeof item.correct === 'number' ? item.correct : null
+                        });
+                    });
+                    if ($('#mc-questions .mc-question').length === 0) { mcAdd(); }
+                }
+                if (type === 'matching' && Array.isArray(data.pairs)) {
+                    $('#match-pairs').empty();
+                    data.pairs.forEach(function (pair) { matchAdd(pair.left, pair.right); });
+                    while ($('#match-pairs .match-pair').length < 2) { matchAdd(); }
+                }
+                if (type === 'sequence') {
+                    $('#seq-instruction').val(data.instruction || '');
+                    if (Array.isArray(data.items)) {
+                        $('#seq-items').empty();
+                        data.items.forEach(function (value) { seqAdd(value); });
+                        while ($('#seq-items .seq-item').length < 2) { seqAdd(); }
+                    }
+                }
+                if (type === 'fill_blank') {
+                    $('#fb-text').val(data.text || '');
+                    $('#fb-distractors').val((data.distractors || []).join(', '));
+                }
+                if (type === 'hotspot') {
+                    hotspotLabels = Array.isArray(data.labels) ? data.labels : [];
+                    if (data.tolerance) { $('#hotspot-tolerance').val(data.tolerance); }
+                    hotspotRender();
+                }
+                if (type === 'category_sort' && Array.isArray(data.categories)) {
+                    $('#cat-categories').empty();
+                    data.categories.forEach(function (category) { catAdd(category.name, category.items); });
+                    while ($('#cat-categories .cat-category').length < 2) { catAdd(); }
+                }
+            }
+
             // Baris awal agar builder tidak kosong.
             mcAdd(); matchAdd(); matchAdd(); seqAdd(); seqAdd(); catAdd(); catAdd();
+
+            // ================= DRAF LOKAL + PEMULIHAN SOAL =================
+            const DRAFT_KEY = 'pjjTeacherDraft:{{ $teacher->id }}';
+            const hasOldInput = @json(session()->hasOldInput());
+
+            function buildDraftObject() {
+                const type = $('#task_type').val();
+                return {
+                    teacher_subject_id: $('#teacher_subject_id').val() || '',
+                    extra_teacher_subject_ids: $('input[name="extra_teacher_subject_ids[]"]:checked').map(function () { return this.value; }).get(),
+                    task_type: type,
+                    title: $('#title').val() || '',
+                    due_at: $('#due_at').val() || '',
+                    instructions: $('#instructions').val() || '',
+                    questions: INTERACTIVE_TYPES.includes(type) ? collectQuestions(type) : null,
+                    saved_at: new Date().toISOString()
+                };
+            }
+
+            function saveDraft() {
+                try {
+                    localStorage.setItem(DRAFT_KEY, JSON.stringify(buildDraftObject()));
+                    toggleClearDraftButton();
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function applyDraft(draft) {
+                $('#teacher_subject_id').val(draft.teacher_subject_id || '');
+                refreshExtraClasses();
+                (draft.extra_teacher_subject_ids || []).forEach(function (id) {
+                    $('#extra-class-' + id).prop('checked', true);
+                });
+                $('#task_type').val(draft.task_type || 'essay');
+                $('#title').val(draft.title || '');
+                $('#due_at').val(draft.due_at || '');
+                $('#instructions').val(draft.instructions || '');
+                switchBuilder();
+                if (draft.questions) {
+                    restoreQuestions(draft.task_type, draft.questions);
+                }
+            }
+
+            function toggleClearDraftButton() {
+                $('#btn-clear-draft').toggleClass('d-none', !localStorage.getItem(DRAFT_KEY));
+            }
+
+            $('#btn-save-draft').on('click', function () {
+                if (saveDraft()) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Draf tersimpan',
+                        text: 'Penulisan tugas disimpan di peramban ini dan akan ditawarkan kembali saat halaman dibuka. Lampiran file tidak ikut tersimpan.',
+                        timer: 3500,
+                        timerProgressBar: true,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Gagal', 'Draf tidak dapat disimpan di peramban ini.', 'error');
+                }
+            });
+
+            $('#btn-clear-draft').on('click', function () {
+                Swal.fire({
+                    title: 'Hapus draf tersimpan?',
+                    text: 'Draf penulisan tugas di peramban ini akan dihapus.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Hapus',
+                    cancelButtonText: 'Batal'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        localStorage.removeItem(DRAFT_KEY);
+                        toggleClearDraftButton();
+                    }
+                });
+            });
 
             $('form[action="{{ route('guru.pjj.assignments.store') }}"]').on('submit', function () {
                 const type = $('#task_type').val();
@@ -577,9 +706,50 @@
                 } else {
                     $('#questions-json').val('');
                 }
+                // Jaring pengaman: simpan draf otomatis agar soal tidak hilang bila publish gagal.
+                saveDraft();
             });
 
+            @if (session('success'))
+                // Publish berhasil: draf tidak diperlukan lagi.
+                localStorage.removeItem(DRAFT_KEY);
+            @endif
+
             switchBuilder();
+
+            // Gagal validasi (mis. ada soal tanpa kunci jawaban): pulihkan isi builder
+            // dari old input agar guru tidak menulis ulang dari awal.
+            if (hasOldInput) {
+                const oldQuestionsRaw = $('#questions-json').val();
+                if (oldQuestionsRaw) {
+                    try {
+                        restoreQuestions($('#task_type').val(), JSON.parse(oldQuestionsRaw));
+                    } catch (e) { /* JSON rusak: biarkan builder default */ }
+                }
+            } else {
+                const draftRaw = localStorage.getItem(DRAFT_KEY);
+                if (draftRaw) {
+                    let draft = null;
+                    try { draft = JSON.parse(draftRaw); } catch (e) { localStorage.removeItem(DRAFT_KEY); }
+                    if (draft) {
+                        Swal.fire({
+                            title: 'Muat draf tugas?',
+                            html: 'Ada draf penulisan tugas tersimpan' + (draft.title ? ': <strong>' + escapeHtml(draft.title) + '</strong>' : '') +
+                                (draft.saved_at ? '<br><small class="text-muted">Disimpan ' + new Date(draft.saved_at).toLocaleString('id-ID') + '</small>' : ''),
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: '<i class="far fa-folder-open mr-1"></i> Muat draf',
+                            cancelButtonText: 'Nanti saja'
+                        }).then(function (result) {
+                            if (result.isConfirmed) {
+                                applyDraft(draft);
+                            }
+                        });
+                    }
+                }
+            }
+
+            toggleClearDraftButton();
         });
     </script>
 @stop

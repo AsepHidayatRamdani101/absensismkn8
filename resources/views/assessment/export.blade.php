@@ -17,8 +17,8 @@
         $fallbackHeadings = $kind === 'daily'
             ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Penilaian', 'Jenis', 'Tanggal', 'Nilai', 'Skor Maksimum', 'Bobot']
             : ($kind === 'final'
-                ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']
-                : ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']);
+                ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']
+                : ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']);
         $headings = array_keys($rows->first() ?? array_fill_keys($fallbackHeadings, ''));
     @endphp
     <table>

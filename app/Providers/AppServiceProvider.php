@@ -147,18 +147,20 @@ class AppServiceProvider extends ServiceProvider
             return $user->hasRole('siswa');
         });
 
+        // Menu PJJ/tugas tetap tampil pada pembelajaran biasa (tugas berlaku sepanjang tahun).
         Gate::define('pjj-admin-menu', function ($user) {
-            return $user->hasRole('admin') && SchoolCalendar::isPjj(Carbon::today());
+            return $user->hasRole('admin');
         });
 
         Gate::define('pjj-guru-menu', function ($user) {
-            return $user->hasRole('guru') && SchoolCalendar::isPjj(Carbon::today());
+            return $user->hasRole('guru');
         });
 
         Gate::define('pjj-siswa-menu', function ($user) {
-            return $user->hasRole('siswa') && SchoolCalendar::isPjj(Carbon::today());
+            return $user->hasRole('siswa');
         });
 
+        // Monitoring PJJ wali kelas hanya relevan (dan tampil) saat mode PJJ aktif.
         Gate::define('pjj-wali-menu', function ($user) {
             return SchoolCalendar::isPjj(Carbon::today())
                 && Gate::forUser($user)->allows('guru-wali-kelas');

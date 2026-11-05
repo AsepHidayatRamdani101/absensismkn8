@@ -31,7 +31,11 @@
         $isLateToday = $todayAttendance?->status === 'Terlambat';
     @endphp
 
-    <div class="card card-info card-outline">
+    @if (!$isPjjActiveToday)
+        <div class="alert alert-info"><i class="fas fa-info-circle mr-1"></i> Mode PJJ tidak aktif hari ini. Absensi selfie hanya tersedia pada hari PJJ; daftar tugas tetap dapat dikerjakan dan dikumpulkan.</div>
+    @endif
+
+    <div class="card card-info card-outline {{ $isPjjActiveToday ? '' : 'd-none' }}">
         <div class="card-header"><h3 class="card-title"><i class="fas fa-camera mr-1"></i> Absensi Selfie Hari Ini</h3></div>
         <div class="card-body">
             <div class="row mb-3">
@@ -67,6 +71,8 @@
                     <span class="text-success mr-3"><i class="fas fa-check-circle fa-2x"></i></span>
                     <div><strong>Absensi hari ini sudah lengkap.</strong><div class="text-muted">Datang pukul {{ $checkInTime->format('H:i') }} · Pulang pukul {{ $checkOutTime->format('H:i') }}.</div></div>
                 </div>
+            @elseif (!$isPjjActiveToday)
+                <p class="text-muted mb-0">Absensi selfie hanya tersedia saat mode PJJ aktif.</p>
             @else
                 <form id="pjj-attendance-form" method="POST" action="{{ route('siswa.pjj.attendance') }}">
                     @csrf

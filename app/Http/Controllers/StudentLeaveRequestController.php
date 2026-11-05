@@ -120,11 +120,25 @@ class StudentLeaveRequestController extends Controller
 
         $pendingCount = (int) $requests->where('status_pengajuan', 'Menunggu')->count();
 
+        // Status terkunci hari ini: pengajuan disetujui yang rentangnya mencakup hari ini.
+        // Otomatis ter-reset saat ganti hari karena dihitung ulang terhadap tanggal hari ini.
+        $today = Carbon::today()->toDateString();
+        $todayLeaves = StudentLeaveRequest::query()
+            ->whereIn('student_id', $students->pluck('id'))
+            ->where('status_pengajuan', 'Disetujui')
+            ->whereDate('tanggal_mulai', '<=', $today)
+            ->whereDate('tanggal_selesai', '>=', $today)
+            ->latest()
+            ->get()
+            ->unique('student_id')
+            ->keyBy('student_id');
+
         return view('guru.wali_kelas.leave_requests.index', [
             'teacher' => $teacher,
             'students' => $students,
             'requests' => $requests,
             'pendingCount' => $pendingCount,
+            'todayLeaves' => $todayLeaves,
         ]);
     }
 
@@ -263,20 +277,28 @@ class StudentLeaveRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'tanggal_mulai' => 'required|date',
-            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
-            'alasan_umum' => 'required|string|max:2000',
-            'entries' => 'required|array|min:1',
+            'tanggal_mulai' => 'required_with:entries|date',
+            'tanggal_selesai' => 'required_with:entries|date|after_or_equal:tanggal_mulai',
+            'alasan_umum' => 'required_with:entries|string|max:2000',
+            'entries' => 'nullable|array',
             'entries.*.student_id' => 'required|integer|exists:students,id',
             'entries.*.jenis_pengajuan' => 'required|in:Izin,Sakit,Dispen',
             'entries.*.alasan' => 'nullable|string|max:2000',
+            'cancel_student_ids' => 'nullable|array',
+            'cancel_student_ids.*' => 'integer|exists:students,id',
         ], [
-            'entries.required' => 'Pilih minimal satu siswa (Izin/Sakit) terlebih dahulu.',
-            'alasan_umum.required' => 'Alasan umum wajib diisi.',
+            'alasan_umum.required_with' => 'Alasan umum wajib diisi.',
         ]);
 
+        $entries = $validated['entries'] ?? [];
+        $cancelIds = collect($validated['cancel_student_ids'] ?? [])->map(fn($id) => (int) $id)->unique();
+
+        if ($entries === [] && $cancelIds->isEmpty()) {
+            return response()->json(['message' => 'Pilih minimal satu siswa terlebih dahulu.'], 422);
+        }
+
         // Pastikan semua siswa milik kelas wali sebelum menyimpan apapun.
-        $studentIds = collect($validated['entries'])->pluck('student_id')->map(fn($id) => (int) $id)->unique();
+        $studentIds = collect($entries)->pluck('student_id')->map(fn($id) => (int) $id)->merge($cancelIds)->unique();
 
         $students = Student::query()
             ->whereIn('id', $studentIds)
@@ -289,13 +311,48 @@ class StudentLeaveRequestController extends Controller
         }
 
         $savedCount = 0;
+        $updatedCount = 0;
+        $cancelledCount = 0;
+        $today = Carbon::today()->toDateString();
 
-        DB::transaction(function () use ($validated, $students, $teacher, &$savedCount) {
-            foreach ($validated['entries'] as $entry) {
+        // Pengajuan disetujui yang masih berlaku hari ini, untuk dideteksi sebagai update/batal.
+        $activeLeaves = StudentLeaveRequest::query()
+            ->whereIn('student_id', $studentIds)
+            ->where('status_pengajuan', 'Disetujui')
+            ->whereDate('tanggal_mulai', '<=', $today)
+            ->whereDate('tanggal_selesai', '>=', $today)
+            ->latest()
+            ->get()
+            ->unique('student_id')
+            ->keyBy('student_id');
+
+        DB::transaction(function () use ($validated, $entries, $cancelIds, $students, $teacher, $activeLeaves, &$savedCount, &$updatedCount, &$cancelledCount) {
+            foreach ($entries as $entry) {
                 $student = $students->get((int) $entry['student_id']);
                 $alasan = trim((string) ($entry['alasan'] ?? '')) !== ''
                     ? trim($entry['alasan'])
                     : $validated['alasan_umum'];
+
+                // Pilih ulang: izin aktif hari ini diperbarui, bukan dibuat ganda.
+                $existing = $activeLeaves->get($student->id);
+
+                if ($existing) {
+                    $this->revertLeaveFromAttendanceDetails($existing);
+
+                    $existing->update([
+                        'jenis_pengajuan' => $entry['jenis_pengajuan'],
+                        'tanggal_mulai' => $validated['tanggal_mulai'],
+                        'tanggal_selesai' => $validated['tanggal_selesai'],
+                        'alasan' => $alasan,
+                        'catatan_wali' => 'Input langsung wali kelas (input cepat massal — diperbarui).',
+                        'verified_by_teacher_id' => $teacher->id,
+                        'verified_at' => now(),
+                    ]);
+
+                    $this->applyLeaveToAttendanceDetails($existing->fresh());
+                    $updatedCount++;
+                    continue;
+                }
 
                 $leaveRequest = StudentLeaveRequest::create([
                     'student_id' => $student->id,
@@ -313,11 +370,42 @@ class StudentLeaveRequestController extends Controller
                 $this->applyLeaveToAttendanceDetails($leaveRequest);
                 $savedCount++;
             }
+
+            // Kembali Hadir: izin aktif hari ini dihapus beserta absensi hasil auto-fill-nya.
+            foreach ($cancelIds as $studentId) {
+                $existing = $activeLeaves->get($studentId);
+
+                if (!$existing) {
+                    continue;
+                }
+
+                $this->revertLeaveFromAttendanceDetails($existing);
+
+                if ($existing->foto_surat_path) {
+                    Storage::disk('public')->delete($existing->foto_surat_path);
+                }
+
+                $existing->delete();
+                $cancelledCount++;
+            }
         });
 
+        $parts = [];
+        if ($savedCount > 0) {
+            $parts[] = $savedCount . ' izin/sakit siswa disimpan';
+        }
+        if ($updatedCount > 0) {
+            $parts[] = $updatedCount . ' status siswa diperbarui';
+        }
+        if ($cancelledCount > 0) {
+            $parts[] = $cancelledCount . ' siswa dikembalikan ke Hadir';
+        }
+
         return response()->json([
-            'message' => $savedCount . ' izin/sakit siswa berhasil disimpan dan absensi otomatis diisikan.',
+            'message' => ($parts !== [] ? implode(', ', $parts) : 'Tidak ada perubahan') . '. Absensi otomatis disesuaikan.',
             'saved' => $savedCount,
+            'updated' => $updatedCount,
+            'cancelled' => $cancelledCount,
         ]);
     }
 

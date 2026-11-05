@@ -36,4 +36,9 @@ class PjjAssignment extends Model
     {
         return $this->hasMany(PjjSubmission::class);
     }
+
+    public function dailyAssessment()
+    {
+        return $this->hasOne(DailyAssessment::class);
+    }
 }

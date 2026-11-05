@@ -32,22 +32,28 @@
             <div class="card-body">
                 <form method="POST" action="{{ route('guru.assessments.final.method', $assignment) }}" class="form-row align-items-end">
                     @csrf
-                    <div class="form-group col-md-5">
+                    <div class="form-group col-md-4">
                         <label>Metode nilai akhir</label>
                         <select name="grading_method" class="form-control form-control-sm">
                             <option value="manual" @selected(($assignment->grading_method ?? 'manual') === 'manual')>Input manual oleh guru</option>
-                            <option value="automatic" @selected(($assignment->grading_method ?? 'manual') === 'automatic')>Otomatis: rata-rata berbobot nilai harian</option>
+                            <option value="automatic" @selected(($assignment->grading_method ?? 'manual') === 'automatic')>Otomatis: nilai harian + kehadiran mapel</option>
                         </select>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Bobot kehadiran mapel (%)</label>
+                        <input type="number" name="attendance_weight" class="form-control form-control-sm"
+                            min="0" max="100" step="0.5" value="{{ $assignment->attendance_weight ?? 30 }}">
                     </div>
                     <div class="form-group col-md-3"><button class="btn btn-primary btn-sm">Simpan Metode</button></div>
                 </form>
                 <p class="text-muted">
-                    Nilai otomatis memakai skor yang dinormalisasi ke skala 0–100 dan dirata-rata berdasarkan bobot setiap project/tugas.
+                    Nilai otomatis = rata-rata berbobot nilai harian (termasuk nilai tugas PJJ yang terekam otomatis) ×
+                    (100% − bobot kehadiran) + persentase kehadiran siswa pada mapel ini × bobot kehadiran.
                 </p>
                 <table id="finalGradesTable" class="table table-bordered table-striped table-sm w-100"
                     data-url="{{ route('guru.assessments.final.data') }}"
                     data-save-url="{{ url('/guru/penilaian-akhir/' . $assignment->id . '/scores') }}">
-                    <thead><tr><th>No</th><th>NIS</th><th>Nama Siswa</th><th>Rata-rata Nilai Harian</th><th>Nilai Akhir</th><th>Metode</th></tr></thead>
+                    <thead><tr><th>No</th><th>NIS</th><th>Nama Siswa</th><th>Rata-rata Nilai Harian</th><th>Kehadiran Mapel (%)</th><th>Nilai Akhir</th><th>Metode</th></tr></thead>
                 </table>
                 <input type="hidden" id="teacherSubjectId" value="{{ $assignment->id }}">
             </div>
@@ -74,6 +80,7 @@
                         { data: 'nis' },
                         { data: 'student' },
                         { data: 'daily_average', render: function (value) { return value ?? '-'; } },
+                        { data: 'attendance_percentage', render: function (value) { return value ?? '-'; } },
                         { data: 'final_score', render: function (value, _, row) {
                             return row.grading_method === 'manual'
                                 ? '<input type="number" class="form-control form-control-sm final-score" data-id="' + row.student_id

@@ -12,6 +12,7 @@ use App\Models\Teacher;
 use App\Models\TeacherSubject;
 use App\Models\Subject;
 use App\Models\Holiday;
+use App\Services\AssignmentGradeSyncService;
 use App\Services\PjjAttendanceSyncService;
 use App\Support\PjjTaskType;
 use App\Support\PklMode;
@@ -27,8 +28,10 @@ use Illuminate\Validation\ValidationException;
 
 class PjjController extends Controller
 {
-    public function __construct(private readonly PjjAttendanceSyncService $attendanceSync)
-    {
+    public function __construct(
+        private readonly PjjAttendanceSyncService $attendanceSync,
+        private readonly AssignmentGradeSyncService $gradeSync
+    ) {
     }
 
     public function adminIndex(Request $request, string $section = 'dashboard')
@@ -116,7 +119,7 @@ class PjjController extends Controller
 
     public function teacherStoreAssignment(Request $request)
     {
-        $this->ensurePjjActive();
+        // Tugas dapat dipublikasikan baik saat PJJ maupun pembelajaran biasa.
         $teacher = $this->teacherForCurrentUser();
         $data = $request->validate([
             'teacher_subject_id' => ['required', 'integer', 'exists:teacher_subjects,id'],
@@ -179,6 +182,8 @@ class PjjController extends Controller
 
         $attachmentPath = $request->file('attachment')?->store('pjj/assignments', 'local');
 
+        $isPjjToday = SchoolCalendar::isPjj(Carbon::today());
+
         foreach ($teacherSubjects as $teacherSubject) {
             $assignment = PjjAssignment::query()->create([
                 'teacher_id' => $teacher->id,
@@ -191,8 +196,13 @@ class PjjController extends Controller
                 'due_at' => $data['due_at'] ?? null,
             ]);
 
-            // Sinkronkan ke absensi reguler: upload tugas PJJ = guru hadir pada sesi KBM hari ini.
-            $this->attendanceSync->syncTeacherAssignment($assignment);
+            // Tugas otomatis terekam sebagai penilaian harian (nilai harian/nilai akhir).
+            $this->gradeSync->syncAssignment($assignment);
+
+            // Khusus mode PJJ: upload tugas = guru hadir pada sesi KBM hari ini.
+            if ($isPjjToday) {
+                $this->attendanceSync->syncTeacherAssignment($assignment);
+            }
         }
 
         $message = $teacherSubjects->count() > 1
@@ -247,6 +257,9 @@ class PjjController extends Controller
         if ($oldAttachmentPath && $oldAttachmentPath !== $attachmentPath) {
             $this->deleteAssignmentAttachmentIfUnused($oldAttachmentPath);
         }
+
+        // Judul penilaian harian mengikuti judul tugas terbaru.
+        $this->gradeSync->syncAssignment($assignment->fresh());
 
         return redirect()->route('guru.pjj.index')->with('success', 'Tugas PJJ berhasil diperbarui.');
     }
@@ -312,6 +325,9 @@ class PjjController extends Controller
             'graded_at' => now(),
         ]);
 
+        // Rekam ke penilaian harian agar ikut nilai harian & nilai akhir.
+        $this->gradeSync->syncSubmissionScore($submission->fresh('assignment'));
+
         if ($request->expectsJson()) {
             return response()->json(['message' => 'Nilai tugas siswa berhasil disimpan.']);
         }
@@ -346,6 +362,9 @@ class PjjController extends Controller
                     'feedback' => ($grade['feedback'] ?? '') !== '' ? $grade['feedback'] : null,
                     'graded_at' => now(),
                 ]);
+
+                // Rekam ke penilaian harian agar ikut nilai harian & nilai akhir.
+                $this->gradeSync->syncSubmissionScore($submission);
             }
         });
 
@@ -394,7 +413,9 @@ class PjjController extends Controller
             ->orderBy('nama_mapel')
             ->get(['id', 'nama_mapel']);
 
-        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'attendanceHistory', 'subjects', 'pjjDates'));
+        $isPjjActiveToday = SchoolCalendar::isPjj(Carbon::today());
+
+        return view('siswa.pjj.index', compact('student', 'todayAttendance', 'attendanceHistory', 'subjects', 'pjjDates', 'isPjjActiveToday'));
     }
 
     public function studentShowQuestions(PjjAssignment $assignment)
@@ -417,7 +438,7 @@ class PjjController extends Controller
 
     public function studentSubmitAssignment(Request $request, PjjAssignment $assignment)
     {
-        $this->ensurePjjActive();
+        // Pengumpulan tugas berlaku saat PJJ maupun pembelajaran biasa.
         $student = $this->studentForCurrentUser();
         abort_unless($assignment->teacherSubject()->where('classroom_id', $student->classroom_id)->exists(), 403);
 
@@ -447,6 +468,9 @@ class PjjController extends Controller
             $submission->feedback = 'Dinilai otomatis oleh sistem (' . PjjTaskType::label($taskType) . ').';
             $submission->graded_at = now();
             $submission->save();
+
+            // Nilai otomatis langsung terekam ke penilaian harian.
+            $this->gradeSync->syncSubmissionScore($submission->setRelation('assignment', $assignment));
 
             $message = 'Jawaban terkirim. Nilai Anda: ' . rtrim(rtrim(number_format($autoScore, 2, '.', ''), '0'), '.') . '.';
 
