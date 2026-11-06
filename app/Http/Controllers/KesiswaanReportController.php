@@ -285,7 +285,7 @@ class KesiswaanReportController extends Controller
                         'expected' => $stats['expected'],
                         'present' => $stats['present'],
                         'percentage' => $stats['expected'] > 0
-                            ? round(($stats['complete'] / $stats['expected']) * 100, 2)
+                            ? round(($stats['present'] / $stats['expected']) * 100, 2)
                             : 0,
                         'student_attendance' => $stats['student_attendance'],
                         'agenda' => $stats['agenda'],

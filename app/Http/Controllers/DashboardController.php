@@ -633,20 +633,16 @@ class DashboardController extends Controller
                 ->where('classroom_id', $assignment->classroom_id)
                 ->whereBetween('tanggal', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()])
                 ->with('attendanceDetails')
-                ->get();
+                ->orderByDesc('id')
+                ->get()
+                ->unique(fn (TeacherAttendance $record) => $record->schedule_id . ':' . $record->tanggal->toDateString())
+                ->values();
 
-            $completeRecords = $records->filter(function (TeacherAttendance $record): bool {
-                $agendaFilled = trim((string) $record->materi_pembelajaran) !== '';
-                $teacherPresent = $record->kehadiran_guru === 'Hadir';
-                $studentCount = Student::query()->where('classroom_id', $record->classroom_id)->count();
-                $recapComplete = $studentCount > 0
-                    && $record->attendanceDetails->count() === $studentCount
-                    && $record->attendanceDetails->every(fn (AttendanceDetail $detail) => trim((string) $detail->status) !== '');
+            $presentRecords = $records->filter(
+                fn (TeacherAttendance $record): bool => $record->kehadiran_guru === 'Hadir'
+            );
 
-                return $agendaFilled && $teacherPresent && $recapComplete;
-            });
-
-            if ($records->count() === $expected && $completeRecords->count() === $expected) {
+            if ($records->count() === $expected && $presentRecords->count() === $expected) {
                 $perfectTeachersPreviousMonth->push([
                     'name' => $assignment->teacher?->nama_lengkap ?? '-',
                     'subject' => $assignment->subject?->nama_mapel ?? '-',
