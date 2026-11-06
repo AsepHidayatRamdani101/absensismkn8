@@ -749,7 +749,9 @@ class DashboardController extends Controller
 
         $schedulePerDayQuery = Schedule::query()
             ->join('teacher_subjects', 'teacher_subjects.id', '=', 'schedules.teacher_subject_id')
+            ->join('academic_years', 'academic_years.id', '=', 'teacher_subjects.academic_year_id')
             ->where('teacher_subjects.teacher_id', $teacherId)
+            ->where('academic_years.is_active', true)
             ->select('schedules.hari', DB::raw('COUNT(*) as total_jadwal'))
             ->groupBy('schedules.hari');
 
