@@ -54,11 +54,13 @@
         <table>
             <thead>
                 <tr>
-                    <th colspan="4">Kehadiran Guru</th>
+                    <th colspan="6">Kehadiran Guru</th>
                 </tr>
                 <tr>
                     <th>Nama Guru</th>
                     <th class="number">Sesi Hadir</th>
+                    <th class="number">Absen Siswa</th>
+                    <th class="number">Agenda</th>
                     <th class="number">Sesi Jadwal Efektif</th>
                     <th class="number">Persentase</th>
                 </tr>
@@ -68,12 +70,14 @@
                     <tr>
                         <td>{{ $teacher['name'] }}</td>
                         <td class="number">{{ $teacher['present'] }}</td>
+                        <td class="number">{{ $teacher['student_attendance'] }}</td>
+                        <td class="number">{{ $teacher['agenda'] }}</td>
                         <td class="number">{{ $teacher['expected'] }}</td>
                         <td class="number">{{ number_format($teacher['percentage'], 2) }}%</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4">Tidak ada jadwal aktif pada periode ini.</td>
+                        <td colspan="6">Tidak ada jadwal aktif pada periode ini.</td>
                     </tr>
                 @endforelse
             </tbody>

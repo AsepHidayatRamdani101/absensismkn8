@@ -71,7 +71,7 @@
                 <div class="alert alert-info">
                     <strong>Periode:</strong> {{ $periodLabel }}.
                     Efektivitas kelas = (Hadir + Terlambat + Dispen) ÷ seluruh catatan status absensi siswa.
-                    Dispen dihitung hadir. Persentase kehadiran guru = sesi jadwal efektif tercatat Hadir ÷ seluruh
+                    Dispen dihitung hadir. Persentase guru = sesi yang sudah mengisi agenda dan absensi siswa ÷ seluruh
                     sesi jadwal efektif. Status siswa ditampilkan sebagai jumlah dan persentase catatan absensi kelas.
                 </div>
                 <h4 class="mt-4">Laporan Efektivitas dan Kehadiran Siswa</h4>
@@ -98,7 +98,9 @@
                                 <th>Kelas</th>
                                 <th>Nama Guru</th>
                                 <th>Sesi Hadir</th>
-                                <th>Sesi Jadwal Efektif</th>
+                                <th>Absen Siswa</th>
+                                <th>Agenda</th>
+                                <th>Sesi Jadwal</th>
                                 <th>Persentase Kehadiran</th>
                             </tr>
                         </thead>
@@ -181,6 +183,8 @@
                         { data: 'classroom', name: 'classroom' },
                         { data: 'teacher', name: 'teacher' },
                         { data: 'present', name: 'present' },
+                        { data: 'student_attendance', name: 'student_attendance' },
+                        { data: 'agenda', name: 'agenda' },
                         { data: 'expected', name: 'expected' },
                         {
                             data: 'percentage',

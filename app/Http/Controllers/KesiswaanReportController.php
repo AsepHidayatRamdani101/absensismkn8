@@ -86,12 +86,14 @@ class KesiswaanReportController extends Controller
                 'teacher' => $teacher['name'],
                 'present' => $teacher['present'],
                 'expected' => $teacher['expected'],
+                'student_attendance' => $teacher['student_attendance'],
+                'agenda' => $teacher['agenda'],
                 'percentage' => $teacher['percentage'],
             ]))
             ->values();
 
         return $this->dataTableResponse($request, $rows, [
-            'classroom', 'teacher', 'present', 'expected', 'percentage',
+            'classroom', 'teacher', 'present', 'expected', 'student_attendance', 'agenda', 'percentage',
         ]);
     }
 
@@ -204,8 +206,9 @@ class KesiswaanReportController extends Controller
         $attendanceByScheduleDate = TeacherAttendance::query()
             ->whereIn('schedule_id', $scheduleIds)
             ->whereBetween('tanggal', [$startDate->toDateString(), $endDate->toDateString()])
+            ->withCount('attendanceDetails')
             ->orderByDesc('id')
-            ->get(['id', 'schedule_id', 'tanggal', 'teacher_id', 'kehadiran_guru'])
+            ->get(['id', 'schedule_id', 'tanggal', 'teacher_id', 'kehadiran_guru', 'status', 'materi_pembelajaran'])
             ->unique(fn(TeacherAttendance $attendance) => $attendance->schedule_id . ':' . $attendance->tanggal->toDateString())
             ->keyBy(fn(TeacherAttendance $attendance) => $attendance->schedule_id . ':' . $attendance->tanggal->toDateString());
 
@@ -219,6 +222,9 @@ class KesiswaanReportController extends Controller
                 'teacher' => $teacherSubject->teacher?->nama_lengkap ?? 'Guru tidak diketahui',
                 'expected' => 0,
                 'present' => 0,
+                'student_attendance' => 0,
+                'agenda' => 0,
+                'complete' => 0,
             ];
 
             foreach ($dates as $date) {
@@ -234,6 +240,19 @@ class KesiswaanReportController extends Controller
                 $teacherAttendance = $attendanceByScheduleDate->get($attendanceKey);
                 if ($teacherAttendance && in_array($teacherAttendance->kehadiran_guru ?? 'Hadir', ['Hadir'], true)) {
                     $teacherStats[$teacherKey]['present']++;
+                }
+                if ($teacherAttendance && $teacherAttendance->status === 'Selesai') {
+                    $teacherStats[$teacherKey]['agenda']++;
+                }
+                if ($teacherAttendance && (int) $teacherAttendance->attendance_details_count > 0) {
+                    $teacherStats[$teacherKey]['student_attendance']++;
+                }
+                if ($teacherAttendance
+                    && $teacherAttendance->kehadiran_guru === 'Hadir'
+                    && $teacherAttendance->status === 'Selesai'
+                    && (int) $teacherAttendance->attendance_details_count > 0
+                ) {
+                    $teacherStats[$teacherKey]['complete']++;
                 }
             }
         }
@@ -266,8 +285,10 @@ class KesiswaanReportController extends Controller
                         'expected' => $stats['expected'],
                         'present' => $stats['present'],
                         'percentage' => $stats['expected'] > 0
-                            ? round(($stats['present'] / $stats['expected']) * 100, 2)
+                            ? round(($stats['complete'] / $stats['expected']) * 100, 2)
                             : 0,
+                        'student_attendance' => $stats['student_attendance'],
+                        'agenda' => $stats['agenda'],
                     ];
                 })
                 ->sortBy('name')
