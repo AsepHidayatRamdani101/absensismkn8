@@ -638,15 +638,21 @@ class DashboardController extends Controller
                 ->unique(fn (TeacherAttendance $record) => $record->schedule_id . ':' . $record->tanggal->toDateString())
                 ->values();
 
-            $presentRecords = $records->filter(
+            $completeRecords = $records->filter(
                 fn (TeacherAttendance $record): bool => $record->kehadiran_guru === 'Hadir'
+                    && $record->status === 'Selesai'
+                    && (int) $record->attendanceDetails->count() > 0
             );
+            $effectivenessPercentage = $expected > 0
+                ? round(($completeRecords->count() / $expected) * 100, 2)
+                : 0;
 
-            if ($records->count() === $expected && $presentRecords->count() === $expected) {
+            if ($records->count() === $expected && $effectivenessPercentage === 100.0) {
                 $perfectTeachersPreviousMonth->push([
                     'name' => $assignment->teacher?->nama_lengkap ?? '-',
                     'subject' => $assignment->subject?->nama_mapel ?? '-',
                     'classroom' => $assignment->classroom?->nama_kelas ?? '-',
+                    'percentage' => $effectivenessPercentage,
                 ]);
             }
         }
