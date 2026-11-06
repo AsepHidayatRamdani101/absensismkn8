@@ -609,9 +609,9 @@ class DashboardController extends Controller
 
         $perfectTeachersPreviousMonth = collect();
         $teacherSubjects = TeacherSubject::query()
-            ->with(['teacher', 'subject'])
+            ->with(['teacher', 'subject', 'classroom'])
             ->get()
-            ->groupBy(fn (TeacherSubject $item) => $item->teacher_id . ':' . $item->subject_id);
+            ->groupBy(fn (TeacherSubject $item) => $item->teacher_id . ':' . $item->subject_id . ':' . $item->classroom_id);
 
         foreach ($teacherSubjects as $assignments) {
             $assignment = $assignments->first();
@@ -619,7 +619,8 @@ class DashboardController extends Controller
                 (int) $assignment->teacher_id,
                 $previousMonthStart->copy(),
                 $previousMonthEnd->copy(),
-                (int) $assignment->subject_id
+                (int) $assignment->subject_id,
+                (int) $assignment->classroom_id
             );
 
             if ($expected <= 0) {
@@ -629,6 +630,7 @@ class DashboardController extends Controller
             $records = TeacherAttendance::query()
                 ->where('teacher_id', $assignment->teacher_id)
                 ->where('subject_id', $assignment->subject_id)
+                ->where('classroom_id', $assignment->classroom_id)
                 ->whereBetween('tanggal', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()])
                 ->with('attendanceDetails')
                 ->get();
@@ -648,6 +650,7 @@ class DashboardController extends Controller
                 $perfectTeachersPreviousMonth->push([
                     'name' => $assignment->teacher?->nama_lengkap ?? '-',
                     'subject' => $assignment->subject?->nama_mapel ?? '-',
+                    'classroom' => $assignment->classroom?->nama_kelas ?? '-',
                 ]);
             }
         }
@@ -730,7 +733,7 @@ class DashboardController extends Controller
         return round(($value / $total) * 100, 2);
     }
 
-    private function countExpectedTeacherSessions(int $teacherId, Carbon $startDate, Carbon $endDate, ?int $subjectId = null): int
+    private function countExpectedTeacherSessions(int $teacherId, Carbon $startDate, Carbon $endDate, ?int $subjectId = null, ?int $classroomId = null): int
     {
         $dayMap = [
             1 => 'Senin',
@@ -750,6 +753,10 @@ class DashboardController extends Controller
 
         if ($subjectId !== null) {
             $schedulePerDayQuery->where('teacher_subjects.subject_id', $subjectId);
+        }
+
+        if ($classroomId !== null) {
+            $schedulePerDayQuery->where('teacher_subjects.classroom_id', $classroomId);
         }
 
         $schedulePerDay = PklMode::applyToScheduleQuery($schedulePerDayQuery)
