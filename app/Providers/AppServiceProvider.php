@@ -178,6 +178,10 @@ class AppServiceProvider extends ServiceProvider
             return $user->hasRole('kesiswaan');
         });
 
+        Gate::define('tu', function ($user) {
+            return $user->hasRole('tu');
+        });
+
         Gate::define('siswa-absen-guru', function ($user) {
             if (!method_exists($user, 'hasRole') || !$user->hasRole('siswa')) {
                 return false;

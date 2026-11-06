@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Rekap Siswa Wali Kelas</title>
+    <title>Rekap Absen Wali Kelas</title>
     <style>
         body {
             font-family: DejaVu Sans, sans-serif;
@@ -30,7 +30,7 @@
 </head>
 
 <body>
-    <h2>Rekap Siswa Wali Kelas</h2>
+    <h2>Rekap Absen Wali Kelas</h2>
     <p>Guru: {{ $teacher->nama_lengkap }}</p>
     <p>Kelas: {{ $classroom->nama_kelas ?? '-' }}</p>
     <p>Periode: {{ $periodLabel }}</p>
@@ -43,6 +43,9 @@
                 <th>Nama Siswa</th>
                 <th>Orang Tua / Wali</th>
                 <th>Hadir</th>
+                <th>Dispen</th>
+                <th>Terlambat</th>
+                <th>Bolos</th>
                 <th>Sakit</th>
                 <th>Izin</th>
                 <th>Alpa</th>
@@ -58,6 +61,9 @@
                     <td>{{ $row['student']->nama_lengkap }}</td>
                     <td>{{ $row['student']->nama_orang_tua_wali ?: '-' }}</td>
                     <td>{{ $row['hadir'] }}</td>
+                    <td>{{ $row['dispen'] }}</td>
+                    <td>{{ $row['terlambat'] }}</td>
+                    <td>{{ $row['bolos'] }}</td>
                     <td>{{ $row['sakit'] }}</td>
                     <td>{{ $row['izin'] }}</td>
                     <td>{{ $row['alpa'] }}</td>
@@ -68,6 +74,9 @@
             <tr>
                 <td colspan="4"><strong>Total</strong></td>
                 <td><strong>{{ $totals['hadir'] }}</strong></td>
+                <td><strong>{{ $totals['dispen'] }}</strong></td>
+                <td><strong>{{ $totals['terlambat'] }}</strong></td>
+                <td><strong>{{ $totals['bolos'] }}</strong></td>
                 <td><strong>{{ $totals['sakit'] }}</strong></td>
                 <td><strong>{{ $totals['izin'] }}</strong></td>
                 <td><strong>{{ $totals['alpa'] }}</strong></td>

@@ -55,6 +55,10 @@ class DashboardController extends Controller
             return redirect()->route('siswa.dashboard');
         }
 
+        if (method_exists($user, 'hasRole') && $user->hasRole('tu')) {
+            return redirect()->route('tu.leave-requests.index');
+        }
+
         abort(403);
     }
 
@@ -331,6 +335,10 @@ class DashboardController extends Controller
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
+        $previousMonthStart = Carbon::today()->startOfMonth()->subMonth();
+        $previousMonthEnd = $previousMonthStart->copy()->endOfMonth();
+        $previousMonthLabel = $previousMonthStart->copy()->locale('id')->translatedFormat('F Y');
+        $showMonthlyAchievement = false;
 
         $student = Student::with('classroom.major')
             ->where('nisn', $user->email)
@@ -340,6 +348,22 @@ class DashboardController extends Controller
         if ($student) {
             $student->ensureQrToken();
         }
+
+        $perfectStudentsPreviousMonth = Student::query()
+            ->join('attendance_details', 'attendance_details.student_id', '=', 'students.id')
+            ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
+            ->leftJoin('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+            ->whereBetween('teacher_attendances.tanggal', [
+                $previousMonthStart->toDateString(),
+                $previousMonthEnd->toDateString(),
+            ])
+            ->select('students.id', 'students.nama_lengkap', 'students.nis', 'classrooms.nama_kelas')
+            ->selectRaw('COUNT(attendance_details.id) AS total_records')
+            ->selectRaw("SUM(CASE WHEN attendance_details.status = 'Hadir' THEN 1 ELSE 0 END) AS hadir_records")
+            ->groupBy('students.id', 'students.nama_lengkap', 'students.nis', 'classrooms.nama_kelas')
+            ->havingRaw('total_records > 0 AND total_records = hadir_records')
+            ->orderBy('students.nama_lengkap')
+            ->get();
 
         $statusCountsMonth = [
             'Hadir' => 0,
@@ -419,6 +443,8 @@ class DashboardController extends Controller
         $schoolSetting = Cache::remember('school-settings:first', now()->addMinutes(30), function () {
             return SchoolSetting::query()->first();
         });
+        $achievementDurationDays = max(0, min(31, (int) ($schoolSetting?->monthly_achievement_duration_days ?? 14)));
+        $showMonthlyAchievement = Carbon::today()->day <= $achievementDurationDays;
 
         return view('siswa.dashboard', compact(
             'student',
@@ -434,6 +460,7 @@ class DashboardController extends Controller
             'latestAttendance',
             'schoolSetting',
             'mode'
+            , 'perfectStudentsPreviousMonth', 'previousMonthLabel', 'showMonthlyAchievement'
         ));
     }
 
@@ -444,6 +471,10 @@ class DashboardController extends Controller
         $today = Carbon::today();
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
+        $previousMonthStart = Carbon::today()->startOfMonth()->subMonth();
+        $previousMonthEnd = $previousMonthStart->copy()->endOfMonth();
+        $previousMonthLabel = $previousMonthStart->copy()->locale('id')->translatedFormat('F Y');
+        $showMonthlyAchievement = false;
 
         $teacher = Teacher::query()
             ->where('nip', $user->email)
@@ -576,9 +607,56 @@ class DashboardController extends Controller
             }
         }
 
+        $perfectTeachersPreviousMonth = collect();
+        $teacherSubjects = TeacherSubject::query()
+            ->with(['teacher', 'subject'])
+            ->get()
+            ->groupBy(fn (TeacherSubject $item) => $item->teacher_id . ':' . $item->subject_id);
+
+        foreach ($teacherSubjects as $assignments) {
+            $assignment = $assignments->first();
+            $expected = $this->countExpectedTeacherSessions(
+                (int) $assignment->teacher_id,
+                $previousMonthStart->copy(),
+                $previousMonthEnd->copy(),
+                (int) $assignment->subject_id
+            );
+
+            if ($expected <= 0) {
+                continue;
+            }
+
+            $records = TeacherAttendance::query()
+                ->where('teacher_id', $assignment->teacher_id)
+                ->where('subject_id', $assignment->subject_id)
+                ->whereBetween('tanggal', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()])
+                ->with('attendanceDetails')
+                ->get();
+
+            $completeRecords = $records->filter(function (TeacherAttendance $record): bool {
+                $agendaFilled = trim((string) $record->materi_pembelajaran) !== '';
+                $teacherPresent = $record->kehadiran_guru === 'Hadir';
+                $studentCount = Student::query()->where('classroom_id', $record->classroom_id)->count();
+                $recapComplete = $studentCount > 0
+                    && $record->attendanceDetails->count() === $studentCount
+                    && $record->attendanceDetails->every(fn (AttendanceDetail $detail) => trim((string) $detail->status) !== '');
+
+                return $agendaFilled && $teacherPresent && $recapComplete;
+            });
+
+            if ($records->count() === $expected && $completeRecords->count() === $expected) {
+                $perfectTeachersPreviousMonth->push([
+                    'name' => $assignment->teacher?->nama_lengkap ?? '-',
+                    'subject' => $assignment->subject?->nama_mapel ?? '-',
+                ]);
+            }
+        }
+
         $schoolSetting = Cache::remember('school-settings:first', now()->addMinutes(30), function () {
             return SchoolSetting::query()->first();
         });
+        $achievementDurationDays = max(0, min(31, (int) ($schoolSetting?->monthly_achievement_duration_days ?? 14)));
+        $showMonthlyAchievement = Carbon::today()->day <= $achievementDurationDays;
         $isPklModeActive = PklMode::isActive();
 
         return view('guru.dashboard', compact(
@@ -603,6 +681,7 @@ class DashboardController extends Controller
             'schoolSetting',
             'isPklModeActive',
             'mode'
+            , 'perfectTeachersPreviousMonth', 'previousMonthLabel', 'showMonthlyAchievement'
         ));
     }
 
@@ -651,7 +730,7 @@ class DashboardController extends Controller
         return round(($value / $total) * 100, 2);
     }
 
-    private function countExpectedTeacherSessions(int $teacherId, Carbon $startDate, Carbon $endDate): int
+    private function countExpectedTeacherSessions(int $teacherId, Carbon $startDate, Carbon $endDate, ?int $subjectId = null): int
     {
         $dayMap = [
             1 => 'Senin',
@@ -668,6 +747,10 @@ class DashboardController extends Controller
             ->where('teacher_subjects.teacher_id', $teacherId)
             ->select('schedules.hari', DB::raw('COUNT(*) as total_jadwal'))
             ->groupBy('schedules.hari');
+
+        if ($subjectId !== null) {
+            $schedulePerDayQuery->where('teacher_subjects.subject_id', $subjectId);
+        }
 
         $schedulePerDay = PklMode::applyToScheduleQuery($schedulePerDayQuery)
             ->pluck('total_jadwal', 'schedules.hari');

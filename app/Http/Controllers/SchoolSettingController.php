@@ -27,12 +27,14 @@ class SchoolSettingController extends Controller
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'jam_masuk' => 'required|date_format:H:i',
             'batas_terlambat' => 'required|integer|min:0|max:240',
+            'monthly_achievement_duration_days' => 'required|integer|min:0|max:31',
         ]);
 
         $setting = SchoolSetting::firstOrCreate([], [
             'nama_sekolah' => $validated['nama_sekolah'],
             'jam_masuk' => $validated['jam_masuk'],
             'batas_terlambat' => $validated['batas_terlambat'],
+            'monthly_achievement_duration_days' => $validated['monthly_achievement_duration_days'],
         ]);
 
         if ($request->hasFile('logo')) {

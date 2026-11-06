@@ -46,7 +46,30 @@
             height: 10px;
             border-radius: 999px;
         }
+
+        .achievement-modal .modal-header {
+            background: linear-gradient(135deg, #0d6efd, #6610f2);
+            color: #fff;
+        }
+
+        .achievement-modal .achievement-row {
+            border-left: 4px solid #0d6efd;
+            background: #f5f8ff;
+            border-radius: .4rem;
+            padding: .65rem .8rem;
+            margin-bottom: .5rem;
+        }
     </style>
+@stop
+
+@section('js')
+    @if ($showMonthlyAchievement && $perfectStudentsPreviousMonth->isNotEmpty())
+        <script>
+            $(function() {
+                $('#monthlyAchievementModal').modal('show');
+            });
+        </script>
+    @endif
 @stop
 
 @section('content_header')
@@ -100,6 +123,17 @@
                 ? round(((count($identityFields) - $missingIdentityFields->count()) / count($identityFields)) * 100)
                 : 0;
     @endphp
+
+    @if ($showMonthlyAchievement && $perfectStudentsPreviousMonth->isNotEmpty())
+        <div class="modal fade achievement-modal" id="monthlyAchievementModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-0 shadow">
+                <div class="modal-header"><h5 class="modal-title"><i class="fas fa-star mr-2"></i>Selamat untuk Siswa Berprestasi</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+                <div class="modal-body"><p>Selamat kepada siswa yang hadir <strong>100%</strong> pada pembelajaran bulan <strong>{{ $previousMonthLabel }}</strong>:</p>
+                    @foreach ($perfectStudentsPreviousMonth as $achievement)<div class="achievement-row"><strong>{{ $achievement->nama_lengkap }}</strong><br><small class="text-muted">NIS: {{ $achievement->nis ?? '-' }} &middot; Kelas: {{ $achievement->nama_kelas ?? '-' }}</small></div>@endforeach
+                </div><div class="modal-footer"><button type="button" class="btn btn-primary" data-dismiss="modal">Selamat!</button></div>
+            </div></div>
+        </div>
+    @endif
 
     @if (session('success'))
         <div class="alert alert-success">

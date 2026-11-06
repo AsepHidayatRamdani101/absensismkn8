@@ -845,6 +845,9 @@ class ReportController extends Controller
                 return [
                     'student' => $student,
                     'hadir' => 0,
+                    'dispen' => 0,
+                    'terlambat' => 0,
+                    'bolos' => 0,
                     'sakit' => 0,
                     'izin' => 0,
                     'alpa' => 0,
@@ -883,7 +886,9 @@ class ReportController extends Controller
             // Calculate totals from daily averages
             $totalAveraged = array_sum($dailyAverages);
             $hadir = (int) ($allStatuses['Hadir'] ?? 0) + (int) ($allStatuses['Dispen'] ?? 0);
+            $dispen = (int) ($allStatuses['Dispen'] ?? 0);
             $terlambat = isset($allStatuses['Terlambat']) ? (int) $allStatuses['Terlambat'] : 0;
+            $bolos = (int) ($allStatuses['Bolos'] ?? 0);
             $sakit = isset($allStatuses['Sakit']) ? (int) $allStatuses['Sakit'] : 0;
             $izin = isset($allStatuses['Izin']) ? (int) $allStatuses['Izin'] : 0;
             $alpa = isset($allStatuses['Alpa']) || isset($allStatuses['Alpha']) ?
@@ -895,6 +900,9 @@ class ReportController extends Controller
             return [
                 'student' => $student,
                 'hadir' => round($totalAveraged, 2),
+                'dispen' => $dispen,
+                'terlambat' => $terlambat,
+                'bolos' => $bolos,
                 'sakit' => $sakit,
                 'izin' => $izin,
                 'alpa' => $alpa,
@@ -905,6 +913,9 @@ class ReportController extends Controller
 
         $totals = [
             'hadir' => round($rows->sum('hadir'), 2),
+            'dispen' => (int) $rows->sum('dispen'),
+            'terlambat' => (int) $rows->sum('terlambat'),
+            'bolos' => (int) $rows->sum('bolos'),
             'sakit' => (int) $rows->sum('sakit'),
             'izin' => (int) $rows->sum('izin'),
             'alpa' => (int) $rows->sum('alpa'),

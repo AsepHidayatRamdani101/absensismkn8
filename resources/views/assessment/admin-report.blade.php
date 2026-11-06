@@ -69,8 +69,8 @@
                                 <th>Penilaian</th><th>Jenis</th><th>Tanggal</th><th>Nilai</th><th>Maks.</th><th>Bobot</th>
                             @else
                                 <th>Kelas</th><th>Guru</th><th>Mata Pelajaran</th><th>NIS</th><th>Siswa</th>
-                                <th>Metode Nilai</th><th>Rata-rata Harian</th><th>Kehadiran Mapel (%)</th>
-                                <th>Nilai Akhir</th><th>Hadir/Terlambat/Dispen</th>
+                                <th>Metode Nilai</th><th>Nilai Rata-rata Tugas/Harian</th><th>Kehadiran Mapel (%)</th>
+                                <th>Nilai Akhir</th><th>Hadir/Terlambat/Dispen</th><th>Dispen</th><th>Terlambat</th>
                                 <th>Sakit</th><th>Izin</th><th>Alpa</th><th>Bolos</th>
                             @endif
                         </tr>
@@ -87,7 +87,7 @@
     @php
         $fields = $kind === 'daily'
             ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Penilaian', 'Jenis', 'Tanggal', 'Nilai', 'Skor Maksimum', 'Bobot']
-            : ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos'];
+            : ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Nilai Rata-rata Tugas/Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Dispen', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Bolos'];
     @endphp
     @section('js')
         <script>

@@ -18,5 +18,6 @@ class SchoolSetting extends Model
         'jam_masuk',
         'batas_terlambat',
         'pkl_mode_active',
+        'monthly_achievement_duration_days',
     ];
 }

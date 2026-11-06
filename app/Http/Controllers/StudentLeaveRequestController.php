@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class StudentLeaveRequestController extends Controller
 {
@@ -140,6 +141,43 @@ class StudentLeaveRequestController extends Controller
             'pendingCount' => $pendingCount,
             'todayLeaves' => $todayLeaves,
         ]);
+    }
+
+    public function tuIndex(Request $request)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        abort_unless(Schema::hasTable('student_leave_requests'), 422, 'Modul perizinan belum aktif.');
+        $status = $request->input('status');
+        $requests = StudentLeaveRequest::query()->with(['student.classroom'])
+            ->when($status, fn ($query) => $query->where('status_pengajuan', $status))
+            ->latest()->get();
+        return view('tu.leave_requests.index', compact('requests', 'status'));
+    }
+
+    public function tuApprove(Request $request, StudentLeaveRequest $leaveRequest)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $leaveRequest->update(['status_pengajuan' => 'Disetujui', 'catatan_wali' => $request->input('catatan_wali'), 'verified_at' => now()]);
+        $this->applyLeaveToAttendanceDetails($leaveRequest->fresh());
+        return back()->with('success', 'Perizinan siswa disetujui.');
+    }
+
+    public function tuReject(Request $request, StudentLeaveRequest $leaveRequest)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $leaveRequest->update(['status_pengajuan' => 'Ditolak', 'catatan_wali' => $request->input('catatan_wali'), 'verified_at' => now()]);
+        return back()->with('success', 'Perizinan siswa ditolak.');
+    }
+
+    public function tuPrint(Request $request)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $ids = collect($request->input('ids', []))->filter()->map(fn ($id) => (int) $id);
+        $requests = StudentLeaveRequest::query()->with(['student.classroom'])
+            ->when($ids->isNotEmpty(), fn ($query) => $query->whereIn('id', $ids))
+            ->when($ids->isEmpty() && $request->filled('tanggal'), fn ($query) => $query->whereDate('tanggal_mulai', $request->input('tanggal')))
+            ->where('status_pengajuan', 'Disetujui')->latest()->get();
+        return Pdf::loadView('tu.leave_requests.print', compact('requests'))->setPaper('a4', 'landscape')->download('surat-perizinan-siswa.pdf');
     }
 
     public function waliApprove(Request $request, StudentLeaveRequest $leaveRequest)

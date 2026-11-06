@@ -12,13 +12,13 @@
     </style>
 </head>
 <body>
-    <h2>{{ $kind === 'daily' ? 'Laporan Penilaian Harian' : ($kind === 'final' ? 'Laporan Penilaian Akhir' : 'Rekap Nilai Akhir dan Absensi') }}</h2>
+    <h2>{{ $kind === 'daily' ? 'Laporan Penilaian Harian' : ($kind === 'final' ? 'Laporan Penilaian Akhir' : 'Rekap Nilai Wali Kelas') }}</h2>
     @php
         $fallbackHeadings = $kind === 'daily'
             ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Penilaian', 'Jenis', 'Tanggal', 'Nilai', 'Skor Maksimum', 'Bobot']
             : ($kind === 'final'
-                ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']
-                : ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Rata-rata Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Sakit', 'Izin', 'Alpa', 'Bolos']);
+                ? ['Kelas', 'Guru', 'Mata Pelajaran', 'NIS', 'Siswa', 'Metode Nilai', 'Nilai Rata-rata Tugas/Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Dispen', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Bolos']
+                : ['NIS', 'Siswa', 'Mata Pelajaran', 'Guru', 'Metode Nilai', 'Nilai Rata-rata Tugas/Harian', 'Kehadiran Mapel (%)', 'Nilai Akhir', 'Hadir/Terlambat/Dispen', 'Dispen', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Bolos']);
         $headings = array_keys($rows->first() ?? array_fill_keys($fallbackHeadings, ''));
     @endphp
     <table>

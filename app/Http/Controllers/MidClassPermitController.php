@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceDetail;
 use App\Models\MidClassPermit;
+use App\Models\StaffTu;
 use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
@@ -12,9 +13,149 @@ use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Http;
+use Barryvdh\DomPDF\Facade\Pdf;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class MidClassPermitController extends Controller
 {
+    public function tuIndex()
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        abort_unless(Schema::hasTable('mid_class_permits'), 422, 'Menu izin pulang belum aktif.');
+        $students = Student::query()->with('classroom.major')->orderBy('nama_lengkap')->get();
+        return view('tu.mid_class_permits.index', compact('students'));
+    }
+
+    public function tuData(Request $request)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $query = MidClassPermit::query()->with(['student.classroom.major'])->latest();
+        $total = (clone $query)->count();
+        $search = trim((string) $request->input('search.value'));
+        if ($search !== '') {
+            $query->whereHas('student', fn ($q) => $q->where('nama_lengkap', 'like', "%{$search}%")
+                ->orWhere('nis', 'like', "%{$search}%"));
+        }
+        if ($request->filled('student_id')) $query->where('student_id', $request->integer('student_id'));
+        if ($request->filled('classroom_id')) $query->whereHas('student', fn ($q) => $q->where('classroom_id', $request->integer('classroom_id')));
+        if ($request->filled('major_id')) $query->whereHas('student.classroom', fn ($q) => $q->where('major_id', $request->integer('major_id')));
+        $filtered = (clone $query)->count();
+        $start = max(0, $request->integer('start'));
+        $length = $request->integer('length', 10);
+        $items = $length === -1 ? $query->get() : $query->skip($start)->take(max(1, $length))->get();
+        return response()->json(['draw' => $request->integer('draw'), 'recordsTotal' => $total, 'recordsFiltered' => $filtered,
+            'data' => $items->map(fn ($permit) => ['id' => $permit->id, 'student_id' => $permit->student_id,
+                'student' => $permit->student?->nama_lengkap, 'nis' => $permit->student?->nis, 'classroom_id' => $permit->student?->classroom_id,
+                'classroom' => $permit->student?->classroom?->nama_kelas, 'major' => $permit->student?->classroom?->major?->nama_jurusan,
+                'parent' => $permit->student?->nama_orang_tua_wali, 'phone' => $permit->student?->no_hp_orang_tua,
+                'tanggal' => $permit->tanggal?->format('Y-m-d'), 'tipe_izin' => $permit->tipe_izin,
+                'jam_keluar' => substr((string) $permit->jam_keluar, 0, 5), 'jam_kembali' => $permit->jam_kembali ? substr($permit->jam_kembali, 0, 5) : '',
+                'alasan' => $permit->alasan, 'catatan' => $permit->catatan, 'print_url' => route('tu.mid-class-permits.print', $permit)])->values()]);
+    }
+
+    public function tuStore(Request $request)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $validated = $request->validate([
+            'student_id' => 'required|integer|exists:students,id',
+            'tanggal' => 'required|date|before_or_equal:today',
+            'tipe_izin' => 'required|in:sementara,penuh',
+            'jam_keluar' => 'required|date_format:H:i',
+            'jam_kembali' => 'nullable|date_format:H:i|after:jam_keluar',
+            'alasan' => 'required|string|max:2000',
+            'catatan' => 'nullable|string|max:500',
+            'nama_orang_tua_wali' => 'required|string|max:255',
+            'no_hp_orang_tua' => 'required|string|max:30',
+        ]);
+        $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $student->update([
+            'nama_orang_tua_wali' => $validated['nama_orang_tua_wali'],
+            'no_hp_orang_tua' => $validated['no_hp_orang_tua'],
+        ]);
+        $permit = MidClassPermit::create([
+            'student_id' => $validated['student_id'], 'tanggal' => $validated['tanggal'],
+            'tipe_izin' => $validated['tipe_izin'], 'jam_keluar' => $validated['jam_keluar'] . ':00',
+            'jam_kembali' => $validated['tipe_izin'] === 'sementara' && !empty($validated['jam_kembali']) ? $validated['jam_kembali'] . ':00' : null,
+            'alasan' => $validated['alasan'], 'catatan' => $validated['catatan'] ?? null,
+            'submitted_by_type' => 'tu', 'submitted_by_teacher_id' => null, 'submitted_by_student_id' => null,
+        ]);
+        $this->applyMidClassPermitToAttendance($permit);
+        $this->notifyPermitRecipients($student->fresh(), $permit);
+        return back()->with('success', 'Izin pulang berhasil dibuat.');
+    }
+
+    private function notifyPermitRecipients(Student $student, MidClassPermit $permit): void
+    {
+        if (!(bool) config('services.fonnte.enabled') || trim((string) config('services.fonnte.token')) === '') {
+            return;
+        }
+
+        $teacher = Teacher::query()->where('wali_classroom_id', $student->classroom_id)->first();
+        $targets = collect([$student->no_hp_orang_tua, $teacher?->no_hp])
+            ->map(fn ($phone) => $this->normalizePhone($phone))
+            ->filter()->unique();
+        $studentName = $student->nama_lengkap;
+        $time = substr((string) $permit->jam_keluar, 0, 5);
+        $message = "Informasi izin pulang siswa\nNama: {$studentName}\nTanggal: {$permit->tanggal->format('d/m/Y')}\nWaktu keluar: {$time}\nJenis: "
+            . ($permit->tipe_izin === 'penuh' ? 'Pulang penuh' : 'Sementara')
+            . "\nAlasan: {$permit->alasan}\n\nMohon perhatian dan tindak lanjutnya.";
+        foreach ($targets as $target) {
+            Http::timeout(20)->withHeaders(['Authorization' => (string) config('services.fonnte.token')])
+                ->asForm()->post((string) config('services.fonnte.api_url'), [
+                    'target' => $target, 'message' => $message,
+                    'countryCode' => (string) config('services.fonnte.default_country_code', '62'),
+                ]);
+        }
+    }
+
+    private function normalizePhone(?string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if ($digits === '' || strlen($digits) < 8) return null;
+        return str_starts_with($digits, '0') ? '62' . substr($digits, 1) : $digits;
+    }
+
+    public function tuPrint(MidClassPermit $permit)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $permit->load('student.classroom');
+        $user = auth()->user();
+        $tuStaff = StaffTu::query()
+            ->where('nip', $user->email)
+            ->orWhere('nama_lengkap', $user->name)
+            ->first();
+        // Satu halaman A4 portrait dibagi 6 slot; hanya slot pertama yang diisi.
+        return Pdf::loadView('tu.mid_class_permits.print', compact('permit', 'tuStaff'))->setPaper('a4', 'portrait')
+            ->stream('izin-pulang-' . $permit->student->nis . '.pdf');
+    }
+
+    public function publicScan(string $token)
+    {
+        $permit = MidClassPermit::query()->with('student.classroom')->where('scan_token', $token)->firstOrFail();
+        return view('public.mid_class_permit_scan', compact('permit'));
+    }
+
+    public function tuUpdate(Request $request, MidClassPermit $permit)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $validated = $request->validate(['student_id' => 'required|exists:students,id', 'tanggal' => 'required|date|before_or_equal:today', 'tipe_izin' => 'required|in:sementara,penuh', 'jam_keluar' => 'required|date_format:H:i', 'jam_kembali' => 'nullable|date_format:H:i|after:jam_keluar', 'alasan' => 'required|string|max:2000', 'catatan' => 'nullable|string|max:500', 'nama_orang_tua_wali' => 'required|string|max:255', 'no_hp_orang_tua' => 'required|string|max:30']);
+        $student = Student::query()->findOrFail($validated['student_id']);
+        $student->update(['nama_orang_tua_wali' => $validated['nama_orang_tua_wali'], 'no_hp_orang_tua' => $validated['no_hp_orang_tua']]);
+        $this->revertMidClassPermitFromAttendance($permit);
+        $permit->update(['student_id' => $student->id, 'tanggal' => $validated['tanggal'], 'tipe_izin' => $validated['tipe_izin'], 'jam_keluar' => $validated['jam_keluar'] . ':00', 'jam_kembali' => $validated['tipe_izin'] === 'sementara' && $validated['jam_kembali'] ? $validated['jam_kembali'] . ':00' : null, 'alasan' => $validated['alasan'], 'catatan' => $validated['catatan'] ?? null]);
+        $this->applyMidClassPermitToAttendance($permit->fresh());
+        return response()->json(['message' => 'Izin pulang berhasil diperbarui.']);
+    }
+
+    public function tuDestroy(MidClassPermit $permit)
+    {
+        abort_unless(auth()->user()->hasRole('tu'), 403);
+        $this->revertMidClassPermitFromAttendance($permit);
+        $permit->delete();
+        return response()->json(['message' => 'Izin pulang berhasil dihapus.']);
+    }
+
     // ─── Wali Kelas ──────────────────────────────────────────────────────────
 
     public function waliIndex()
@@ -305,6 +446,15 @@ class MidClassPermitController extends Controller
                 ]
             );
         }
+    }
+
+    private function revertMidClassPermitFromAttendance(MidClassPermit $permit): void
+    {
+        $permit->loadMissing('student');
+        if (!$permit->student) return;
+        AttendanceDetail::query()->where('student_id', $permit->student_id)
+            ->whereHas('teacherAttendance', fn ($q) => $q->whereDate('tanggal', Carbon::parse($permit->tanggal)->toDateString()))
+            ->where('keterangan', 'like', 'Izin%')->delete();
     }
 
     private function resolveCurrentTeacher(): ?Teacher

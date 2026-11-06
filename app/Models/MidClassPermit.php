@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class MidClassPermit extends Model
 {
@@ -20,11 +21,19 @@ class MidClassPermit extends Model
         'submitted_by_teacher_id',
         'submitted_by_student_id',
         'catatan',
+        'scan_token',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $permit): void {
+            $permit->scan_token ??= (string) Str::uuid();
+        });
+    }
 
     public function student()
     {

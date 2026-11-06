@@ -43,7 +43,30 @@
         .info-list li {
             margin-bottom: 0.45rem;
         }
+
+        .achievement-modal .modal-header {
+            background: linear-gradient(135deg, #198754, #20c997);
+            color: #fff;
+        }
+
+        .achievement-modal .achievement-row {
+            border-left: 4px solid #20c997;
+            background: #f8fffb;
+            border-radius: .4rem;
+            padding: .65rem .8rem;
+            margin-bottom: .5rem;
+        }
     </style>
+@stop
+
+@section('js')
+    @if ($showMonthlyAchievement && $perfectTeachersPreviousMonth->isNotEmpty())
+        <script>
+            $(function() {
+                $('#monthlyAchievementModal').modal('show');
+            });
+        </script>
+    @endif
 @stop
 
 @section('content_header')
@@ -86,6 +109,17 @@
     @php
         $isDetail = ($mode ?? 'ringkas') === 'detail';
     @endphp
+
+    @if ($showMonthlyAchievement && $perfectTeachersPreviousMonth->isNotEmpty())
+        <div class="modal fade achievement-modal" id="monthlyAchievementModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-0 shadow">
+                <div class="modal-header"><h5 class="modal-title"><i class="fas fa-medal mr-2"></i>Apresiasi Guru Terbaik</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+                <div class="modal-body"><p>Guru yang mengajar <strong>100%</strong> pada rekap bulan <strong>{{ $previousMonthLabel }}</strong>:</p>
+                    @foreach ($perfectTeachersPreviousMonth as $achievement)<div class="achievement-row"><strong>{{ $achievement['name'] }}</strong><br><small class="text-muted"><i class="fas fa-book mr-1"></i>{{ $achievement['subject'] }}</small></div>@endforeach
+                </div><div class="modal-footer"><button type="button" class="btn btn-success" data-dismiss="modal">Terima Kasih</button></div>
+            </div></div>
+        </div>
+    @endif
 
     @if (!$teacher)
         <div class="alert alert-warning">

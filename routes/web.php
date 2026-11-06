@@ -44,6 +44,8 @@ Route::get('/', function () {
 
 Route::get('/scan/siswa/{token}', [StudentController::class, 'showPublicByQr'])
     ->name('students.qr.show');
+Route::get('/scan/izin-pulang/{token}', [MidClassPermitController::class, 'publicScan'])
+    ->name('mid-class-permits.public-scan');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -788,12 +790,41 @@ Route::middleware('auth')->group(function () {
     Route::get('/pjj/submissions/{submission}/files/{file}', [PjjController::class, 'downloadSubmissionFile'])->name('pjj.submission.files.download');
 });
 
-Route::middleware(['auth', 'role:wali_kelas'])->group(function () {
+// Wali kelas menggunakan akun guru yang ditandai is_wali_kelas pada data guru.
+// Karena itu akses tidak boleh dibatasi hanya oleh role wali_kelas.
+Route::middleware(['auth', 'role:guru|wali_kelas'])->group(function () {
     Route::get('/wali-kelas', [DashboardDssController::class, 'waliKelas'])->name('wali-kelas.dashboard');
     Route::get('/wali-kelas/dss', [DashboardDssController::class, 'waliKelas'])->name('wali-kelas.dashboard.dss');
     Route::get('/wali-kelas/rapor', [AssessmentController::class, 'homeroom'])->name('guru.wali-kelas.assessments');
     Route::get('/wali-kelas/rapor/download/{format}', [AssessmentController::class, 'homeroomDownload'])
         ->name('guru.wali-kelas.assessments.download');
+    Route::get('/wali-kelas/kirim-laporan', [AssessmentController::class, 'waliReportSend'])
+        ->name('guru.wali-kelas.report-send');
+    Route::post('/wali-kelas/kirim-laporan/{student}', [AssessmentController::class, 'sendWaliReport'])
+        ->name('guru.wali-kelas.report-send.store');
+});
+
+Route::middleware(['auth', 'role:tu'])->group(function () {
+    Route::get('/tu/perizinan-siswa', [StudentLeaveRequestController::class, 'tuIndex'])
+        ->name('tu.leave-requests.index');
+    Route::post('/tu/perizinan-siswa/{leaveRequest}/approve', [StudentLeaveRequestController::class, 'tuApprove'])
+        ->name('tu.leave-requests.approve');
+    Route::post('/tu/perizinan-siswa/{leaveRequest}/reject', [StudentLeaveRequestController::class, 'tuReject'])
+        ->name('tu.leave-requests.reject');
+    Route::get('/tu/perizinan-siswa/cetak', [StudentLeaveRequestController::class, 'tuPrint'])
+        ->name('tu.leave-requests.print');
+    Route::get('/tu/izin-pulang', [MidClassPermitController::class, 'tuIndex'])
+        ->name('tu.mid-class-permits.index');
+    Route::get('/tu/izin-pulang/data', [MidClassPermitController::class, 'tuData'])
+        ->name('tu.mid-class-permits.data');
+    Route::post('/tu/izin-pulang', [MidClassPermitController::class, 'tuStore'])
+        ->name('tu.mid-class-permits.store');
+    Route::put('/tu/izin-pulang/{permit}', [MidClassPermitController::class, 'tuUpdate'])
+        ->name('tu.mid-class-permits.update');
+    Route::delete('/tu/izin-pulang/{permit}', [MidClassPermitController::class, 'tuDestroy'])
+        ->name('tu.mid-class-permits.destroy');
+    Route::get('/tu/izin-pulang/cetak/{permit}', [MidClassPermitController::class, 'tuPrint'])
+        ->name('tu.mid-class-permits.print');
 });
 
 Route::middleware(['auth', 'role:bk'])->group(function () {

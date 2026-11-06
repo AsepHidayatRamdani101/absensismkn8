@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{font-family:DejaVu Sans,sans-serif;margin:0}.sheet{width:210mm;height:297mm;display:block}.slot{width:210mm;height:74mm;border:0;border-bottom:1px dashed #777;position:relative}.slot:last-child{border-bottom:0}.slip{width:100%;height:74mm;padding:3mm 50px;font-size:8px;overflow:hidden}.layout-table,.data-table,.data-grid{width:100%;border-collapse:collapse}.qr-panel{width:34mm;height:67mm;text-align:center;vertical-align:middle;border-right:1px solid #aaa;padding-right:5mm}.qr-panel img{display:block;width:25mm;height:25mm;margin:0 auto}.slip-content{padding-left:6mm;vertical-align:top}.title{text-align:left;font-size:11px;font-weight:bold;margin-bottom:2mm}.intro{margin:0 0 2mm;font-size:7px}.data-grid>tbody>tr>td{width:50%;vertical-align:top}.data-grid>tbody>tr>td+td{padding-left:6mm}.data-table tr{border-bottom:1px solid #999}.data-table td{padding:1.2mm 0;line-height:1.15;vertical-align:top}.data-table .label{width:21mm;white-space:nowrap}.data-table .colon{width:4mm;text-align:center}.data-table .value{padding-right:2mm}.sign{width:45mm;margin:1.5mm auto 0;text-align:center;font-size:7px}.signature-space{height:7mm;border-bottom:1px solid #555;margin-bottom:1mm}.sign-name{font-weight:bold}.sign-nip{font-size:6.5px}
+</style></head><body>
+@php
+    // Embed the SVG as an image so Dompdf renders it without Imagick.
+    $qrSvg = QrCode::format('svg')
+        ->size(120)
+        ->margin(0)
+        ->generate(route('mid-class-permits.public-scan', $permit->scan_token));
+    $qrSvg = preg_replace('/<\?xml.*?\?>\s*/', '', $qrSvg);
+    $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+@endphp
+<div class="sheet">
+@for($slot = 0; $slot < 4; $slot++)
+<div class="slot">@if($slot === 0)<div class="slip"><table class="layout-table"><tr><td class="qr-panel"><img src="{{ $qrDataUri }}" alt="QR Verifikasi" /></td><td class="slip-content"><div class="title">SURAT IZIN PULANG SISWA</div><p class="intro">Menerangkan bahwa siswa berikut diberikan izin pulang:</p><table class="data-grid"><tr><td><table class="data-table"><tr><td class="label">Nama</td><td class="colon">:</td><td class="value">{{ $permit->student->nama_lengkap }}</td></tr><tr><td class="label">NIS</td><td class="colon">:</td><td class="value">{{ $permit->student->nis }}</td></tr><tr><td class="label">Kelas</td><td class="colon">:</td><td class="value">{{ $permit->student->classroom->nama_kelas ?? '-' }}</td></tr><tr><td class="label">Tanggal</td><td class="colon">:</td><td class="value">{{ $permit->tanggal->format('d/m/Y') }}</td></tr></table></td><td><table class="data-table"><tr><td class="label">Jenis</td><td class="colon">:</td><td class="value">{{ $permit->tipe_izin === 'penuh' ? 'Pulang Penuh' : 'Izin Sementara' }}</td></tr><tr><td class="label">Waktu</td><td class="colon">:</td><td class="value">{{ substr($permit->jam_keluar,0,5) }}{{ $permit->jam_kembali ? ' s.d. '.substr($permit->jam_kembali,0,5) : '' }}</td></tr><tr><td class="label">Alasan</td><td class="colon">:</td><td class="value">{{ $permit->alasan }}</td></tr></table></td></tr></table><div class="sign"><div>Petugas TU</div><div class="signature-space"></div><div class="sign-name">{{ $tuStaff?->nama_lengkap ?? auth()->user()->name }}</div><div class="sign-nip">NIP. {{ $tuStaff?->nip ?? auth()->user()->email }}</div></div></td></tr></table></div>@endif</div>
+@endfor
+</div></body></html>

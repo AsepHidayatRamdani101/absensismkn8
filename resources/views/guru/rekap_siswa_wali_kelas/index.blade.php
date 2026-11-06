@@ -2,15 +2,28 @@
 
 @include('guru.partials.mobile-ux')
 
-@section('title', 'Rekap Siswa Wali Kelas')
+@section('title', 'Rekap Absen Wali Kelas')
 
 @section('plugins.Datatables', true)
 @section('plugins.Sweetalert2', true)
 
+@section('css')
+<style>
+    .wali-recap-actions .btn { min-width: 120px; }
+    .wali-recap-filter-actions { gap: .35rem; }
+    .wali-recap-filter-actions .btn { flex: 1 1 0; white-space: nowrap; }
+    @media (max-width: 575.98px) {
+        .wali-recap-actions { width: 100%; }
+        .wali-recap-actions .btn { flex: 1; min-width: 0; }
+        .wali-recap-filter-actions .btn { flex: 1 1 0; padding-left: .35rem; padding-right: .35rem; }
+    }
+</style>
+@stop
+
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <div>
-            <h1>Rekap Siswa Wali Kelas</h1>
+            <h1>Rekap Absen Wali Kelas</h1>
             <p class="text-muted mb-0">
                 {{ $classroom->nama_kelas ?? '-' }}
                 @if ($classroom?->major)
@@ -18,12 +31,12 @@
                 @endif
             </p>
         </div>
-        <div class="d-flex mt-2 mt-md-0">
-            <a href="{{ route('guru.wali-kelas.rekap-siswa.pdf', request()->query()) }}" class="btn btn-danger btn-sm mr-2">
-                <i class="fas fa-file-pdf"></i> Download PDF
+        <div class="btn-group wali-recap-actions mt-2 mt-md-0" role="group" aria-label="Export rekap absen">
+            <a href="{{ route('guru.wali-kelas.rekap-siswa.pdf', request()->query()) }}" class="btn btn-outline-danger btn-sm">
+                <i class="fas fa-file-pdf mr-1"></i> PDF
             </a>
-            <a href="{{ route('guru.wali-kelas.rekap-siswa.excel', request()->query()) }}" class="btn btn-success btn-sm">
-                <i class="fas fa-file-excel"></i> Download Excel
+            <a href="{{ route('guru.wali-kelas.rekap-siswa.excel', request()->query()) }}" class="btn btn-outline-success btn-sm">
+                <i class="fas fa-file-excel mr-1"></i> Excel
             </a>
         </div>
     </div>
@@ -43,7 +56,7 @@
                             <option value="mingguan" {{ ($filters['period_type'] ?? '') === 'mingguan' ? 'selected' : '' }}>
                                 Mingguan</option>
                             <option value="bulanan" {{ ($filters['period_type'] ?? '') === 'bulanan' ? 'selected' : '' }}>
-                                Bulanan</option>
+                                Per Bulan</option>
                             <option value="tahunan" {{ ($filters['period_type'] ?? '') === 'tahunan' ? 'selected' : '' }}>
                                 Tahunan</option>
                         </select>
@@ -62,9 +75,9 @@
                     </div>
 
                     <div class="form-group col-md-3 period-field" data-type="bulanan">
-                        <label>Bulan</label>
+                        <label>Bulan Rekap Orang Tua</label>
                         <input type="month" name="bulan" class="form-control form-control-sm"
-                            value="{{ $filters['bulan'] ?? '' }}">
+                            value="{{ $filters['bulan'] ?? now()->format('Y-m') }}">
                     </div>
 
                     <div class="form-group col-md-3 period-field" data-type="tahunan">
@@ -73,11 +86,16 @@
                             value="{{ $filters['tahun'] ?? '' }}" min="2000" max="2100">
                     </div>
 
-                    <div class="form-group col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary btn-sm mr-2">
+                    <div class="form-group col-md-4 d-flex align-items-end wali-recap-filter-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">
                             <i class="fas fa-filter"></i> Terapkan
                         </button>
-                        <a href="{{ route('guru.wali-kelas.rekap-siswa') }}" class="btn btn-secondary btn-sm">Reset</a>
+                        <button type="button" id="currentMonthButton" class="btn btn-info btn-sm">
+                            <i class="fas fa-calendar-alt"></i> Bulan Ini
+                        </button>
+                        <a href="{{ route('guru.wali-kelas.rekap-siswa') }}" class="btn btn-light border btn-sm">
+                            <i class="fas fa-undo mr-1"></i> Reset
+                        </a>
                     </div>
                 </div>
             </form>
@@ -93,6 +111,9 @@
                             <th>Nama Siswa</th>
                             <th>Identitas</th>
                             <th>Hadir</th>
+                            <th>Dispen</th>
+                            <th>Terlambat</th>
+                            <th>Bolos</th>
                             <th>Sakit</th>
                             <th>Izin</th>
                             <th>Alpa</th>
@@ -122,6 +143,9 @@
                                     </button>
                                 </td>
                                 <td>{{ $row['hadir'] }}</td>
+                                <td>{{ $row['dispen'] }}</td>
+                                <td>{{ $row['terlambat'] }}</td>
+                                <td>{{ $row['bolos'] }}</td>
                                 <td>{{ $row['sakit'] }}</td>
                                 <td>{{ $row['izin'] }}</td>
                                 <td>{{ $row['alpa'] }}</td>
@@ -193,6 +217,14 @@
 
             $('#period_type').on('change', togglePeriodField);
             togglePeriodField();
+
+            $('#currentMonthButton').on('click', function() {
+                const now = new Date();
+                const month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+                $('#period_type').val('bulanan');
+                $('input[name="bulan"]').val(month);
+                $('form[action="{{ route('guru.wali-kelas.rekap-siswa') }}"]').trigger('submit');
+            });
 
             $('.btn-student-identity').on('click', function() {
                 const button = $(this);
