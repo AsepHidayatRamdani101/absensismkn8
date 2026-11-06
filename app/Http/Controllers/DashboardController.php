@@ -647,7 +647,7 @@ class DashboardController extends Controller
                 ? round(($completeRecords->count() / $expected) * 100, 2)
                 : 0;
 
-            if ($records->count() === $expected && $effectivenessPercentage === 100.0) {
+            if ($effectivenessPercentage === 100.0) {
                 $perfectTeachersPreviousMonth->push([
                     'name' => $assignment->teacher?->nama_lengkap ?? '-',
                     'subject' => $assignment->subject?->nama_mapel ?? '-',
