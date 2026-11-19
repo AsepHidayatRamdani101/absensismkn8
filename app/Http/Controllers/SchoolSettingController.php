@@ -28,7 +28,25 @@ class SchoolSettingController extends Controller
             'jam_masuk' => 'required|date_format:H:i',
             'batas_terlambat' => 'required|integer|min:0|max:240',
             'monthly_achievement_duration_days' => 'required|integer|min:0|max:31',
+            'report_daily_weight' => 'required|integer|min:0|max:100',
+            'report_uts_weight' => 'required|integer|min:0|max:100',
+            'report_uas_weight' => 'required|integer|min:0|max:100',
+            'report_kkm' => 'required|integer|min:40|max:95',
+            'report_city' => 'nullable|string|max:100',
+            'principal_name' => 'nullable|string|max:255',
+            'principal_nip' => 'nullable|string|max:50',
+        ], [
+            'report_kkm.min' => 'KKM minimal 40.',
+            'report_kkm.max' => 'KKM maksimal 95.',
         ]);
+
+        $weightTotal = $validated['report_daily_weight'] + $validated['report_uts_weight'] + $validated['report_uas_weight'];
+
+        if ($weightTotal !== 100) {
+            return back()->withInput()->withErrors([
+                'report_daily_weight' => "Jumlah bobot Harian + UTS + UAS harus 100% (saat ini {$weightTotal}%).",
+            ]);
+        }
 
         $setting = SchoolSetting::firstOrCreate([], [
             'nama_sekolah' => $validated['nama_sekolah'],

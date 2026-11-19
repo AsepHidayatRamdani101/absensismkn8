@@ -5,6 +5,8 @@ use App\Http\Controllers\Dashboard\DashboardDssController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\EarlyWarningReportController;
+use App\Http\Controllers\ExamScoreController;
+use App\Http\Controllers\ReportCardController;
 use App\Http\Controllers\ClassroomController;
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\AttendanceController;
@@ -504,6 +506,14 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::middleware('role:admin|kurikulum')->group(function () {
+        Route::get('rapor-semester', [ReportCardController::class, 'admin'])->name('report-cards.index');
+        Route::get('rapor-semester/cetak', [ReportCardController::class, 'printAdmin'])
+            ->middleware('throttle:20,1')->name('report-cards.print');
+        Route::get('rapor-semester/leger', [ReportCardController::class, 'legerAdmin'])
+            ->middleware('throttle:20,1')->name('report-cards.leger');
+        Route::post('rapor-semester/{student}/catatan', [ReportCardController::class, 'saveAdminNote'])
+            ->name('report-cards.note');
+
         Route::post('teacher-subjects/import', [TeacherSubjectController::class, 'import'])->name('teacher-subjects.import');
         Route::get('teacher-subjects/template', [TeacherSubjectController::class, 'template'])->name('teacher-subjects.template');
         Route::get('teacher-subjects/export', [TeacherSubjectController::class, 'export'])->name('teacher-subjects.export');
@@ -646,6 +656,26 @@ Route::middleware(['auth', 'guru'])->group(function () {
         ->name('guru.assessments.final.method');
     Route::post('/guru/penilaian-akhir/{teacherSubject}/scores/{student}', [AssessmentController::class, 'saveFinalScore'])
         ->name('guru.assessments.final.score');
+    Route::get('/guru/nilai-ujian', [ExamScoreController::class, 'index'])->name('guru.assessments.exams');
+    Route::post('/guru/nilai-ujian/{teacherSubject}', [ExamScoreController::class, 'update'])
+        ->name('guru.assessments.exams.update');
+    Route::get('/guru/nilai-ujian/{teacherSubject}/template', [ExamScoreController::class, 'template'])
+        ->name('guru.assessments.exams.template');
+    Route::post('/guru/nilai-ujian/{teacherSubject}/import', [ExamScoreController::class, 'import'])
+        ->middleware('throttle:20,1')
+        ->name('guru.assessments.exams.import');
+    Route::get('/guru/wali-kelas/rapor-semester', [ReportCardController::class, 'homeroom'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.report-cards');
+    Route::get('/guru/wali-kelas/rapor-semester/cetak', [ReportCardController::class, 'printHomeroom'])
+        ->middleware(['can:guru-wali-kelas', 'throttle:20,1'])
+        ->name('guru.wali-kelas.report-cards.print');
+    Route::get('/guru/wali-kelas/rapor-semester/leger', [ReportCardController::class, 'legerHomeroom'])
+        ->middleware(['can:guru-wali-kelas', 'throttle:20,1'])
+        ->name('guru.wali-kelas.report-cards.leger');
+    Route::post('/guru/wali-kelas/rapor-semester/{student}/catatan', [ReportCardController::class, 'saveHomeroomNote'])
+        ->middleware('can:guru-wali-kelas')
+        ->name('guru.wali-kelas.report-cards.note');
     Route::get('/guru/attendance-details/datatable', [AttendanceDetailController::class, 'guruDatatable'])
         ->name('guru.attendance-details.datatable');
     Route::get('/guru/attendance-details/class-options', [AttendanceDetailController::class, 'guruClassOptions'])

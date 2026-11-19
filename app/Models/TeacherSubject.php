@@ -55,4 +55,9 @@ class TeacherSubject extends Model
     {
         return $this->hasMany(FinalGrade::class);
     }
+
+    public function examScores()
+    {
+        return $this->hasMany(ExamScore::class);
+    }
 }

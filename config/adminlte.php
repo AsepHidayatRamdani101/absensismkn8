@@ -259,8 +259,8 @@ return [
     'dashboard_url' => 'home',
     'logout_url' => 'logout',
     'login_url' => 'login',
-    'register_url' => 'register',
-    'password_reset_url' => 'password/reset',
+    'register_url' => false,
+    'password_reset_url' => false,
     'password_email_url' => 'password/email',
     'profile_url' => false,
     'disable_darkmode_routes' => false,
@@ -362,6 +362,11 @@ return [
                     'route' => 'admin.assessments.final',
                     'icon' => 'fas fa-fw fa-poll',
                 ],
+                [
+                    'text' => 'Rapor Semester',
+                    'route' => 'report-cards.index',
+                    'icon' => 'fas fa-fw fa-book',
+                ],
             ],
         ],
         [
@@ -390,6 +395,11 @@ return [
                     'text' => 'Nilai Akhir',
                     'route' => 'guru.assessments.final',
                     'icon' => 'fas fa-fw fa-poll',
+                ],
+                [
+                    'text' => 'Nilai UTS & UAS',
+                    'route' => 'guru.assessments.exams',
+                    'icon' => 'fas fa-fw fa-file-signature',
                 ],
             ],
         ],
@@ -712,6 +722,11 @@ return [
                     'icon' => 'fas fa-chart-bar',
                 ],
                 [
+                    'text' => 'Rapor Semester',
+                    'route' => 'guru.wali-kelas.report-cards',
+                    'icon' => 'fas fa-book',
+                ],
+                [
                     'text' => 'Kirim Laporan',
                     'route' => 'guru.wali-kelas.report-send',
                     'icon' => 'fab fa-whatsapp',
@@ -767,6 +782,11 @@ return [
                     'text' => 'Dasbor Panca',
                     'route' => 'kurikulum.dashboard.dss',
                     'icon' => 'fas fa-fw fa-chart-line',
+                ],
+                [
+                    'text' => 'Rapor Semester',
+                    'route' => 'report-cards.index',
+                    'icon' => 'fas fa-fw fa-book',
                 ],
                 [
                     'text' => 'Absensi',
