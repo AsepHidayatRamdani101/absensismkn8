@@ -16,7 +16,7 @@ class MasterItemServiceTest extends TestCase
 {
     public function test_reward_item_restore_calls_repository(): void
     {
-        DB::shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
+        DB::partialMock()->shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
 
         $repository = \Mockery::mock(RewardItemRepositoryInterface::class);
         $repository->shouldReceive('restore')->once()->with(21)->andReturn(true);
@@ -32,7 +32,7 @@ class MasterItemServiceTest extends TestCase
 
     public function test_violation_item_restore_calls_repository(): void
     {
-        DB::shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
+        DB::partialMock()->shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
 
         $repository = \Mockery::mock(ViolationItemRepositoryInterface::class);
         $repository->shouldReceive('restore')->once()->with(31)->andReturn(true);

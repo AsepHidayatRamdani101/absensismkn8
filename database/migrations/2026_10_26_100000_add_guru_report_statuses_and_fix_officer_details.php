@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -16,6 +18,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('teacher_attendances', function (Blueprint $table) {
+                $table->enum('kehadiran_guru', ['Hadir', 'Izin', 'Sakit', 'Cuti', 'Dinas Luar', 'Home Visit', 'Tugas', 'Tanpa Keterangan'])
+                    ->default('Hadir')->change();
+            });
+
+            return;
+        }
+
         DB::statement("ALTER TABLE teacher_attendances MODIFY COLUMN kehadiran_guru ENUM('Hadir','Izin','Sakit','Cuti','Dinas Luar','Home Visit','Tugas','Tanpa Keterangan') NOT NULL DEFAULT 'Hadir'");
 
         $officerJabatans = "'ketua_kelas','sekretaris','bendahara'";
@@ -61,6 +72,15 @@ return new class extends Migration
         DB::table('teacher_attendances')
             ->whereIn('kehadiran_guru', ['Tugas', 'Tanpa Keterangan'])
             ->update(['kehadiran_guru' => 'Hadir']);
+
+        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('teacher_attendances', function (Blueprint $table) {
+                $table->enum('kehadiran_guru', ['Hadir', 'Izin', 'Sakit', 'Cuti', 'Dinas Luar', 'Home Visit'])
+                    ->default('Hadir')->change();
+            });
+
+            return;
+        }
 
         DB::statement("ALTER TABLE teacher_attendances MODIFY COLUMN kehadiran_guru ENUM('Hadir','Izin','Sakit','Cuti','Dinas Luar','Home Visit') NOT NULL DEFAULT 'Hadir'");
     }

@@ -97,6 +97,11 @@ class FakeDashboardRepository implements DashboardAnalyticsRepositoryInterface
         ];
     }
 
+    public function todayAttendanceStatusCards(): array
+    {
+        return [];
+    }
+
     public function trends(array $filters, array $scope): array
     {
         return [
