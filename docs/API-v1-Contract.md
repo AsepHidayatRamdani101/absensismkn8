@@ -59,10 +59,20 @@ Catatan:
 
 ## Scope Akses Data
 
-- Siswa API (`/students`, `/reports/student/{student}`):
-  - role siswa hanya boleh data milik sendiri.
-- Guru API (`/students`, `/teachers`, `attendance/manual`):
-  - data disesuaikan dengan relasi guru (mis. wali kelas) dan teacher_id dipaksa mengikuti akun guru pada absensi manual.
+Setiap endpoint dibatasi role (akun tanpa role yang sesuai mendapat `403`):
+
+| Endpoint | Role yang diizinkan | Cakupan data |
+|---|---|---|
+| `GET /students` | admin, kurikulum, kesiswaan, bk, tu, guru, siswa | admin/kurikulum/kesiswaan/bk/tu: semua; guru: siswa di kelas yang diajar (tahun ajaran aktif) + kelas walinya; siswa: dirinya sendiri |
+| `GET /teachers` | admin, kurikulum, kesiswaan, bk, tu, guru | guru: data dirinya sendiri |
+| `POST /attendance/manual` | admin, kurikulum, guru | guru: hanya jadwal miliknya; `teacher_id` dipaksa mengikuti akun guru |
+| `GET /attendance/history` | admin, kurikulum, guru | guru: hanya absensi miliknya |
+| `GET /reports/daily`, `/reports/monthly` | admin, kurikulum, kesiswaan, bk | — |
+| `GET /reports/student/{student}` | admin, kurikulum, kesiswaan, bk, guru, siswa | guru: siswa di kelas walinya; siswa: dirinya sendiri |
+| `POST /device/rfid`, `/device/face` | admin | — |
+
+Akun guru/siswa dihubungkan ke data guru/siswa lewat NIP/NUPTK/NISN/NIS (username akun).
+Token API kedaluwarsa setelah `SANCTUM_EXPIRATION` menit (bawaan 30 hari).
 
 ## Pagination Meta
 

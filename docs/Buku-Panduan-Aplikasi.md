@@ -119,6 +119,22 @@ Catatan:
 ### 5.5 Rekap Guru
 Guru dapat melihat rekap absensi mapel yang diampu melalui menu rekap.
 
+### 5.6 Input Nilai UTS & UAS
+1. Buka menu Penilaian → Nilai UTS & UAS.
+2. Pilih jurusan, kelas, lalu mata pelajaran (hanya penugasan pada tahun ajaran aktif).
+3. Isi kolom UTS dan UAS (0–100, boleh desimal seperti 87,5). Tekan Enter untuk pindah ke kolom berikutnya.
+4. Klik Simpan Semua Nilai.
+
+Alternatif lewat Excel:
+1. Klik Download Template Excel (berisi daftar siswa dan nilai yang sudah tersimpan).
+2. Isi kolom UTS/UAS, simpan, lalu klik Import Excel.
+3. Sel yang dikosongkan tidak mengubah nilai lama. Bila ada baris yang salah (NIS tidak dikenal atau nilai di luar 0–100), seluruh import dibatalkan dan daftar barisnya ditampilkan.
+
+Catatan:
+- Kolom Harian diambil dari menu Nilai Akhir (metode manual atau otomatis).
+- Kolom Nilai Rapor = Harian × bobot + UTS × bobot + UAS × bobot (bobot diatur admin di Profil Sekolah, bawaan 50% : 25% : 25%). Nilai ditampilkan bulat seperti yang tercetak di rapor.
+- Komponen yang belum diisi tidak ikut dihitung dan ditandai "Belum ada ...".
+
 ---
 
 ## 6. Panduan Wali Kelas
@@ -143,6 +159,18 @@ Jika siswa terkendala upload:
 
 ### 6.4 Rekap Siswa Wali Kelas
 Wali Kelas dapat melihat dan mengekspor rekap absensi siswa di kelas binaan.
+
+### 6.5 Rapor Semester
+1. Buka menu Wali → Rapor Semester.
+2. Pilih tahun pelajaran/semester, lalu klik Tampilkan.
+3. Periksa kolom Kelengkapan: siswa bertanda "mapel belum lengkap" masih memiliki nilai Harian/UTS/UAS yang kosong. Klik ikon daftar untuk melihat rincian per mapel lalu hubungi guru mapel terkait.
+4. Klik Catatan untuk mengisi catatan wali kelas. Jumlah Sakit/Izin/Tanpa Keterangan terisi otomatis dari absensi KBM (dalam hari) dan bisa dikoreksi bila perlu.
+5. Atur Tanggal rapor, lalu klik Cetak (per siswa) atau Cetak Rapor 1 Kelas. PDF terbuka di tab baru dan siap dicetak di kertas A4.
+6. Klik Leger Nilai untuk mengunduh rekap nilai seluruh siswa per mapel (Excel), lengkap dengan jumlah, rata-rata, dan peringkat.
+
+Ketentuan nilai:
+- Predikat dihitung dari KKM: rentang (100 − KKM) dibagi tiga untuk A, B, dan C; di bawah KKM = D (Belum Tuntas).
+- Nama kepala sekolah, NIP, dan tempat penerbitan rapor diatur admin di Profil Sekolah → Pengaturan Rapor.
 
 ---
 
@@ -176,6 +204,15 @@ Kurikulum dapat mengakses berbagai laporan:
 - Laporan absensi siswa
 - Laporan agenda guru
 - Rekap absensi guru (kombinasi)
+
+### 7.5 Rapor Semester (Kurikulum & Admin)
+1. Buka menu Kurikulum → Rapor Semester (admin: Penilaian → Rapor Semester).
+2. Pilih tahun pelajaran/semester dan kelas, lalu klik Tampilkan.
+3. Pantau kelengkapan nilai tiap kelas, cetak rapor (per siswa/satu kelas), atau unduh leger nilai.
+
+Catatan:
+- Catatan wali kelas hanya dapat diubah oleh wali kelas yang bersangkutan dan admin; kurikulum dapat melihat dan mencetak.
+- Bobot nilai rapor, KKM, tempat penerbitan, serta nama & NIP kepala sekolah diatur admin di Profil Sekolah → Pengaturan Rapor.
 
 ---
 
