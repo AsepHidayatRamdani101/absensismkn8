@@ -7,6 +7,7 @@ use App\Http\Resources\Api\V1\StudentResource;
 
 use App\Models\AttendanceDetail;
 use App\Models\Student;
+use App\Support\SchoolIdentity;
 
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -76,10 +77,20 @@ class ReportApiController extends Controller
     public function student(Request $request, Student $student): JsonResponse
     {
         $user = $request->user();
+        abort_if($user === null, 401);
 
-        if ($user && method_exists($user, 'hasRole') && $user->hasRole('siswa')) {
-            $isOwnRecord = $student->nisn === $user->email || $student->nis === $user->email;
-            abort_unless($isOwnRecord, 403, 'Anda tidak memiliki akses ke data siswa ini.');
+        if (!$user->hasAnyRole(['admin', 'kurikulum', 'kesiswaan', 'bk'])) {
+            if ($user->hasRole('guru')) {
+                $teacher = SchoolIdentity::waliTeacherFor($user);
+                abort_unless(
+                    $teacher && (int) $teacher->wali_classroom_id === (int) $student->classroom_id,
+                    403,
+                    'Anda tidak memiliki akses ke data siswa ini.'
+                );
+            } else {
+                $ownStudent = $user->hasRole('siswa') ? SchoolIdentity::studentFor($user) : null;
+                abort_unless($ownStudent && $ownStudent->id === $student->id, 403, 'Anda tidak memiliki akses ke data siswa ini.');
+            }
         }
 
         return response()->json([

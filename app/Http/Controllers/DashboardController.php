@@ -19,6 +19,7 @@ use App\Models\TeacherAttendance;
 use App\Models\TeacherSubject;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -340,10 +341,7 @@ class DashboardController extends Controller
         $previousMonthLabel = $previousMonthStart->copy()->locale('id')->translatedFormat('F Y');
         $showMonthlyAchievement = false;
 
-        $student = Student::with('classroom.major')
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        $student = SchoolIdentity::studentFor($user)?->loadMissing('classroom.major');
 
         if ($student) {
             $student->ensureQrToken();
@@ -476,10 +474,7 @@ class DashboardController extends Controller
         $previousMonthLabel = $previousMonthStart->copy()->locale('id')->translatedFormat('F Y');
         $showMonthlyAchievement = false;
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         $statusCountsMonth = [
             'Hadir' => 0,

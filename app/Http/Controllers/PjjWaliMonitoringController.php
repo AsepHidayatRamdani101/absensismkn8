@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Services\PjjAttendanceSyncService;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -278,22 +279,7 @@ class PjjWaliMonitoringController extends Controller
 
     private function waliTeacherForCurrentUser(): Teacher
     {
-        $user = Auth::user();
-
-        // Prioritaskan identitas unik (NIP/NUPTK); pencocokan nama hanya fallback
-        // agar guru dengan nama kembar tidak ter-resolve ke data guru yang salah.
-        $baseQuery = fn() => Teacher::query()
-            ->where('is_wali_kelas', true)
-            ->whereNotNull('wali_classroom_id')
-            ->with('waliClassroom');
-
-        $teacher = $baseQuery()
-            ->where(function ($query) use ($user) {
-                $query->where('nip', $user->email)
-                    ->orWhere('nuptk', $user->email);
-            })
-            ->first()
-            ?? $baseQuery()->where('nama_lengkap', $user->name)->first();
+        $teacher = SchoolIdentity::waliTeacherFor(Auth::user())?->loadMissing('waliClassroom');
 
         abort_unless($teacher, 403, 'Anda tidak terdaftar sebagai wali kelas.');
 

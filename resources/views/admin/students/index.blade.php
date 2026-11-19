@@ -210,13 +210,17 @@
 
                 Swal.fire({
                     title: 'Generate akun siswa?',
-                    text: 'Username dari NISN (fallback NIS) dan password default siswa12345.',
+                    text: 'Username dari NISN (fallback NIS). Akun baru memakai password default siswa12345; akun lama tetap memakai password masing-masing.',
                     icon: 'question',
+                    input: 'checkbox',
+                    inputValue: 0,
+                    inputPlaceholder: 'Reset juga password SEMUA akun siswa yang sudah ada ke siswa12345',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, generate',
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        const resetPassword = result.value ? 1 : 0;
                         let afterId = 0;
                         let totalProcessed = 0;
                         let totalCreated = 0;
@@ -241,6 +245,7 @@
                                     _token: token,
                                     after_id: afterId,
                                     batch_size: batchSize,
+                                    reset_password: resetPassword,
                                 },
                                 headers: {
                                     'Accept': 'application/json',

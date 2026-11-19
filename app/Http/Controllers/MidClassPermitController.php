@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -121,10 +122,7 @@ class MidClassPermitController extends Controller
         abort_unless(auth()->user()->hasRole('tu'), 403);
         $permit->load('student.classroom');
         $user = auth()->user();
-        $tuStaff = StaffTu::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $tuStaff = SchoolIdentity::staffTuFor($user);
         // Satu halaman A4 portrait dibagi 6 slot; hanya slot pertama yang diisi.
         return Pdf::loadView('tu.mid_class_permits.print', compact('permit', 'tuStaff'))->setPaper('a4', 'portrait')
             ->stream('izin-pulang-' . $permit->student->nis . '.pdf');
@@ -461,20 +459,14 @@ class MidClassPermitController extends Controller
     {
         $user = auth()->user();
 
-        return Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        return SchoolIdentity::teacherFor($user);
     }
 
     private function resolveOfficerStudent(): ?Student
     {
         $user  = auth()->user();
 
-        $student = Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        $student = SchoolIdentity::studentFor($user);
 
         if (!$student || !$student->canSubmitTeacherAttendance()) {
             return null;

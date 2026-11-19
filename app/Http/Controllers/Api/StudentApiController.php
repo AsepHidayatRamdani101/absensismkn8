@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\AcademicYear;
 use App\Models\Student;
-use App\Models\Teacher;
+use App\Models\TeacherSubject;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\StudentResource;
+use App\Support\SchoolIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StudentApiController extends Controller
 {
+    private const FULL_ACCESS_ROLES = ['admin', 'kurikulum', 'kesiswaan', 'bk', 'tu'];
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -19,21 +23,26 @@ class StudentApiController extends Controller
 
         $query = Student::query()->with('classroom.major');
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('siswa')) {
-            $query->where(function ($q) use ($user) {
-                $q->where('nisn', $user->email)
-                    ->orWhere('nis', $user->email);
-            });
-        }
+        if (!$user->hasAnyRole(self::FULL_ACCESS_ROLES)) {
+            if ($user->hasRole('guru')) {
+                $teacher = SchoolIdentity::teacherFor($user);
+                abort_if($teacher === null, 403, 'Data guru tidak ditemukan untuk akun ini.');
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
-            $teacher = Teacher::query()
-                ->where('nip', $user->email)
-                ->orWhere('nama_lengkap', $user->name)
-                ->first();
+                $classroomIds = TeacherSubject::query()
+                    ->where('teacher_id', $teacher->id)
+                    ->where('academic_year_id', AcademicYear::query()->where('is_active', true)->value('id'))
+                    ->pluck('classroom_id')
+                    ->push($teacher->is_wali_kelas ? $teacher->wali_classroom_id : null)
+                    ->filter()
+                    ->unique()
+                    ->values();
 
-            if ($teacher?->wali_classroom_id) {
-                $query->where('classroom_id', (int) $teacher->wali_classroom_id);
+                $query->whereIn('classroom_id', $classroomIds);
+            } elseif ($user->hasRole('siswa')) {
+                $student = SchoolIdentity::studentFor($user);
+                $query->whereKey($student?->id ?? 0);
+            } else {
+                $query->whereRaw('1 = 0');
             }
         }
 

@@ -9,6 +9,7 @@ use App\Models\TeacherAttendance;
 use App\Models\AttendanceDetail;
 use App\Models\Schedule;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,13 +54,15 @@ class AttendanceApiController extends Controller
 
         $teacherId = (int) ($validated['teacher_id'] ?? 0);
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
-            $teacher = Teacher::query()
-                ->where('nip', $user->email)
-                ->orWhere('nama_lengkap', $user->name)
-                ->first();
+        if (!$user->hasAnyRole(['admin', 'kurikulum'])) {
+            $teacher = SchoolIdentity::teacherFor($user);
 
             abort_if($teacher === null, 403, 'Data guru tidak ditemukan untuk akun ini.');
+            abort_unless(
+                (int) ($schedule->teacherSubject?->teacher_id ?? 0) === (int) $teacher->id,
+                403,
+                'Jadwal ini bukan milik Anda.'
+            );
             $teacherId = (int) $teacher->id;
         }
 
@@ -112,12 +115,18 @@ class AttendanceApiController extends Controller
 
     public function history(Request $request)
     {
+        $user = $request->user();
+        abort_if($user === null, 401);
+
         $perPage = max(min((int) $request->integer('per_page', 20), 100), 10);
         $items = TeacherAttendance::with([
             'teacher',
             'subject',
             'classroom'
         ])
+            ->when(!$user->hasAnyRole(['admin', 'kurikulum']), function ($query) use ($user) {
+                $query->where('teacher_id', SchoolIdentity::teacherFor($user)?->id ?? 0);
+            })
             ->latest()
             ->paginate($perPage);
 

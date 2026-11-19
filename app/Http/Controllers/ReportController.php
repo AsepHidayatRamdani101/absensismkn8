@@ -23,6 +23,7 @@ use App\Models\TeacherLeaveRequest;
 use App\Models\TeacherSubject;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -692,10 +693,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::with('waliClassroom.major')
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user)?->loadMissing('waliClassroom.major');
 
         if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
             abort(403);
@@ -710,10 +708,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::with('waliClassroom.major')
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user)?->loadMissing('waliClassroom.major');
 
         if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
             abort(403);
@@ -735,10 +730,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::with('waliClassroom.major')
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user)?->loadMissing('waliClassroom.major');
 
         if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
             abort(403);
@@ -760,10 +752,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::with('waliClassroom.major')
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user)?->loadMissing('waliClassroom.major');
 
         if (!$teacher || !$teacher->is_wali_kelas || !$teacher->wali_classroom_id) {
             abort(403);
@@ -936,10 +925,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -954,10 +940,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             abort(403);
@@ -979,10 +962,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             abort(403);

@@ -6,6 +6,7 @@ use App\Models\OfficerAttendancePermit;
 use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\TeacherLeaveRequest;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -186,9 +187,6 @@ class OfficerAttendancePermitController extends Controller
     {
         $user = auth()->user();
 
-        return Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        return SchoolIdentity::studentFor($user);
     }
 }

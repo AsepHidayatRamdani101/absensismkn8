@@ -26,6 +26,7 @@
             <form id="formGenerateAccountsTu" action="{{ route('staff-tu.generate-accounts') }}" method="POST"
                 class="d-inline">
                 @csrf
+                <input type="hidden" name="reset_password" value="0">
                 <button type="button" id="btnGenerateAccountsTu" class="btn btn-info btn-sm">
                     <i class="fas fa-user-cog"></i> Generate Akun TU
                 </button>
@@ -231,13 +232,17 @@
             $('#btnGenerateAccountsTu').on('click', function() {
                 Swal.fire({
                     title: 'Generate akun staf TU?',
-                    text: 'Username = NIP, password default = tu12345.',
+                    text: 'Username = NIP. Akun baru memakai password default tu12345; akun lama tetap memakai password masing-masing.',
                     icon: 'question',
+                    input: 'checkbox',
+                    inputValue: 0,
+                    inputPlaceholder: 'Reset juga password SEMUA akun TU yang sudah ada ke tu12345',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, generate',
                     cancelButtonText: 'Batal',
                 }).then(result => {
                     if (result.isConfirmed) {
+                        $('#formGenerateAccountsTu input[name="reset_password"]').val(result.value ? 1 : 0);
                         Swal.fire({
                             title: 'Memproses...',
                             allowOutsideClick: false,

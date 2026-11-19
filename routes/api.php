@@ -22,8 +22,10 @@ Route::prefix('v1')->group(function () {
         // MASTER DATA
         //-----------------------------------
 
-        Route::get('/students', [StudentApiController::class, 'index']);
-        Route::get('/teachers', [TeacherApiController::class, 'index']);
+        Route::get('/students', [StudentApiController::class, 'index'])
+            ->middleware('role:admin|kurikulum|kesiswaan|bk|tu|guru|siswa');
+        Route::get('/teachers', [TeacherApiController::class, 'index'])
+            ->middleware('role:admin|kurikulum|kesiswaan|bk|tu|guru');
 
         //-----------------------------------
         // ATTENDANCE
@@ -32,12 +34,12 @@ Route::prefix('v1')->group(function () {
         Route::post(
             '/attendance/manual',
             [AttendanceApiController::class, 'manual']
-        )->middleware('audit');
+        )->middleware(['role:admin|kurikulum|guru', 'audit']);
 
         Route::get(
             '/attendance/history',
             [AttendanceApiController::class, 'history']
-        );
+        )->middleware('role:admin|kurikulum|guru');
 
         //-----------------------------------
         // REPORT
@@ -46,17 +48,17 @@ Route::prefix('v1')->group(function () {
         Route::get(
             '/reports/daily',
             [ReportApiController::class, 'daily']
-        );
+        )->middleware('role:admin|kurikulum|kesiswaan|bk');
 
         Route::get(
             '/reports/monthly',
             [ReportApiController::class, 'monthly']
-        );
+        )->middleware('role:admin|kurikulum|kesiswaan|bk');
 
         Route::get(
             '/reports/student/{student}',
             [ReportApiController::class, 'student']
-        );
+        )->middleware('role:admin|kurikulum|kesiswaan|bk|guru|siswa');
 
         //-----------------------------------
         // DEVICE
@@ -65,11 +67,11 @@ Route::prefix('v1')->group(function () {
         Route::post(
             '/device/rfid',
             [DeviceApiController::class, 'rfid']
-        )->middleware('audit');
+        )->middleware(['role:admin', 'audit']);
 
         Route::post(
             '/device/face',
             [DeviceApiController::class, 'face']
-        )->middleware('audit');
+        )->middleware(['role:admin', 'audit']);
     });
 });

@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -19,6 +18,14 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             PancawaluyaPermissionSeeder::class,
             UserSeeder::class,
+            CharacterDimensionSeeder::class,
+        ]);
+
+        if (app()->environment('production')) {
+            return;
+        }
+
+        $this->call([
             majorSeeder::class,
             classSeeder::class,
             siswaSeeder::class,
@@ -28,7 +35,6 @@ class DatabaseSeeder extends Seeder
             teacherSubjectSeeder::class,
             scheduleSeeder::class,
             DeviceSeeder::class,
-            CharacterDimensionSeeder::class,
         ]);
     }
 }

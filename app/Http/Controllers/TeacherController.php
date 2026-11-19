@@ -248,8 +248,9 @@ class TeacherController extends Controller
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $resetPasswords = request()->boolean('reset_password');
 
-        Teacher::query()->orderBy('id')->chunk(200, function ($teachers) use (&$created, &$updated, &$skipped) {
+        Teacher::query()->orderBy('id')->chunk(200, function ($teachers) use (&$created, &$updated, &$skipped, $resetPasswords) {
             foreach ($teachers as $teacher) {
                 $username = trim((string) $teacher->nip);
 
@@ -262,13 +263,14 @@ class TeacherController extends Controller
                     continue;
                 }
 
-                $user = User::updateOrCreate(
-                    ['email' => $username],
-                    [
-                        'name' => $teacher->nama_lengkap,
-                        'password' => Hash::make('guru12345'),
-                    ]
-                );
+                $user = User::firstOrNew(['email' => $username]);
+                $user->name = $teacher->nama_lengkap;
+
+                if (!$user->exists || $resetPasswords) {
+                    $user->password = Hash::make('guru12345');
+                }
+
+                $user->save();
 
                 if ($user->wasRecentlyCreated) {
                     $created++;

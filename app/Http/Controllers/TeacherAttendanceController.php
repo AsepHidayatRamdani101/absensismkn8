@@ -13,6 +13,7 @@ use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,10 +25,7 @@ class TeacherAttendanceController extends Controller
     {
         $user = Auth::user();
 
-        $student = Student::with('classroom.major')
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        $student = SchoolIdentity::studentFor($user)?->loadMissing('classroom.major');
 
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
@@ -401,10 +399,7 @@ class TeacherAttendanceController extends Controller
 
         $user = Auth::user();
 
-        $student = Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        $student = SchoolIdentity::studentFor($user);
 
         if (!$student) {
             return redirect()->route('siswa.dashboard')->with('error', 'Data siswa tidak ditemukan untuk akun ini.');
