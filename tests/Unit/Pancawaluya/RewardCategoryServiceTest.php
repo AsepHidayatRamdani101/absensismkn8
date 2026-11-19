@@ -31,7 +31,7 @@ class RewardCategoryServiceTest extends TestCase
 
     public function test_restore_calls_repository_restore(): void
     {
-        DB::shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
+        DB::partialMock()->shouldReceive('transaction')->once()->andReturnUsing(fn($callback) => $callback());
 
         $repository = \Mockery::mock(RewardCategoryRepositoryInterface::class);
         $repository->shouldReceive('restore')->once()->with(10)->andReturn(true);

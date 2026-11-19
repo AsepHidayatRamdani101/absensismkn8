@@ -8,10 +8,14 @@ use App\Models\AttendanceDetail;
 use App\Models\Classroom;
 use App\Models\DailyAssessment;
 use App\Models\DailyAssessmentScore;
+use App\Models\ExamScore;
 use App\Models\FinalGrade;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TeacherSubject;
+use App\Services\Assessment\ProcessScoreCalculator;
+use App\Services\Assessment\ReportCardService;
+use App\Support\SchoolIdentity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,6 +23,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 class AssessmentController extends Controller
@@ -297,7 +302,26 @@ class AssessmentController extends Controller
             ->where('classroom_id', $student->classroom_id)
             ->where('academic_year_id', $yearId)
             ->get();
-        $rows = $assignments->map(fn(TeacherSubject $assignment) => $this->studentGradeRow($assignment, $student));
+        $exams = ExamScore::query()
+            ->where('student_id', $student->id)
+            ->whereIn('teacher_subject_id', $assignments->pluck('id'))
+            ->get()
+            ->keyBy('teacher_subject_id');
+        $reportSettings = app(ReportCardService::class)->settings();
+        $rows = $assignments->map(function (TeacherSubject $assignment) use ($student, $exams, $reportSettings) {
+            $row = $this->studentGradeRow($assignment, $student);
+            $exam = $exams->get($assignment->id);
+            $row['uts'] = $exam?->uts_score === null ? null : (float) $exam->uts_score;
+            $row['uas'] = $exam?->uas_score === null ? null : (float) $exam->uas_score;
+            $row['report_score'] = ReportCardService::compose(
+                $row['final_score'] === null ? null : (float) $row['final_score'],
+                $row['uts'],
+                $row['uas'],
+                $reportSettings
+            )['score'];
+
+            return $row;
+        });
         $cumulativeGrade = $rows->whereNotNull('final_score')->avg('final_score');
         $attendance = $this->attendanceSummary($student->id, $yearId);
         $dailyAssessments = DailyAssessment::query()
@@ -319,16 +343,14 @@ class AssessmentController extends Controller
 
     private function teacherIdentity(): Teacher
     {
-        $user = auth()->user();
-        $teacher = Teacher::query()->where('nip', $user->email)->orWhere('nama_lengkap', $user->name)->first();
+        $teacher = SchoolIdentity::teacherFor(auth()->user());
         abort_unless($teacher, 403, 'Data guru tidak ditemukan.');
         return $teacher;
     }
 
     private function studentIdentity(): Student
     {
-        $user = auth()->user();
-        $student = Student::query()->where('nisn', $user->email)->orWhere('nis', $user->email)->first();
+        $student = SchoolIdentity::studentFor(auth()->user());
         abort_unless($student, 403, 'Data siswa tidak ditemukan.');
         return $student;
     }
@@ -430,13 +452,7 @@ class AssessmentController extends Controller
      */
     private function blendAutomaticScore(TeacherSubject $assignment, ?float $dailyAverage, ?float $attendancePercentage): ?float
     {
-        $weight = max(0.0, min(100.0, (float) ($assignment->attendance_weight ?? 30))) / 100;
-
-        if ($dailyAverage !== null && $attendancePercentage !== null) {
-            return round($dailyAverage * (1 - $weight) + $attendancePercentage * $weight, 2);
-        }
-
-        return $dailyAverage ?? $attendancePercentage;
+        return ProcessScoreCalculator::blend($assignment, $dailyAverage, $attendancePercentage);
     }
 
     private function adminRows(string $kind, array $filters, Request $request)
@@ -490,34 +506,10 @@ class AssessmentController extends Controller
         $rows = collect();
         if ($kind === 'final') {
             $classroomIds = $assignments->pluck('classroom_id')->unique()->all();
-            $assignmentIds = $assignments->pluck('id')->all();
             $studentsByClass = Student::query()->whereIn('classroom_id', $classroomIds)
                 ->orderBy('nama_lengkap')->get()->groupBy('classroom_id');
             $studentIds = $studentsByClass->flatten()->pluck('id')->all();
-            $manualScores = FinalGrade::query()->whereIn('teacher_subject_id', $assignmentIds)
-                ->whereIn('student_id', $studentIds)->get()
-                ->keyBy(fn(FinalGrade $grade) => $grade->teacher_subject_id . ':' . $grade->student_id);
-            // Nilai kosong (siswa belum mengerjakan) dihitung 0 agar rumus tetap berjalan.
-            $automaticScores = DB::table('daily_assessment_scores')
-                ->join('daily_assessments', 'daily_assessments.id', '=', 'daily_assessment_scores.daily_assessment_id')
-                ->whereIn('daily_assessments.teacher_subject_id', $assignmentIds)
-                ->whereIn('daily_assessment_scores.student_id', $studentIds)
-                ->select('daily_assessments.teacher_subject_id', 'daily_assessment_scores.student_id')
-                ->selectRaw('SUM((COALESCE(daily_assessment_scores.score, 0) / daily_assessments.max_score) * 100 * daily_assessments.weight) / NULLIF(SUM(daily_assessments.weight), 0) AS weighted_score')
-                ->groupBy('daily_assessments.teacher_subject_id', 'daily_assessment_scores.student_id')
-                ->get()
-                ->keyBy(fn($row) => $row->teacher_subject_id . ':' . $row->student_id);
-            // Persentase kehadiran per mapel per siswa (komponen nilai akhir otomatis).
-            $subjectAttendance = DB::table('attendance_details')
-                ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
-                ->where('teacher_attendances.academic_year_id', $filters['academic_year_id'])
-                ->whereIn('attendance_details.student_id', $studentIds)
-                ->select('teacher_attendances.subject_id', 'teacher_attendances.classroom_id', 'attendance_details.student_id')
-                ->selectRaw('COUNT(*) AS total')
-                ->selectRaw("SUM(CASE WHEN attendance_details.status IN ('Hadir','Terlambat','Dispen') THEN 1 ELSE 0 END) AS hadir")
-                ->groupBy('teacher_attendances.subject_id', 'teacher_attendances.classroom_id', 'attendance_details.student_id')
-                ->get()
-                ->keyBy(fn($row) => $row->subject_id . ':' . $row->classroom_id . ':' . $row->student_id);
+            $processScores = app(ProcessScoreCalculator::class)->calculate($assignments, $studentIds);
             $attendanceByStudent = DB::table('attendance_details')
                 ->join('teacher_attendances', 'teacher_attendances.id', '=', 'attendance_details.teacher_attendance_id')
                 ->where('teacher_attendances.academic_year_id', $filters['academic_year_id'])
@@ -535,16 +527,10 @@ class AssessmentController extends Controller
 
             foreach ($assignments as $assignment) {
                 foreach ($studentsByClass->get($assignment->classroom_id, collect()) as $student) {
-                    $key = $assignment->id . ':' . $student->id;
-                    $manual = $manualScores->get($key)?->score;
-                    $dailyAverage = $automaticScores->get($key)?->weighted_score;
-                    $dailyAverage = $dailyAverage === null ? null : round((float) $dailyAverage, 2);
-                    $attendanceRow = $subjectAttendance->get($assignment->subject_id . ':' . $assignment->classroom_id . ':' . $student->id);
-                    $attendancePercentage = $attendanceRow && (int) $attendanceRow->total > 0
-                        ? round(((int) $attendanceRow->hadir / (int) $attendanceRow->total) * 100, 2)
-                        : null;
-                    $automatic = $this->blendAutomaticScore($assignment, $dailyAverage, $attendancePercentage);
-                    $grade = ($assignment->grading_method ?? 'manual') === 'automatic' ? $automatic : $manual;
+                    $process = $processScores[$assignment->id . ':' . $student->id] ?? null;
+                    $dailyAverage = $process['daily_average'] ?? null;
+                    $attendancePercentage = $process['attendance_percentage'] ?? null;
+                    $grade = $process['final'] ?? null;
                     $counts = $attendanceByStudent->get($student->id);
                     $rows->push([
                         'Kelas' => $assignment->classroom?->nama_kelas,
@@ -633,10 +619,11 @@ class AssessmentController extends Controller
         $grade = $this->homeroomGradeRows((int) $teacher->wali_classroom_id, (int) AcademicYear::query()->where('is_active', true)->value('id'), $startDate, $endDate)
             ->firstWhere('NIS', $student->nis) ?? ['NIS' => $student->nis, 'Siswa' => $student->nama_lengkap];
         $pdf = Pdf::loadView('guru.wali_kelas.parent_report_pdf', compact('teacher', 'student', 'month', 'attendance', 'grade'))->setPaper('a4');
-        $path = 'wali-reports/' . $student->id . '-' . $month . '.pdf';
-        Storage::disk('public')->put($path, $pdf->output());
         $phone = $this->normalizeWaliPhone($student->no_hp_orang_tua);
         abort_unless($phone, 422, 'Nomor WhatsApp orang tua belum tersedia.');
+        // Nama acak agar URL laporan siswa lain tidak bisa ditebak.
+        $path = 'wali-reports/' . Str::random(40) . '.pdf';
+        Storage::disk('public')->put($path, $pdf->output());
         $url = asset('storage/' . $path);
         $message = "Laporan bulanan {$student->nama_lengkap} ({$month}) dari wali kelas. Terlampir rekap absensi dan nilai tugas/harian.";
         $response = Http::timeout(30)->withHeaders(['Authorization' => (string) config('services.fonnte.token')])->asForm()->post(config('services.fonnte.api_url'), [

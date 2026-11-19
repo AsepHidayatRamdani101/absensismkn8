@@ -13,6 +13,7 @@ use App\Models\TeacherAttendance;
 use App\Models\TeacherLeaveRequest;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -212,10 +213,7 @@ class AttendanceDetailController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -384,10 +382,7 @@ class AttendanceDetailController extends Controller
 
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return response()->json([
@@ -665,10 +660,7 @@ class AttendanceDetailController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return response()->json([
@@ -755,10 +747,7 @@ class AttendanceDetailController extends Controller
     {
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -1326,10 +1315,7 @@ class AttendanceDetailController extends Controller
 
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -1460,10 +1446,7 @@ class AttendanceDetailController extends Controller
         ]);
 
         $user = auth()->user();
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return response()->json([
@@ -1743,10 +1726,7 @@ class AttendanceDetailController extends Controller
 
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -1988,10 +1968,7 @@ class AttendanceDetailController extends Controller
 
         $user = auth()->user();
 
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
         if (!$teacher) {
             return redirect()->route('guru.dashboard')->with('error', 'Data guru tidak ditemukan untuk akun ini.');
@@ -2502,9 +2479,6 @@ class AttendanceDetailController extends Controller
     {
         $user = auth()->user();
 
-        return Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        return SchoolIdentity::studentFor($user);
     }
 }

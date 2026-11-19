@@ -33,6 +33,7 @@
             <form id="formGenerateAccountsTeachers" action="{{ route('teachers.generate-accounts') }}" method="POST"
                 class="d-inline-block mr-1">
                 @csrf
+                <input type="hidden" name="reset_password" value="0">
                 <button type="button" id="btnGenerateAccountsTeachers" class="btn btn-info">
                     <i class="fas fa-user-cog"></i>
                     Generate Akun Guru
@@ -199,13 +200,17 @@
             $('#btnGenerateAccountsTeachers').on('click', function() {
                 Swal.fire({
                     title: 'Generate akun guru?',
-                    text: 'Username dari NIP (fallback NUPTK) dan password default guru12345.',
+                    text: 'Username dari NIP (fallback NUPTK). Akun baru memakai password default guru12345; akun lama tetap memakai password masing-masing.',
                     icon: 'question',
+                    input: 'checkbox',
+                    inputValue: 0,
+                    inputPlaceholder: 'Reset juga password SEMUA akun guru yang sudah ada ke guru12345',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, generate',
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        $('#formGenerateAccountsTeachers input[name="reset_password"]').val(result.value ? 1 : 0);
                         Swal.fire({
                             title: 'Memproses generate akun...',
                             text: 'Mohon tunggu, akun guru sedang dibuat.',

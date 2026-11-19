@@ -11,6 +11,7 @@ use App\Models\Major;
 use App\Models\SchoolSetting;
 use App\Models\User;
 use App\Support\ReferenceCache;
+use App\Support\SchoolIdentity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -31,11 +32,7 @@ class StudentController extends Controller
 
     private function resolveAuthenticatedStudent(): ?Student
     {
-        return Student::query()
-            ->with('classroom.major')
-            ->where('nisn', auth()->user()->email)
-            ->orWhere('nis', auth()->user()->email)
-            ->first();
+        return SchoolIdentity::studentFor(auth()->user())?->loadMissing('classroom.major');
     }
 
     public function index(Request $request)
@@ -660,7 +657,9 @@ class StudentController extends Controller
             User::query()->upsert(
                 $upsertRows,
                 ['email'],
-                ['name', 'password', 'updated_at']
+                request()->boolean('reset_password')
+                    ? ['name', 'password', 'updated_at']
+                    : ['name', 'updated_at']
             );
 
             $generatedUserIds = User::query()

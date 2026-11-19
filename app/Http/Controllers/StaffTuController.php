@@ -111,8 +111,9 @@ class StaffTuController extends Controller
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $resetPasswords = request()->boolean('reset_password');
 
-        StaffTu::query()->orderBy('id')->chunk(200, function ($staffList) use (&$created, &$updated, &$skipped) {
+        StaffTu::query()->orderBy('id')->chunk(200, function ($staffList) use (&$created, &$updated, &$skipped, $resetPasswords) {
             foreach ($staffList as $staff) {
                 $username = trim((string) $staff->nip);
 
@@ -121,13 +122,14 @@ class StaffTuController extends Controller
                     continue;
                 }
 
-                $user = User::updateOrCreate(
-                    ['email' => $username],
-                    [
-                        'name'     => $staff->nama_lengkap,
-                        'password' => Hash::make('tu12345'),
-                    ]
-                );
+                $user = User::firstOrNew(['email' => $username]);
+                $user->name = $staff->nama_lengkap;
+
+                if (!$user->exists || $resetPasswords) {
+                    $user->password = Hash::make('tu12345');
+                }
+
+                $user->save();
 
                 if ($user->wasRecentlyCreated) {
                     $created++;

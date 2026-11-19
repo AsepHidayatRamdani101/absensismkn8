@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && npm run build:login-css",
+        "build:login-css": "tailwindcss -c tailwind.config.js -i resources/css/app.css -o public/css/login-tailwind.css --content ./resources/views/auth/login.blade.php --minify",
         "dev": "vite"
     },
     "devDependencies": {

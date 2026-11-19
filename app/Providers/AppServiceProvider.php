@@ -49,6 +49,7 @@ use App\Models\Teacher;
 use App\Models\Student;
 use App\Support\ReferenceCache;
 use App\Support\FonnteSettings;
+use App\Support\SchoolIdentity;
 use App\Support\SchoolCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\ServiceProvider;
@@ -58,7 +59,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 
 class AppServiceProvider extends ServiceProvider
@@ -68,6 +69,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(SchoolIdentity::class);
+
         $this->app->bind(RewardCategoryRepositoryInterface::class, RewardCategoryRepository::class);
         $this->app->bind(RewardItemRepositoryInterface::class, RewardItemRepository::class);
         $this->app->bind(ViolationCategoryRepositoryInterface::class, ViolationCategoryRepository::class);
@@ -85,34 +88,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (config('school.force_https')) {
+            URL::forceScheme('https');
+        }
+
         FonnteSettings::load();
         $this->configureRateLimiters();
 
         $this->registerReferenceCacheInvalidationHooks();
 
-        View::composer('*', function () {
-            if (app()->runningInConsole() || !Auth::check()) {
+        $menuBadgeApplied = false;
+        View::composer('*', function () use (&$menuBadgeApplied) {
+            if ($menuBadgeApplied || app()->runningInConsole() || !Auth::check()) {
                 return;
             }
 
+            $menuBadgeApplied = true;
             $user = Auth::user();
 
             if (!$user || !method_exists($user, 'hasRole') || !$user->hasRole('guru')) {
                 return;
             }
 
-            if (!Schema::hasTable('student_leave_requests') || !Schema::hasColumns('teachers', ['is_wali_kelas', 'wali_classroom_id'])) {
-                return;
-            }
-
-            $waliTeacher = Teacher::query()
-                ->where(function ($query) use ($user) {
-                    $query->where('nip', $user->email)
-                        ->orWhere('nama_lengkap', $user->name);
-                })
-                ->where('is_wali_kelas', true)
-                ->whereNotNull('wali_classroom_id')
-                ->first();
+            $waliTeacher = SchoolIdentity::waliTeacherFor($user);
 
             if (!$waliTeacher) {
                 return;
@@ -187,18 +185,7 @@ class AppServiceProvider extends ServiceProvider
                 return false;
             }
 
-            $username = trim((string) $user->email);
-
-            if ($username === '') {
-                return false;
-            }
-
-            $student = Student::query()
-                ->where('nisn', $username)
-                ->orWhere('nis', $username)
-                ->first();
-
-            return $student?->canSubmitTeacherAttendance() ?? false;
+            return SchoolIdentity::studentFor($user)?->canSubmitTeacherAttendance() ?? false;
         });
 
         Gate::define('guru-wali-kelas', function ($user) {
@@ -206,18 +193,7 @@ class AppServiceProvider extends ServiceProvider
                 return false;
             }
 
-            if (!Schema::hasColumns('teachers', ['is_wali_kelas', 'wali_classroom_id'])) {
-                return false;
-            }
-
-            return Teacher::query()
-                ->where(function ($query) use ($user) {
-                    $query->where('nip', $user->email)
-                        ->orWhere('nama_lengkap', $user->name);
-                })
-                ->where('is_wali_kelas', true)
-                ->whereNotNull('wali_classroom_id')
-                ->exists();
+            return SchoolIdentity::waliTeacherFor($user) !== null;
         });
 
         Gate::define('pancawaluya.menu.reward-transaction', function ($user) {

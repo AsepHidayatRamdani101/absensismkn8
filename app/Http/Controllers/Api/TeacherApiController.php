@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\TeacherResource;
 use App\Models\Teacher;
+use App\Support\SchoolIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class TeacherApiController extends Controller
 {
+    private const FULL_ACCESS_ROLES = ['admin', 'kurikulum', 'kesiswaan', 'bk', 'tu'];
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -17,15 +20,9 @@ class TeacherApiController extends Controller
 
         $query = Teacher::query()->orderBy('nama_lengkap');
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('guru')) {
-            $query->where(function ($q) use ($user) {
-                $q->where('nip', $user->email)
-                    ->orWhere('nama_lengkap', $user->name);
-            });
-        }
-
-        if (method_exists($user, 'hasRole') && $user->hasRole('siswa')) {
-            $query->whereRaw('1 = 0');
+        if (!$user->hasAnyRole(self::FULL_ACCESS_ROLES)) {
+            $teacher = $user->hasRole('guru') ? SchoolIdentity::teacherFor($user) : null;
+            $query->whereKey($teacher?->id ?? 0);
         }
 
         $perPage = max(min((int) $request->integer('per_page', 20), 100), 10);

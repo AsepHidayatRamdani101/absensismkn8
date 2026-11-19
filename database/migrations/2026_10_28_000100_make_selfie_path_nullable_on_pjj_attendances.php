@@ -14,7 +14,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement('ALTER TABLE pjj_attendances MODIFY selfie_path VARCHAR(255) NULL');
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement('ALTER TABLE pjj_attendances MODIFY selfie_path VARCHAR(255) NULL');
+        } else {
+            Schema::table('pjj_attendances', function (Blueprint $table) {
+                $table->string('selfie_path')->nullable()->change();
+            });
+        }
 
         Schema::table('pjj_attendances', function (Blueprint $table) {
             $table->timestamp('forced_at')->nullable()->after('status');
@@ -29,6 +35,13 @@ return new class extends Migration
         });
 
         DB::table('pjj_attendances')->whereNull('selfie_path')->update(['selfie_path' => '']);
-        DB::statement('ALTER TABLE pjj_attendances MODIFY selfie_path VARCHAR(255) NOT NULL');
+
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement('ALTER TABLE pjj_attendances MODIFY selfie_path VARCHAR(255) NOT NULL');
+        } else {
+            Schema::table('pjj_attendances', function (Blueprint $table) {
+                $table->string('selfie_path')->nullable(false)->change();
+            });
+        }
     }
 };

@@ -7,6 +7,7 @@ use App\Models\TeacherLeaveRequest;
 use App\Models\TeacherAttendance;
 use App\Models\Schedule;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -287,10 +288,7 @@ class TeacherLeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        return Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        return SchoolIdentity::teacherFor($user);
     }
 
     private function hasLeaveRequestColumns(): bool

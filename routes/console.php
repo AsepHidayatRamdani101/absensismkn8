@@ -25,15 +25,17 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('accounts:generate-guru-siswa', function () {
+Artisan::command('accounts:generate-guru-siswa {--reset-password : Reset juga password akun yang sudah ada ke password default}', function () {
     Role::firstOrCreate(['name' => 'guru', 'guard_name' => 'web']);
     Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
+
+    $resetPasswords = (bool) $this->option('reset-password');
 
     $guruCreated = 0;
     $guruUpdated = 0;
     $guruSkipped = 0;
 
-    Teacher::query()->orderBy('id')->chunk(200, function ($teachers) use (&$guruCreated, &$guruUpdated, &$guruSkipped) {
+    Teacher::query()->orderBy('id')->chunk(200, function ($teachers) use (&$guruCreated, &$guruUpdated, &$guruSkipped, $resetPasswords) {
         foreach ($teachers as $teacher) {
             $username = trim((string) $teacher->nip);
 
@@ -42,24 +44,20 @@ Artisan::command('accounts:generate-guru-siswa', function () {
                 continue;
             }
 
-            $user = User::where('email', $username)->first();
+            $user = User::firstOrNew(['email' => $username]);
+            $isNew = !$user->exists;
+            $user->name = $teacher->nama_lengkap;
 
-            if (!$user) {
-                $user = User::create([
-                    'name' => $teacher->nama_lengkap,
-                    'email' => $username,
-                    'password' => Hash::make('guru12345'),
-                ]);
-                $guruCreated++;
-            } else {
-                $user->update([
-                    'name' => $teacher->nama_lengkap,
-                    'password' => Hash::make('guru12345'),
-                ]);
-                $guruUpdated++;
+            if ($isNew || $resetPasswords) {
+                $user->password = Hash::make('guru12345');
             }
 
-            $user->syncRoles(['guru']);
+            $user->save();
+            $isNew ? $guruCreated++ : $guruUpdated++;
+
+            if (!$user->hasRole('guru')) {
+                $user->assignRole('guru');
+            }
         }
     });
 
@@ -67,7 +65,7 @@ Artisan::command('accounts:generate-guru-siswa', function () {
     $siswaUpdated = 0;
     $siswaSkipped = 0;
 
-    Student::query()->orderBy('id')->chunk(200, function ($students) use (&$siswaCreated, &$siswaUpdated, &$siswaSkipped) {
+    Student::query()->orderBy('id')->chunk(200, function ($students) use (&$siswaCreated, &$siswaUpdated, &$siswaSkipped, $resetPasswords) {
         foreach ($students as $student) {
             $username = trim((string) $student->nisn);
 
@@ -76,24 +74,20 @@ Artisan::command('accounts:generate-guru-siswa', function () {
                 continue;
             }
 
-            $user = User::where('email', $username)->first();
+            $user = User::firstOrNew(['email' => $username]);
+            $isNew = !$user->exists;
+            $user->name = $student->nama_lengkap;
 
-            if (!$user) {
-                $user = User::create([
-                    'name' => $student->nama_lengkap,
-                    'email' => $username,
-                    'password' => Hash::make('siswa12345'),
-                ]);
-                $siswaCreated++;
-            } else {
-                $user->update([
-                    'name' => $student->nama_lengkap,
-                    'password' => Hash::make('siswa12345'),
-                ]);
-                $siswaUpdated++;
+            if ($isNew || $resetPasswords) {
+                $user->password = Hash::make('siswa12345');
             }
 
-            $user->syncRoles(['siswa']);
+            $user->save();
+            $isNew ? $siswaCreated++ : $siswaUpdated++;
+
+            if (!$user->hasRole('siswa')) {
+                $user->assignRole('siswa');
+            }
         }
     });
 
@@ -102,8 +96,10 @@ Artisan::command('accounts:generate-guru-siswa', function () {
     $this->line('Guru   -> dibuat: ' . $guruCreated . ', diperbarui: ' . $guruUpdated . ', dilewati (NIP kosong): ' . $guruSkipped);
     $this->line('Siswa  -> dibuat: ' . $siswaCreated . ', diperbarui: ' . $siswaUpdated . ', dilewati (NISN kosong): ' . $siswaSkipped);
     $this->newLine();
-    $this->line('Password default guru: guru12345');
-    $this->line('Password default siswa: siswa12345');
+    $this->line('Password default akun baru — guru: guru12345, siswa: siswa12345');
+    $this->line($resetPasswords
+        ? 'Password akun lama juga direset ke password default.'
+        : 'Password akun lama tidak diubah (gunakan --reset-password untuk mereset).');
 })->purpose('Generate akun login untuk semua guru (NIP) dan siswa (NISN).');
 
 Artisan::command('analytics:refresh', function (DashboardCacheService $cacheService) {
@@ -111,19 +107,34 @@ Artisan::command('analytics:refresh', function (DashboardCacheService $cacheServ
     $this->info('Cache analytics dashboard berhasil di-refresh melalui cache version bump.');
 })->purpose('Refresh cache analytics dashboard dengan mekanisme version bump.');
 
-Artisan::command('backup:db-daily', function () {
+$pruneBackups = function (string $directory, int $keepDays): int {
+    $disk = Storage::disk('local');
+    $threshold = Carbon::now()->subDays($keepDays)->getTimestamp();
+    $deleted = 0;
+
+    foreach ($disk->files($directory) as $file) {
+        if ($disk->lastModified($file) < $threshold) {
+            $disk->delete($file);
+            $deleted++;
+        }
+    }
+
+    return $deleted;
+};
+
+Artisan::command('backup:db-daily', function () use ($pruneBackups) {
     $connection = (string) config('database.default');
 
-    if ($connection !== 'mysql') {
+    if (!in_array($connection, ['mysql', 'mariadb'], true)) {
         $this->warn('Backup DB otomatis saat ini dioptimalkan untuk koneksi mysql.');
         return self::SUCCESS;
     }
 
-    $host = (string) config('database.connections.mysql.host');
-    $port = (string) config('database.connections.mysql.port', '3306');
-    $database = (string) config('database.connections.mysql.database');
-    $username = (string) config('database.connections.mysql.username');
-    $password = (string) config('database.connections.mysql.password');
+    $host = (string) config("database.connections.{$connection}.host");
+    $port = (string) config("database.connections.{$connection}.port", '3306');
+    $database = (string) config("database.connections.{$connection}.database");
+    $username = (string) config("database.connections.{$connection}.username");
+    $password = (string) config("database.connections.{$connection}.password");
 
     if ($database === '' || $username === '') {
         $this->error('Konfigurasi database mysql tidak lengkap.');
@@ -138,27 +149,31 @@ Artisan::command('backup:db-daily', function () {
     $targetPath = storage_path('app/' . $directory . '/' . $fileName);
 
     $command = sprintf(
-        'mysqldump -h %s -P %s -u %s -p%s --single-transaction --quick %s | gzip > %s',
+        'mysqldump -h %s -P %s -u %s --single-transaction --quick %s | gzip > %s',
         escapeshellarg($host),
         escapeshellarg($port),
         escapeshellarg($username),
-        escapeshellarg($password),
         escapeshellarg($database),
         escapeshellarg($targetPath)
     );
 
-    $result = Process::run($command);
+    // Password lewat env agar tidak terlihat di daftar proses server.
+    $result = Process::env(['MYSQL_PWD' => $password])->timeout(1800)->run($command);
 
     if (!$result->successful()) {
         $this->error('Backup database gagal: ' . trim($result->errorOutput()));
         return self::FAILURE;
     }
 
+    $keepDays = max(1, (int) config('school.backup.db_keep_days', 14));
+    $deleted = $pruneBackups($directory, $keepDays);
+
     $this->info('Backup database berhasil: ' . $targetPath);
+    $this->line("Backup database lebih dari {$keepDays} hari yang dihapus: {$deleted}");
     return self::SUCCESS;
 })->purpose('Backup database harian ke storage/app/backups/database.');
 
-Artisan::command('backup:full-weekly', function () {
+Artisan::command('backup:full-weekly', function () use ($pruneBackups) {
     $disk = Storage::disk('local');
     $directory = 'backups/full';
     $disk->makeDirectory($directory);
@@ -166,23 +181,43 @@ Artisan::command('backup:full-weekly', function () {
     $archiveName = 'full_backup_' . Carbon::now()->format('Ymd_His') . '.zip';
     $archivePath = storage_path('app/' . $directory . '/' . $archiveName);
 
-    $sourceStoragePath = storage_path('app');
+    // Folder backup dikecualikan agar arsip tidak ikut memuat backup lama.
     $command = sprintf(
-        'cd %s && zip -r %s app',
+        'cd %s && zip -r -q %s app -x %s',
         escapeshellarg(storage_path()),
-        escapeshellarg($archivePath)
+        escapeshellarg($archivePath),
+        escapeshellarg('app/backups/*')
     );
 
-    $result = Process::run($command);
+    $result = Process::timeout(3600)->run($command);
 
     if (!$result->successful()) {
         $this->error('Backup full gagal: ' . trim($result->errorOutput()));
         return self::FAILURE;
     }
 
+    $keepDays = max(7, (int) config('school.backup.full_keep_days', 56));
+    $deleted = $pruneBackups($directory, $keepDays);
+
     $this->info('Backup full storage berhasil: ' . $archivePath);
+    $this->line("Backup full lebih dari {$keepDays} hari yang dihapus: {$deleted}");
     return self::SUCCESS;
 })->purpose('Backup mingguan storage/app ke berkas ZIP.');
+
+Artisan::command('reports:prune-shared', function () {
+    $disk = Storage::disk('public');
+    $threshold = Carbon::now()->subDays(max(1, (int) config('school.shared_report_keep_days', 7)))->getTimestamp();
+    $deleted = 0;
+
+    foreach ($disk->files('wali-reports') as $file) {
+        if ($disk->lastModified($file) < $threshold) {
+            $disk->delete($file);
+            $deleted++;
+        }
+    }
+
+    $this->info("Laporan WhatsApp lama yang dihapus: {$deleted}");
+})->purpose('Hapus PDF laporan wali kelas (WhatsApp) yang sudah lama dari disk publik.');
 
 Artisan::command('reminder:guru-absen-agenda', function () {
     $fonnteEnabled = (bool) config('services.fonnte.enabled', false);
@@ -389,6 +424,8 @@ Schedule::command('analytics:refresh')->everyFiveMinutes()->withoutOverlapping()
 Schedule::command('queue:prune-failed --hours=48')->hourly();
 Schedule::command('backup:db-daily')->dailyAt('01:00')->withoutOverlapping();
 Schedule::command('backup:full-weekly')->weeklyOn(0, '01:30')->withoutOverlapping();
+Schedule::command('reports:prune-shared')->dailyAt('02:00');
+Schedule::command('sanctum:prune-expired --hours=24')->daily();
 Schedule::command('reminder:guru-absen-agenda')
     ->dailyAt('15:00')
     ->withoutOverlapping();

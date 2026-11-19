@@ -17,6 +17,7 @@ use App\Services\PjjAttendanceSyncService;
 use App\Support\PjjTaskType;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -1280,17 +1281,8 @@ class PjjController extends Controller
 
     private function teacherForCurrentUser(): Teacher
     {
-        $user = Auth::user();
-
         // Prioritaskan identitas unik (NIP/NUPTK); pencocokan nama hanya fallback
-        // agar guru dengan nama kembar tidak ter-resolve ke data guru yang salah.
-        $teacher = Teacher::query()
-            ->where(function ($query) use ($user) {
-                $query->where('nip', $user->email)
-                    ->orWhere('nuptk', $user->email);
-            })
-            ->first()
-            ?? Teacher::query()->where('nama_lengkap', $user->name)->first();
+        $teacher = SchoolIdentity::teacherFor(Auth::user());
 
         abort_unless($teacher, 403, 'Akun guru tidak terhubung dengan data guru.');
         return $teacher;
@@ -1298,17 +1290,8 @@ class PjjController extends Controller
 
     private function studentForCurrentUser(): Student
     {
-        $user = Auth::user();
-
         // Prioritaskan identitas unik (NISN/NIS); pencocokan nama hanya fallback
-        // agar siswa dengan nama kembar tidak ter-resolve ke kelas yang salah.
-        $student = Student::query()
-            ->where(function ($query) use ($user) {
-                $query->where('nisn', $user->email)
-                    ->orWhere('nis', $user->email);
-            })
-            ->first()
-            ?? Student::query()->where('nama_lengkap', $user->name)->first();
+        $student = SchoolIdentity::studentFor(Auth::user(), allowNameFallback: true);
 
         abort_unless($student, 403, 'Akun siswa tidak terhubung dengan data siswa.');
         return $student;

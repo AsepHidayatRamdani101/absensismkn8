@@ -56,16 +56,19 @@
         <div class="card-header"><h3 class="card-title">Nilai Akhir</h3></div>
         <div class="card-body table-responsive">
             <table class="table table-bordered table-sm">
-                <thead><tr><th>Mata Pelajaran</th><th>Guru</th><th>Metode</th><th>Rata-rata Harian</th><th>Kehadiran Mapel (%)</th><th>Nilai Akhir</th></tr></thead>
+                <thead><tr><th>Mata Pelajaran</th><th>Guru</th><th>Metode</th><th>Rata-rata Harian</th><th>Kehadiran Mapel (%)</th><th>Nilai Akhir</th><th>UTS</th><th>UAS</th><th>Nilai Rapor</th></tr></thead>
                 <tbody>
                     @forelse ($rows as $row)
                         <tr><td>{{ $row['subject'] }}</td><td>{{ $row['teacher'] }}</td>
                             <td>{{ $row['grading_method'] === 'automatic' ? 'Otomatis' : 'Manual' }}</td>
                             <td>{{ $row['daily_average'] ?? '-' }}</td>
                             <td>{{ $row['attendance_percentage'] ?? '-' }}</td>
-                            <td>{{ $row['final_score'] ?? '-' }}</td></tr>
+                            <td>{{ $row['final_score'] ?? '-' }}</td>
+                            <td>{{ $row['uts'] ?? '-' }}</td>
+                            <td>{{ $row['uas'] ?? '-' }}</td>
+                            <td><strong>{{ $row['report_score'] === null ? '-' : (int) round($row['report_score']) }}</strong></td></tr>
                     @empty
-                        <tr><td colspan="6" class="text-center">Belum ada nilai akhir.</td></tr>
+                        <tr><td colspan="9" class="text-center">Belum ada nilai akhir.</td></tr>
                     @endforelse
                 </tbody>
             </table>

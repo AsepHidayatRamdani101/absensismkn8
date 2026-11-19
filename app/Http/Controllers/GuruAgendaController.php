@@ -8,6 +8,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Support\PklMode;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -257,10 +258,7 @@ class GuruAgendaController extends Controller
     {
         $user = auth()->user();
 
-        return Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        return SchoolIdentity::teacherFor($user);
     }
 
     private function resolveTodayContext(): array

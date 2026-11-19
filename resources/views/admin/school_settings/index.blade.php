@@ -141,7 +141,56 @@
                             </div>
                         </div>
 
-                        <div class="form-group mt-2">
+                        <div class="border-top pt-3 mt-2">
+                            <h6 class="font-weight-bold text-dark mb-1"><i class="fas fa-book text-primary mr-2"></i>Pengaturan Rapor</h6>
+                            <p class="input-hint mt-0 mb-3">Nilai rapor = Harian × bobot + UTS × bobot + UAS × bobot (jumlah bobot harus 100%). Predikat A/B/C ditentukan dari KKM.</p>
+                            <div class="form-row">
+                                <div class="form-group col-md-3 col-6">
+                                    <label class="form-label" for="report_daily_weight">Bobot Harian</label>
+                                    <div class="input-group">
+                                        <input type="number" id="report_daily_weight" name="report_daily_weight" min="0" max="100" class="form-control @error('report_daily_weight') is-invalid @enderror" value="{{ old('report_daily_weight', $setting->report_daily_weight ?? 50) }}" required>
+                                        <div class="input-group-append"><span class="input-group-text">%</span></div>
+                                    </div>
+                                </div>
+                                <div class="form-group col-md-3 col-6">
+                                    <label class="form-label" for="report_uts_weight">Bobot UTS</label>
+                                    <div class="input-group">
+                                        <input type="number" id="report_uts_weight" name="report_uts_weight" min="0" max="100" class="form-control" value="{{ old('report_uts_weight', $setting->report_uts_weight ?? 25) }}" required>
+                                        <div class="input-group-append"><span class="input-group-text">%</span></div>
+                                    </div>
+                                </div>
+                                <div class="form-group col-md-3 col-6">
+                                    <label class="form-label" for="report_uas_weight">Bobot UAS</label>
+                                    <div class="input-group">
+                                        <input type="number" id="report_uas_weight" name="report_uas_weight" min="0" max="100" class="form-control" value="{{ old('report_uas_weight', $setting->report_uas_weight ?? 25) }}" required>
+                                        <div class="input-group-append"><span class="input-group-text">%</span></div>
+                                    </div>
+                                </div>
+                                <div class="form-group col-md-3 col-6">
+                                    <label class="form-label" for="report_kkm">KKM</label>
+                                    <input type="number" id="report_kkm" name="report_kkm" min="40" max="95" class="form-control @error('report_kkm') is-invalid @enderror" value="{{ old('report_kkm', $setting->report_kkm ?? 75) }}" required>
+                                </div>
+                            </div>
+                            @error('report_daily_weight')<div class="text-danger small mt-n2 mb-2">{{ $message }}</div>@enderror
+                            <div class="input-hint mt-n2 mb-3" id="weightTotalHint"></div>
+                            <div class="form-row">
+                                <div class="form-group col-md-4">
+                                    <label class="form-label" for="report_city">Tempat Penerbitan Rapor</label>
+                                    <input type="text" id="report_city" name="report_city" maxlength="100" class="form-control" value="{{ old('report_city', $setting->report_city ?? '') }}" placeholder="Contoh: Garut">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label class="form-label" for="principal_name">Nama Kepala Sekolah</label>
+                                    <input type="text" id="principal_name" name="principal_name" maxlength="255" class="form-control" value="{{ old('principal_name', $setting->principal_name ?? '') }}" placeholder="Nama & gelar">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label class="form-label" for="principal_nip">NIP Kepala Sekolah</label>
+                                    <input type="text" id="principal_nip" name="principal_nip" maxlength="50" class="form-control" value="{{ old('principal_nip', $setting->principal_nip ?? '') }}">
+                                </div>
+                            </div>
+                            <div class="input-hint mt-n2">Bila nama kepala sekolah dikosongkan, rapor memakai data guru dengan jabatan Kepala Sekolah.</div>
+                        </div>
+
+                        <div class="form-group mt-3">
                             <label class="form-label" for="logo">Logo Sekolah</label>
                             <div class="custom-file">
                                 <input type="file" id="logo" name="logo" accept=".jpg,.jpeg,.png,.webp" class="custom-file-input @error('logo') is-invalid @enderror">
@@ -185,6 +234,16 @@
                 const fileName = this.files && this.files.length ? this.files[0].name : 'Pilih file logo...';
                 $(this).next('.custom-file-label').text(fileName);
             });
+
+            function updateWeightTotal() {
+                const total = ['#report_daily_weight', '#report_uts_weight', '#report_uas_weight']
+                    .reduce((sum, id) => sum + (parseInt($(id).val(), 10) || 0), 0);
+                $('#weightTotalHint')
+                    .text('Jumlah bobot: ' + total + '%' + (total === 100 ? '' : ' — harus 100%'))
+                    .toggleClass('text-danger', total !== 100);
+            }
+            $('#report_daily_weight, #report_uts_weight, #report_uas_weight').on('input', updateWeightTotal);
+            updateWeightTotal();
         });
     </script>
 @stop

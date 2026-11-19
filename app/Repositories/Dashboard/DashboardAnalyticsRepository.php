@@ -17,6 +17,7 @@ use App\Models\Teacher;
 use App\Models\User;
 use App\Models\ViolationTransaction;
 use App\Repositories\Contracts\Dashboard\DashboardAnalyticsRepositoryInterface;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -34,15 +35,9 @@ class DashboardAnalyticsRepository implements DashboardAnalyticsRepositoryInterf
 
     public function buildScope(User $user): array
     {
-        $teacher = Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        $teacher = SchoolIdentity::teacherFor($user);
 
-        $student = Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        $student = SchoolIdentity::studentFor($user);
 
         if (method_exists($user, 'hasRole') && $user->hasRole('admin')) {
             return ['role' => 'admin', 'teacher_id' => null, 'classroom_id' => null, 'student_id' => null, 'user_id' => (int) $user->id];

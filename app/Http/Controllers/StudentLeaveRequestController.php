@@ -9,6 +9,7 @@ use App\Models\StudentLeaveRequest;
 use App\Models\Teacher;
 use App\Models\TeacherAttendance;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolIdentity;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -880,20 +881,14 @@ class StudentLeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        return Student::query()
-            ->where('nisn', $user->email)
-            ->orWhere('nis', $user->email)
-            ->first();
+        return SchoolIdentity::studentFor($user);
     }
 
     private function resolveCurrentTeacher(): ?Teacher
     {
         $user = auth()->user();
 
-        return Teacher::query()
-            ->where('nip', $user->email)
-            ->orWhere('nama_lengkap', $user->name)
-            ->first();
+        return SchoolIdentity::teacherFor($user);
     }
 
     private function resolveOfficerStudent(): ?Student

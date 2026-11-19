@@ -50,7 +50,7 @@ return [
     |
     */
 
-    'expiration' => null,
+    'expiration' => is_numeric(env('SANCTUM_EXPIRATION', 43200)) ? (int) env('SANCTUM_EXPIRATION', 43200) : null,
 
     /*
     |--------------------------------------------------------------------------

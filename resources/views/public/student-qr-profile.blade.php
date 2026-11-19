@@ -147,9 +147,15 @@
                                         <td>Jurusan</td>
                                         <td>: {{ $student->classroom?->major?->nama_jurusan ?: '-' }}</td>
                                     </tr>
+                                    @php
+                                        $phoneDigits = preg_replace('/\s+/', '', (string) $student->no_hp);
+                                        $maskedPhone = strlen($phoneDigits) > 7
+                                            ? \Illuminate\Support\Str::mask($phoneDigits, '*', 4, strlen($phoneDigits) - 7)
+                                            : ($phoneDigits === '' ? '-' : str_repeat('*', strlen($phoneDigits)));
+                                    @endphp
                                     <tr>
                                         <td>No HP Siswa</td>
-                                        <td>: {{ $student->no_hp ?: '-' }}</td>
+                                        <td>: {{ $maskedPhone }}</td>
                                     </tr>
                                 </table>
                             </div>

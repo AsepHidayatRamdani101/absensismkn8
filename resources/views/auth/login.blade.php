@@ -5,8 +5,8 @@
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Sistem Absensi SMKN 8 Garut</title>
-    <!-- Load Tailwind CSS v3 -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Load Tailwind CSS v3 (build lokal: npm run build:login-css) -->
+    <link rel="stylesheet" href="{{ asset('css/login-tailwind.css') }}?v={{ @filemtime(public_path('css/login-tailwind.css')) }}">
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
     <style data-purpose="typography">
@@ -183,14 +183,15 @@
                             </label>
                         </div>
                         <div class="text-sm">
-                            <a class="font-medium text-brand-blue hover:text-blue-700 flex items-center" href="#">
+                            <span class="font-medium text-gray-500 flex items-center cursor-help"
+                                title="Hubungi admin sekolah untuk mereset kata sandi akun Anda.">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path
                                         d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                                         stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
                                 </svg>
-                                Lupa kata sandi?
-                            </a>
+                                Lupa kata sandi? Hubungi admin
+                            </span>
                         </div>
                     </div>
                     <!-- Action Buttons -->
